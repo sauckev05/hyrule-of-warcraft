@@ -12,7 +12,7 @@ BINDING_NAME_ZELDA_ROLL_RIGHT = "Roll right"
 BINDING_NAME_ZELDA_FLIP = "Backflip"
 BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon"
 BINDING_NAME_ZELDA_HOOK = "Hookshot to target"
-BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on)"
+BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on) - Shift already does this"
 
 local SPIN_HOLD = 0.8
 local attackDownAt = nil
@@ -58,7 +58,8 @@ function ZeldaControls_Target(state)
 	if ZeldaLock then ZeldaLock(1) end
 end
 
--- default keys, applied once per account (version 3: sword 1, bow 2, shield 3, hookshot 4, roll Shift+W)
+-- default keys, applied once per account (version 4: sword 1, bow 2, shield 3, hookshot 4, roll Shift+W;
+-- lock-on is the Shift key itself, watched below, since WoW cannot bind a lone modifier key)
 local DEFAULT_KEYS = {
 	{ "1", "ZELDA_ATTACK" },
 	{ "2", "ZELDA_BOW" },
@@ -68,12 +69,11 @@ local DEFAULT_KEYS = {
 	{ "SHIFT-A", "ZELDA_ROLL_LEFT" },
 	{ "SHIFT-D", "ZELDA_ROLL_RIGHT" },
 	{ "SHIFT-S", "ZELDA_FLIP" },
-	{ "Z", "ZELDA_TARGET" },
 }
 -- keys older versions used; freed if they still hold a Zelda move
-local OLD_KEYS = { "F", "G", "R", "V", "H" }
-local KEYS_VERSION = 3
-local HELP = "|cff33ff99Zelda Controls|r: 1 sword (hold = spin attack), 2 bow, 3 shield (hold), 4 hookshot, Shift+W roll, Shift+A/D side roll, Shift+S backflip, hold Z to lock on."
+local OLD_KEYS = { "F", "G", "R", "V", "H", "Z" }
+local KEYS_VERSION = 4
+local HELP = "|cff33ff99Zelda Controls|r: hold Shift to lock on (Q/E circle the target), 1 sword (hold = spin attack), 2 bow, 3 shield (hold), 4 hookshot, Shift+W roll, Shift+A/D side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
@@ -98,6 +98,21 @@ frame:SetScript("OnEvent", function()
 		end
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		DEFAULT_CHAT_FRAME:AddMessage(HELP .. " Change them in Key Bindings.")
+	end
+end)
+
+-- Z-targeting on Shift: holding Shift locks on, letting go releases. Shift with W/A/D/S still rolls
+-- and backflips, so those happen while locked on, like Ocarina's Z + A. Not while typing in chat.
+local shiftHeld = false
+local shiftWatcher = CreateFrame("Frame", "ZeldaControlsShiftWatcher", UIParent)
+shiftWatcher:SetScript("OnUpdate", function()
+	local down = IsShiftKeyDown() and true or false
+	if down and ChatFrameEditBox and ChatFrameEditBox:IsVisible() then
+		down = false
+	end
+	if down ~= shiftHeld then
+		shiftHeld = down
+		ZeldaControls_Target(down and "down" or "up")
 	end
 end)
 
