@@ -39,10 +39,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..4d1849a
+index 0000000..29712b1
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,776 @@
+@@ -0,0 +1,782 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -295,6 +295,12 @@ index 0000000..4d1849a
 +        holder->SetAuraDuration(-1);
 +        holder->UpdateAuraDuration();
 +    }
++}
++
++uint32 ZeldaSellMultiplier()
++{
++    static uint32 const rate = uint32(std::max(1, sConfig.GetIntDefault("Zelda.SellPriceRate", 5)));
++    return rate;
 +}
 +
 +uint32 ZeldaFishingSkillGain()
@@ -821,10 +827,10 @@ index 0000000..4d1849a
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..17a69ca
+index 0000000..1fb21db
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,72 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -891,6 +897,10 @@ index 0000000..17a69ca
 +// Zelda of Warcraft: fishing skill points for every fish caught (Zelda.FishingSkillGain, 10);
 +// 0 keeps the original slow fishing skill-ups.
 +uint32 ZeldaFishingSkillGain();
++
++// Zelda of Warcraft: how many times the normal price a vendor pays for an item (Zelda.SellPriceRate,
++// 5). The tooltip's sell price and the buyback price follow it.
++uint32 ZeldaSellMultiplier();
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -1043,7 +1053,7 @@ index 043cad6..232434e 100644
                      // fish catch or fail and junk allowed (after 3.1.0)
                      if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
 diff --git a/src/game/Entities/ItemHandler.cpp b/src/game/Entities/ItemHandler.cpp
-index bf44698..98818ac 100644
+index bf44698..1c413ca 100644
 --- a/src/game/Entities/ItemHandler.cpp
 +++ b/src/game/Entities/ItemHandler.cpp
 @@ -17,6 +17,7 @@
@@ -1054,6 +1064,15 @@ index bf44698..98818ac 100644
  #include "Server/WorldPacket.h"
  #include "Server/WorldSession.h"
  #include "Server/Opcodes.h"
+@@ -314,7 +315,7 @@ void WorldSession::HandleItemQuerySingleOpcode(WorldPacket& recv_data)
+         data << pProto->Quality;
+         data << pProto->Flags;
+         data << pProto->BuyPrice;
+-        data << pProto->SellPrice;
++        data << uint32(pProto->SellPrice * ZeldaSellMultiplier()); // Zelda of Warcraft: vendors pay more
+         data << pProto->InventoryType;
+         data << pProto->AllowableClass;
+         data << pProto->AllowableRace;
 @@ -401,7 +402,7 @@ void WorldSession::HandleItemQuerySingleOpcode(WorldPacket& recv_data)
          data << pProto->StartQuest;
          data << pProto->LockID;
@@ -1063,6 +1082,15 @@ index bf44698..98818ac 100644
          data << pProto->RandomProperty;
          data << pProto->Block;
          data << pProto->ItemSet;
+@@ -548,7 +549,7 @@ void WorldSession::HandleSellItemOpcode(WorldPacket& recv_data)
+         return;
+     }
+ 
+-    uint32 money = pProto->SellPrice * count;
++    uint32 money = pProto->SellPrice * count * ZeldaSellMultiplier(); // Zelda of Warcraft: vendors pay more
+ 
+     for (auto i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+     {
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
 index 4d8e916..6fc32b9 100644
 --- a/src/game/Entities/Player.cpp

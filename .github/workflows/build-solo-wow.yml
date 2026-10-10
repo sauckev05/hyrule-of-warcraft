@@ -217,6 +217,8 @@ jobs:
           $c = $c -replace '^SkillChance\.Yellow\s*=.*', 'SkillChance.Yellow = 100'
           $c = $c -replace '^SkillChance\.Green\s*=.*', 'SkillChance.Green  = 100'
           $c = $c -replace '^SkillChance\.Grey\s*=.*', 'SkillChance.Grey   = 100'
+          # enemies drop five times the money
+          $c = $c -replace '^Rate\.Drop\.Money\s*=.*', 'Rate.Drop.Money = 5'
           # two talent points per level
           $c = $c -replace '^Rate\.Talent\s*=.*', 'Rate.Talent = 2'
           $c += ''
@@ -244,6 +246,7 @@ jobs:
           $c += '#   RedSwingTrail       melee swings leave a red weapon trail'
           $c += '#   PassiveBattleShout  Battle Shout is always on: no rage, no casting, never runs out'
           $c += '#   FishingSkillGain    fishing skill points for every fish caught (0 = normal fishing skill-ups)'
+          $c += '#   SellPriceRate       vendors pay this many times the normal price for your items'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
@@ -256,6 +259,7 @@ jobs:
           $c += 'Zelda.RedSwingTrail = 1'
           $c += 'Zelda.PassiveBattleShout = 1'
           $c += 'Zelda.FishingSkillGain = 10'
+          $c += 'Zelda.SellPriceRate = 5'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1
