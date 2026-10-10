@@ -35,10 +35,10 @@ index 00fde0a..dbbfe69 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..21fd744
+index 0000000..9cc1477
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,339 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -49,6 +49,11 @@ index 0000000..21fd744
 + *   .zflip      backflip away with a short moment of invulnerability
 + *   .zshield    toggles the shield: heavy damage reduction from the front, slower movement
 + *   .zhook      hookshot: pulls you to your target
++ *
++ * Your WoW weapons decide your fighting style, as Link's sword and shield or the Biggoron's Sword:
++ *   one-handed weapon + shield   quick slashes, and the shield can block
++ *   two-handed weapon            slower, wider and longer slashes and a bigger spin, but no shield
++ *   two weapons (dual wield)     every slash strikes with both hands, no shield
 + */
 +
 +#include "Common.h"
@@ -60,6 +65,8 @@ index 0000000..21fd744
 +#include "Grids/GridNotifiersImpl.h"
 +#include "Grids/CellImpl.h"
 +#include "Util/Timer.h"
++#include "Entities/Item.h"
++#include "Entities/ItemPrototype.h"
 +#include "Globals/ObjectAccessor.h"
 +
 +#include <cmath>
@@ -89,16 +96,57 @@ index 0000000..21fd744
 +        return s_states[player->GetGUIDLow()]; // references stay valid: unordered_map never moves nodes
 +    }
 +
-+    const float SLASH_RANGE = 5.5f;
-+    const float SLASH_ARC = M_PI_F * 2.0f / 3.0f; // 120 degrees in front
-+    const float SPIN_RANGE = 7.5f;
-+    const uint32 SLASH_MIN_GAP_MS = 380;
 +    const uint32 COMBO_WINDOW_MS = 1100;
 +    const uint32 SPIN_COOLDOWN_MS = 2500;
 +    const uint32 DODGE_COOLDOWN_MS = 900;
 +    const uint32 DODGE_INVULN_MS = 450;
 +    const uint32 HOOK_COOLDOWN_MS = 4000;
 +    const float HOOK_RANGE = 30.0f;
++
++    enum class Style { OneHanded, TwoHanded, DualWield, Unarmed };
++
++    struct StyleStats
++    {
++        float slashRange;
++        float slashArc;
++        uint32 slashGapMs;
++        float spinRange;
++        uint32 spinHits;
++    };
++
++    Style StyleOf(Player* player)
++    {
++        Item* main = player->GetWeaponForAttack(BASE_ATTACK, true, true);
++        if (!main)
++            return Style::Unarmed;
++        if (main->GetProto()->InventoryType == INVTYPE_2HWEAPON)
++            return Style::TwoHanded;
++        if (player->GetWeaponForAttack(OFF_ATTACK, true, true))
++            return Style::DualWield;
++        return Style::OneHanded;
++    }
++
++    StyleStats StatsFor(Style style)
++    {
++        switch (style)
++        {
++            case Style::TwoHanded: return { 7.0f, M_PI_F * 5.0f / 6.0f, 650, 9.5f, 3 }; // Biggoron's Sword
++            case Style::DualWield: return { 5.5f, M_PI_F * 2.0f / 3.0f, 420, 7.5f, 2 };
++            case Style::Unarmed:   return { 4.5f, M_PI_F / 2.0f, 380, 6.0f, 1 };
++            default:               return { 5.5f, M_PI_F * 2.0f / 3.0f, 380, 7.5f, 2 }; // Kokiri/Master Sword
++        }
++    }
++
++    const char* StyleName(Style style)
++    {
++        switch (style)
++        {
++            case Style::TwoHanded: return "two-handed weapon";
++            case Style::DualWield: return "two weapons";
++            case Style::Unarmed:   return "no weapon";
++            default:               return "one-handed weapon";
++        }
++    }
 +
 +    void CollectEnemies(Player* player, float range, std::list<Unit*>& out)
 +    {
@@ -158,8 +206,10 @@ index 0000000..21fd744
 +        return true;
 +
 +    ZeldaState& state = StateFor(player);
++    Style style = StyleOf(player);
++    StyleStats stats = StatsFor(style);
 +    uint32 now = WorldTimer::getMSTime();
-+    if (now - state.lastSlash < SLASH_MIN_GAP_MS)
++    if (now - state.lastSlash < stats.slashGapMs)
 +        return true;
 +
 +    state.comboCount = (now - state.lastSlash <= COMBO_WINDOW_MS) ? state.comboCount + 1 : 1;
@@ -169,18 +219,20 @@ index 0000000..21fd744
 +        state.comboCount = 0;
 +
 +    std::list<Unit*> enemies;
-+    CollectEnemies(player, SLASH_RANGE + 2.0f, enemies);
++    CollectEnemies(player, stats.slashRange + 2.0f, enemies);
 +
 +    // Prefer the selected target if it is in reach, then everything else in the cone in front of us.
 +    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
 +    uint32 hit = 0;
 +    for (Unit* unit : enemies)
 +    {
-+        bool inReach = player->IsWithinDistInMap(unit, SLASH_RANGE + unit->GetCombatReach());
-+        bool inFront = player->HasInArc(unit, SLASH_ARC) || unit == selected;
++        bool inReach = player->IsWithinDistInMap(unit, stats.slashRange + unit->GetCombatReach());
++        bool inFront = player->HasInArc(unit, stats.slashArc) || unit == selected;
 +        if (!inReach || !inFront)
 +            continue;
 +        Swing(player, unit, finisher ? 2 : 1);
++        if (style == Style::DualWield && unit->IsAlive())
++            player->AttackerStateUpdate(unit, OFF_ATTACK, true);
 +        ++hit;
 +    }
 +
@@ -202,12 +254,13 @@ index 0000000..21fd744
 +    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
 +    state.comboCount = 0;
 +
++    StyleStats stats = StatsFor(StyleOf(player));
 +    std::list<Unit*> enemies;
-+    CollectEnemies(player, SPIN_RANGE + 2.0f, enemies);
++    CollectEnemies(player, stats.spinRange + 2.0f, enemies);
 +    for (Unit* unit : enemies)
 +    {
-+        if (player->IsWithinDistInMap(unit, SPIN_RANGE + unit->GetCombatReach()))
-+            Swing(player, unit, 2);
++        if (player->IsWithinDistInMap(unit, stats.spinRange + unit->GetCombatReach()))
++            Swing(player, unit, stats.spinHits);
 +    }
 +    player->HandleEmoteCommand(EMOTE_ONESHOT_ATTACK2HTIGHT);
 +    return true;
@@ -274,6 +327,15 @@ index 0000000..21fd744
 +    }
 +    if (on && !CanAct(player))
 +        on = false;
++    if (on && !player->GetShield(true))
++    {
++        Style style = StyleOf(player);
++        if (style == Style::TwoHanded)
++            SendSysMessage("You can't raise a shield while wielding a two-handed weapon - swing it instead!");
++        else
++            PSendSysMessage("You need a shield equipped in your off hand to block (you have %s).", StyleName(style));
++        on = false;
++    }
 +    if (on == state.shield)
 +        return true;
 +

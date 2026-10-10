@@ -1,5 +1,7 @@
 -- Zelda Controls: Ocarina of Time style combat for World of Warcraft 1.12.
 -- The moves themselves run on the Azeroth Solo server (.zslash, .zspin, .zroll, .zflip, .zshield, .zhook).
+-- Your equipped weapons set the style: one-hander + shield (quick, can block), two-hander like the
+-- Biggoron's Sword (slow, wide, long reach, no shield), or two weapons (both hands strike, no shield).
 
 BINDING_HEADER_ZELDA = "Zelda Controls"
 BINDING_NAME_ZELDA_ATTACK = "Sword (hold, then release for Spin Attack)"
