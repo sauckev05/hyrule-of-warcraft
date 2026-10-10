@@ -65,17 +65,18 @@ function Wait-Port([int]$port, [int]$seconds, [string]$what) {
 }
 
 function Start-Database {
-    if (Test-Port $DbPort) { return }
+    if (-not (Test-Port $DbPort)) {
     Write-Step 'Starting database...'
     $mysqld = Find-MariaExe @('mariadbd.exe', 'mysqld.exe')
     # --no-defaults: ignore any my.ini left behind by other MySQL/MariaDB installs on this PC
     Start-Process -FilePath $mysqld -ArgumentList @('--no-defaults', "--datadir=`"$DbDataDir`"", "--port=$DbPort", '--bind-address=127.0.0.1', '--max_allowed_packet=256M', '--skip-name-resolve') -WindowStyle Hidden | Out-Null
     Wait-Port $DbPort 90 'The database' | Out-Null
     Write-Host ''
+    }
     # The port opens a moment before the server accepts logins - wait until a real query works
     $deadline = (Get-Date).AddSeconds(60)
     while ($true) {
-        if ((Invoke-MariaDb '-e "SELECT 1"' '' -Quiet) -eq 0) { break }
+        if ((Invoke-MariaDb 'SELECT 1;' '' -Quiet) -eq 0) { break }
         if ((Get-Date) -gt $deadline) { throw "The database is running but refuses logins. Details: $(Get-LogTail)" }
         Start-Sleep -Seconds 2
     }
@@ -87,30 +88,66 @@ function Get-LogTail {
     return '(no log)'
 }
 
-# Runs the MariaDB command-line client through cmd.exe so quoting and < redirection behave,
-# appending all output to setup.log. Returns the exit code.
-function Invoke-MariaDb([string]$arguments, [string]$inputFile, [switch]$Quiet) {
-    $client = Find-MariaExe @('mariadb.exe', 'mysql.exe')
-    $line = "`"$client`" --no-defaults --protocol=TCP -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort --max_allowed_packet=256M --default-character-set=utf8 $arguments"
-    if ($inputFile) { $line += " < `"$inputFile`"" }
-    $line += " >> `"$LogFile`" 2>&1"
-    if (-not $Quiet) { Add-Content -Path $LogFile -Value "---- $(Get-Date -Format s) mariadb $arguments $inputFile" }
-    cmd /c "`"$line`""
-    return $LASTEXITCODE
+# Runs a MariaDB command-line tool directly (no cmd.exe), feeding SQL through standard input and
+# writing everything it prints - plus how it exited - to setup.log. Returns the exit code.
+function Invoke-MariaTool([string]$exeNames, [string[]]$toolArgs, [string]$inputFile, [switch]$Quiet) {
+    $exe = Find-MariaExe ($exeNames -split ',')
+    $common = @('--no-defaults', '--protocol=TCP', '-uroot', "-p$DbRootPass", '-h127.0.0.1', "-P$DbPort")
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $exe
+    $psi.Arguments = (($common + $toolArgs) | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.WorkingDirectory = Split-Path $exe -Parent
+    if (-not $Quiet) { Add-Content -Path $LogFile -Value "---- $(Get-Date -Format s) $(Split-Path $exe -Leaf) $($toolArgs -join ' ') $inputFile" }
+    try {
+        $p = [System.Diagnostics.Process]::Start($psi)
+    } catch {
+        Add-Content -Path $LogFile -Value "could not start ${exe}: $($_.Exception.Message)"
+        return -1
+    }
+    $errTask = $p.StandardError.ReadToEndAsync()
+    $outTask = $p.StandardOutput.ReadToEndAsync()
+    if ($inputFile) {
+        # copy the file byte-for-byte so UTF-8 text in the database survives
+        $fs = [System.IO.File]::OpenRead($inputFile)
+        $fs.CopyTo($p.StandardInput.BaseStream, 1048576)
+        $fs.Close()
+        $p.StandardInput.BaseStream.Flush()
+    }
+    $p.StandardInput.Close()
+    $p.WaitForExit()
+    $text = ($outTask.Result + $errTask.Result).Trim()
+    if ($text -and -not ($Quiet -and $p.ExitCode -eq 0)) { Add-Content -Path $LogFile -Value $text }
+    if ($p.ExitCode -ne 0) { Add-Content -Path $LogFile -Value ("exit code {0} (0x{0:X8})" -f $p.ExitCode) }
+    return $p.ExitCode
+}
+
+function Invoke-MariaDb([string]$sql, [string]$inputFile, [switch]$Quiet) {
+    $file = $inputFile
+    if (-not $file) {
+        $file = Join-Path $Root 'last-command.sql'
+        Set-Content -Path $file -Value $sql -Encoding ASCII
+    }
+    return Invoke-MariaTool 'mariadb.exe,mysql.exe' @('--max_allowed_packet=256M', '--default-character-set=utf8') $file -Quiet:$Quiet
 }
 
 function Stop-Database {
     if (-not (Test-Port $DbPort)) { return }
     Write-Step 'Stopping database...'
-    $admin = Find-MariaExe @('mariadb-admin.exe', 'mysqladmin.exe')
-    cmd /c "`"`"$admin`" --no-defaults --protocol=TCP -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort shutdown >> `"$LogFile`" 2>&1`""
+    Invoke-MariaTool 'mariadb-admin.exe,mysqladmin.exe' @('shutdown') '' | Out-Null
     $deadline = (Get-Date).AddSeconds(30)
     while ((Test-Port $DbPort) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    if (Test-Port $DbPort) {
+        Get-Process -Name mariadbd, mysqld -ErrorAction SilentlyContinue | Stop-Process -Force
+    }
 }
 
 function Invoke-Sql([string]$sql) {
-    if ($sql.Contains('"')) { throw 'Invoke-Sql: SQL must not contain double quotes' }
-    $code = Invoke-MariaDb "-e `"$sql`"" ''
+    $code = Invoke-MariaDb $sql ''
     if ($code -ne 0) { throw "Database command failed. Details: $(Get-LogTail)" }
 }
 
