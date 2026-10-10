@@ -1,3 +1,339 @@
+diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
+index ffa25ba..bc272ad 100644
+--- a/src/game/Chat/Chat.cpp
++++ b/src/game/Chat/Chat.cpp
+@@ -962,6 +962,12 @@ ChatCommand* ChatHandler::getCommandTable()
+         { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
+         { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
+         { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
++        { "zslash",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaSlashCommand,          "", nullptr },
++        { "zspin",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaSpinCommand,           "", nullptr },
++        { "zroll",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaRollCommand,           "", nullptr },
++        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
++        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
++        { "zhook",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaHookCommand,           "", nullptr },
+         { "guid",           SEC_GAMEMASTER,     false, &ChatHandler::HandleGUIDCommand,                "", nullptr },
+         { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
+         { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
+diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
+index 00fde0a..dbbfe69 100644
+--- a/src/game/Chat/Chat.h
++++ b/src/game/Chat/Chat.h
+@@ -679,6 +679,13 @@ class ChatHandler
+         bool HandleAnnounceCommand(char* args);
+         bool HandleNotifyCommand(char* args);
+         bool HandleGPSCommand(char* args);
++        // Zelda of Warcraft combat moves (ZeldaCommands.cpp)
++        bool HandleZeldaSlashCommand(char* args);
++        bool HandleZeldaSpinCommand(char* args);
++        bool HandleZeldaRollCommand(char* args);
++        bool HandleZeldaFlipCommand(char* args);
++        bool HandleZeldaShieldCommand(char* args);
++        bool HandleZeldaHookCommand(char* args);
+         bool HandleTaxiCheatCommand(char* args);
+         bool HandleWhispersCommand(char* args);
+         bool HandleWhisperRestrictionCommand(char* args);
+diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
+new file mode 100644
+index 0000000..21fd744
+--- /dev/null
++++ b/src/game/Chat/ZeldaCommands.cpp
+@@ -0,0 +1,277 @@
++/*
++ * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
++ * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
++ *
++ *   .zslash     sword slash: hits every enemy in a cone in front of you; every 3rd quick slash is a finisher
++ *   .zspin      spin attack: hits every enemy around you twice (after holding the attack key)
++ *   .zroll      dodge roll forward with a short moment of invulnerability
++ *   .zflip      backflip away with a short moment of invulnerability
++ *   .zshield    toggles the shield: heavy damage reduction from the front, slower movement
++ *   .zhook      hookshot: pulls you to your target
++ */
++
++#include "Common.h"
++#include "Chat/Chat.h"
++#include "Chat/ZeldaCommands.h"
++#include "Entities/Player.h"
++#include "Entities/Unit.h"
++#include "Grids/GridNotifiers.h"
++#include "Grids/GridNotifiersImpl.h"
++#include "Grids/CellImpl.h"
++#include "Util/Timer.h"
++#include "Globals/ObjectAccessor.h"
++
++#include <cmath>
++#include <mutex>
++#include <unordered_map>
++
++namespace
++{
++    struct ZeldaState
++    {
++        uint32 lastSlash = 0;
++        uint32 comboCount = 0;
++        uint32 spinReadyAt = 0;
++        uint32 dodgeReadyAt = 0;
++        uint32 invulnerableUntil = 0;
++        uint32 hookReadyAt = 0;
++        bool shield = false;
++    };
++
++    // Commands run on the session's thread and damage on map threads, so the table is locked.
++    std::unordered_map<uint32, ZeldaState> s_states;
++    std::mutex s_statesLock;
++
++    ZeldaState& StateFor(Player* player)
++    {
++        std::lock_guard<std::mutex> guard(s_statesLock);
++        return s_states[player->GetGUIDLow()]; // references stay valid: unordered_map never moves nodes
++    }
++
++    const float SLASH_RANGE = 5.5f;
++    const float SLASH_ARC = M_PI_F * 2.0f / 3.0f; // 120 degrees in front
++    const float SPIN_RANGE = 7.5f;
++    const uint32 SLASH_MIN_GAP_MS = 380;
++    const uint32 COMBO_WINDOW_MS = 1100;
++    const uint32 SPIN_COOLDOWN_MS = 2500;
++    const uint32 DODGE_COOLDOWN_MS = 900;
++    const uint32 DODGE_INVULN_MS = 450;
++    const uint32 HOOK_COOLDOWN_MS = 4000;
++    const float HOOK_RANGE = 30.0f;
++
++    void CollectEnemies(Player* player, float range, std::list<Unit*>& out)
++    {
++        MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck check(player, range);
++        MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(out, check);
++        Cell::VisitAllObjects(player, searcher, range);
++
++        for (auto itr = out.begin(); itr != out.end();)
++        {
++            Unit* unit = *itr;
++            if (!unit->IsAlive() || !player->CanAttack(unit) || !player->IsWithinLOSInMap(unit))
++                itr = out.erase(itr);
++            else
++                ++itr;
++        }
++    }
++
++    bool CanAct(Player* player)
++    {
++        return player->IsAlive() && !player->IsTaxiFlying() && !player->IsMounted() &&
++               !player->hasUnitState(UNIT_STAT_CAN_NOT_REACT) && !player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PACIFIED);
++    }
++
++    void Swing(Player* player, Unit* victim, uint32 hits)
++    {
++        for (uint32 i = 0; i < hits && victim->IsAlive(); ++i)
++            player->AttackerStateUpdate(victim, BASE_ATTACK, true);
++    }
++}
++
++uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage)
++{
++    if (!victim || damage == 0)
++        return damage;
++
++    ZeldaState state;
++    {
++        std::lock_guard<std::mutex> guard(s_statesLock);
++        auto itr = s_states.find(victim->GetGUIDLow());
++        if (itr == s_states.end())
++            return damage;
++        state = itr->second;
++    }
++    if (WorldTimer::getMSTime() < state.invulnerableUntil)
++        return 0; // rolled through it
++
++    if (state.shield && attacker && attacker != victim && victim->HasInArc(attacker, M_PI_F * 2.0f / 3.0f))
++        return damage / 5; // blocked with the shield: 80% less
++
++    return damage;
++}
++
++bool ChatHandler::HandleZeldaSlashCommand(char* /*args*/)
++{
++    Player* player = m_session->GetPlayer();
++    if (!CanAct(player))
++        return true;
++
++    ZeldaState& state = StateFor(player);
++    uint32 now = WorldTimer::getMSTime();
++    if (now - state.lastSlash < SLASH_MIN_GAP_MS)
++        return true;
++
++    state.comboCount = (now - state.lastSlash <= COMBO_WINDOW_MS) ? state.comboCount + 1 : 1;
++    state.lastSlash = now;
++    bool finisher = state.comboCount >= 3;
++    if (finisher)
++        state.comboCount = 0;
++
++    std::list<Unit*> enemies;
++    CollectEnemies(player, SLASH_RANGE + 2.0f, enemies);
++
++    // Prefer the selected target if it is in reach, then everything else in the cone in front of us.
++    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
++    uint32 hit = 0;
++    for (Unit* unit : enemies)
++    {
++        bool inReach = player->IsWithinDistInMap(unit, SLASH_RANGE + unit->GetCombatReach());
++        bool inFront = player->HasInArc(unit, SLASH_ARC) || unit == selected;
++        if (!inReach || !inFront)
++            continue;
++        Swing(player, unit, finisher ? 2 : 1);
++        ++hit;
++    }
++
++    if (hit == 0)
++        player->HandleEmoteCommand(EMOTE_ONESHOT_ATTACK1H); // swing at the air
++    return true;
++}
++
++bool ChatHandler::HandleZeldaSpinCommand(char* /*args*/)
++{
++    Player* player = m_session->GetPlayer();
++    if (!CanAct(player))
++        return true;
++
++    ZeldaState& state = StateFor(player);
++    uint32 now = WorldTimer::getMSTime();
++    if (now < state.spinReadyAt)
++        return true;
++    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
++    state.comboCount = 0;
++
++    std::list<Unit*> enemies;
++    CollectEnemies(player, SPIN_RANGE + 2.0f, enemies);
++    for (Unit* unit : enemies)
++    {
++        if (player->IsWithinDistInMap(unit, SPIN_RANGE + unit->GetCombatReach()))
++            Swing(player, unit, 2);
++    }
++    player->HandleEmoteCommand(EMOTE_ONESHOT_ATTACK2HTIGHT);
++    return true;
++}
++
++static void Dodge(Player* player, float angleOffset, float horizontal, float vertical)
++{
++    ZeldaState& state = StateFor(player);
++    uint32 now = WorldTimer::getMSTime();
++    if (now < state.dodgeReadyAt)
++        return;
++    state.dodgeReadyAt = now + DODGE_COOLDOWN_MS;
++    state.invulnerableUntil = now + DODGE_INVULN_MS;
++
++    // KnockBackWithAngle pushes away from the angle given, so aim it opposite to where we want to go.
++    float angle = player->GetOrientation() + angleOffset + M_PI_F;
++    player->KnockBackWithAngle(angle, horizontal, vertical);
++}
++
++bool ChatHandler::HandleZeldaRollCommand(char* args)
++{
++    Player* player = m_session->GetPlayer();
++    if (!CanAct(player) || player->IsInWater())
++        return true;
++
++    // optional direction: f (forward, default), l (left), r (right), b (back)
++    float offset = 0.0f;
++    if (args && *args)
++    {
++        switch (args[0])
++        {
++            case 'l': case 'L': offset = M_PI_F / 2.0f; break;
++            case 'r': case 'R': offset = -M_PI_F / 2.0f; break;
++            case 'b': case 'B': offset = M_PI_F; break;
++            default: break;
++        }
++    }
++    Dodge(player, offset, 11.0f, 2.5f);
++    return true;
++}
++
++bool ChatHandler::HandleZeldaFlipCommand(char* /*args*/)
++{
++    Player* player = m_session->GetPlayer();
++    if (!CanAct(player) || player->IsInWater())
++        return true;
++    Dodge(player, M_PI_F, 8.0f, 7.0f);
++    return true;
++}
++
++bool ChatHandler::HandleZeldaShieldCommand(char* args)
++{
++    Player* player = m_session->GetPlayer();
++    ZeldaState& state = StateFor(player);
++
++    bool on = !state.shield;
++    if (args && *args)
++    {
++        std::string a = args;
++        if (a == "on" || a == "1")
++            on = true;
++        else if (a == "off" || a == "0")
++            on = false;
++    }
++    if (on && !CanAct(player))
++        on = false;
++    if (on == state.shield)
++        return true;
++
++    state.shield = on;
++    player->SetSpeedRate(MOVE_RUN, on ? 0.45f : 1.0f, true);
++    if (on)
++        player->HandleEmoteCommand(EMOTE_ONESHOT_PARRYSHIELD);
++    return true;
++}
++
++bool ChatHandler::HandleZeldaHookCommand(char* /*args*/)
++{
++    Player* player = m_session->GetPlayer();
++    if (!CanAct(player))
++        return true;
++
++    ZeldaState& state = StateFor(player);
++    uint32 now = WorldTimer::getMSTime();
++    if (now < state.hookReadyAt)
++    {
++        SendSysMessage("The hookshot is still retracting.");
++        return true;
++    }
++
++    Unit* target = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
++    if (!target || target == player || !player->IsWithinDistInMap(target, HOOK_RANGE) || !player->IsWithinLOSInMap(target))
++    {
++        SendSysMessage("Hookshot: select something within 30 yards that you can see.");
++        return true;
++    }
++    state.hookReadyAt = now + HOOK_COOLDOWN_MS;
++
++    // Land just in front of the target, facing it.
++    float angle = target->GetAngle(player);
++    float dist = target->GetCombatReach() + 1.5f;
++    float x = target->GetPositionX() + std::cos(angle) * dist;
++    float y = target->GetPositionY() + std::sin(angle) * dist;
++    float z = target->GetPositionZ();
++    player->UpdateAllowedPositionZ(x, y, z);
++    player->NearTeleportTo(x, y, z, player->GetAngle(target));
++    return true;
++}
+diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
+new file mode 100644
+index 0000000..08fb353
+--- /dev/null
++++ b/src/game/Chat/ZeldaCommands.h
+@@ -0,0 +1,12 @@
++#ifndef ZELDA_COMMANDS_H
++#define ZELDA_COMMANDS_H
++
++#include "Common.h"
++
++class Player;
++class Unit;
++
++// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
++uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
++
++#endif
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
 index a10fdbb..4137851 100644
 --- a/src/game/Entities/Creature.cpp
@@ -82,10 +418,29 @@ index a378c4e..f53dd65 100644
 +
  #endif
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af..9252438 100644
+index 00986af..442475e 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
-@@ -7050,7 +7050,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Entities/Unit.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Log/Log.h"
+ #include "Server/Opcodes.h"
+ #include "Server/WorldPacket.h"
+@@ -901,6 +902,10 @@ void Unit::FallSuicide()
+ 
+ uint32 Unit::DealDamage(Unit* dealer, Unit* victim, uint32 damage, CleanDamage const* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellInfo, bool durabilityLoss, Spell* spell)
+ {
++    // Zelda of Warcraft: dodge-roll invulnerability and shield blocking
++    if (victim && victim->GetTypeId() == TYPEID_PLAYER && damagetype != INSTAKILL)
++        damage = ZeldaModifyIncomingDamage(static_cast<Player*>(victim), dealer, damage);
++
+     // remove affects from attacker at any non-DoT damage (including 0 damage)
+     if (damagetype != DOT && damagetype != INSTAKILL)
+     {
+@@ -7050,7 +7055,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())

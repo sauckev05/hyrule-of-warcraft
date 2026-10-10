@@ -2,6 +2,11 @@ name: build-windows
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'solo-wow/**'
+      - 'zelda-wow/**'
+      - '.github/workflows/build-solo-wow.yml'
+      - '.github/workflows/build-zelda-wow.yml'
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

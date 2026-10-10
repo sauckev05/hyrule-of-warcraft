@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'zelda-wow/**'
+      - 'solo-wow/package/addons/**'
       - '.github/workflows/build-zelda-wow.yml'
   workflow_dispatch:
 concurrency:
@@ -60,6 +61,8 @@ jobs:
           New-Item -ItemType Directory ZeldaWoW | Out-Null
           Copy-Item zelda-wow/benilla/target/release/benilla.exe ZeldaWoW/
           Copy-Item -Recurse -Force zelda-wow/package/* ZeldaWoW/
+          New-Item -ItemType Directory -Force ZeldaWoW/benilla-config/AddOns | Out-Null
+          Copy-Item -Recurse -Force solo-wow/package/addons/* ZeldaWoW/benilla-config/AddOns/
           Copy-Item zelda-wow/benilla/LICENSE-MIT ZeldaWoW/LICENSE-benilla-MIT.txt
           Get-ChildItem ZeldaWoW | Format-Table Name, Length
           Compress-Archive -Path ZeldaWoW -DestinationPath ZeldaWoW-Windows.zip

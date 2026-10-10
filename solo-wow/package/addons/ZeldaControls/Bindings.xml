@@ -1,0 +1,10 @@
+<Bindings>
+	<Binding name="ZELDA_ATTACK" runOnUp="true" header="ZELDA">ZeldaControls_Attack(keystate)</Binding>
+	<Binding name="ZELDA_SHIELD" runOnUp="true">ZeldaControls_Shield(keystate)</Binding>
+	<Binding name="ZELDA_ROLL">ZeldaControls_Command(".zroll f")</Binding>
+	<Binding name="ZELDA_ROLL_LEFT">ZeldaControls_Command(".zroll l")</Binding>
+	<Binding name="ZELDA_ROLL_RIGHT">ZeldaControls_Command(".zroll r")</Binding>
+	<Binding name="ZELDA_FLIP">ZeldaControls_Command(".zflip")</Binding>
+	<Binding name="ZELDA_HOOK">ZeldaControls_Command(".zhook")</Binding>
+	<Binding name="ZELDA_TARGET">ZeldaControls_Target()</Binding>
+</Bindings>

@@ -111,6 +111,13 @@ try {
 
     # ---------------------------------------------------------------- client + shortcut
     Set-Realmlist $wow
+    $addonSrc = Join-Path $Root 'addons'
+    if (Test-Path $addonSrc) {
+        $addonDst = Join-Path $wow 'Interface\AddOns'
+        New-Item -ItemType Directory -Force $addonDst | Out-Null
+        Copy-Item -Recurse -Force (Join-Path $addonSrc '*') $addonDst
+        Write-Ok 'Zelda Controls addon installed (F sword, R shield, V roll, H hookshot, Z target)'
+    }
     Write-Ok 'Client pointed at your own PC (realmlist 127.0.0.1). Original saved as realmlist.wtf.original'
     try {
         $desktop = [Environment]::GetFolderPath('Desktop')
