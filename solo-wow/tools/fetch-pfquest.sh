@@ -3,7 +3,8 @@
 # into the addons folder given as $1: the vanilla 1.12, English-only build, as its Makefile's
 # "enUS" target makes it, with the toc listing each init file once.
 set -euo pipefail
-DEST="$1"
+mkdir -p "$1"
+DEST="$(cd "$1" && pwd)"
 COMMIT=104f35678ca39ab1fb78b655f815cc7016f5e0c8
 WORK="$(mktemp -d)"
 git clone -q https://github.com/shagu/pfQuest.git "$WORK/src"
