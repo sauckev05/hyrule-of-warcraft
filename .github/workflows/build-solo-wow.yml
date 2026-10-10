@@ -211,6 +211,14 @@ jobs:
           $c = $c -replace '^Console\.Enable\s*=.*', 'Console.Enable = 1'
           # every profession can be learned, not just two
           $c = $c -replace '^MaxPrimaryTradeSkill\s*=.*', 'MaxPrimaryTradeSkill = 9'
+          # professions level three times faster, and old recipes and nodes still give points
+          $c = $c -replace '^SkillGain\.Crafting\s*=.*', 'SkillGain.Crafting = 3'
+          $c = $c -replace '^SkillGain\.Gathering\s*=.*', 'SkillGain.Gathering = 3'
+          $c = $c -replace '^SkillChance\.Yellow\s*=.*', 'SkillChance.Yellow = 100'
+          $c = $c -replace '^SkillChance\.Green\s*=.*', 'SkillChance.Green  = 100'
+          $c = $c -replace '^SkillChance\.Grey\s*=.*', 'SkillChance.Grey   = 100'
+          # two talent points per level
+          $c = $c -replace '^Rate\.Talent\s*=.*', 'Rate.Talent = 2'
           $c += ''
           $c += '###################################################################################################'
           $c += '# SOLOCRAFT - dungeon & raid scaling so one player can clear everything'
@@ -233,6 +241,7 @@ jobs:
           $c += '#   OneHandOnBack       one-handed weapons (not maces) are worn on the back instead of the hip'
           $c += '#   DayLengthMinutes    real minutes per game day (60: a full day and night every hour)'
           $c += '#   ChestBoEChance      percent chance a treasure chest also holds a Bind on Equip item of the zone level'
+          $c += '#   RedSwingTrail       melee swings leave a red weapon trail'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
@@ -242,6 +251,7 @@ jobs:
           $c += 'Zelda.OneHandOnBack = 1'
           $c += 'Zelda.DayLengthMinutes = 60'
           $c += 'Zelda.ChestBoEChance = 50'
+          $c += 'Zelda.RedSwingTrail = 1'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1

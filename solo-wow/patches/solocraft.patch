@@ -39,10 +39,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..0fcd5bf
+index 0000000..500904d
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,704 @@
+@@ -0,0 +1,722 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -210,13 +210,13 @@ index 0000000..0fcd5bf
 +    // Plays Whirlwind's spinning animation, swoosh and sound on the hero for every client nearby,
 +    // without casting the spell: an SMSG_SPELL_GO with no effects, listing the enemies the spin hit
 +    // so they show Whirlwind's impact too. The damage itself still comes from ZeldaSwing.
-+    void PlayWhirlwind(Player* player, std::vector<ObjectGuid> const& hits)
++    void PlaySpellVisual(Player* player, uint32 spellId, std::vector<ObjectGuid> const& hits)
 +    {
 +        uint8 const count = uint8(std::min<size_t>(hits.size(), 255));
 +        WorldPacket data(SMSG_SPELL_GO, 32 + count * 8);
 +        data << player->GetPackGUID();                 // caster (no item)
 +        data << player->GetPackGUID();                 // caster unit
-+        data << uint32(WHIRLWIND_SPELL);
++        data << uint32(spellId);
 +        data << uint16(0x0100 | 0x0001);               // CAST_FLAG_UNKNOWN9 | CAST_FLAG_HIDDEN_COMBATLOG
 +        data << count;                                 // hit targets
 +        for (uint8 i = 0; i < count; ++i)
@@ -225,10 +225,28 @@ index 0000000..0fcd5bf
 +        data << uint16(0);                             // TARGET_FLAG_SELF
 +        player->SendMessageToSet(data, true);
 +
-+        // the hero's own client starts Whirlwind's cooldown and global cooldown when the GO
-+        // arrives - clear them, so the spin never locks the action bar
-+        player->SendClearCooldown(WHIRLWIND_SPELL, player);
++        // the hero's own client starts the spell's cooldown and global cooldown when the GO
++        // arrives - clear them, so the visual never locks the action bar
++        player->SendClearCooldown(spellId, player);
 +    }
++
++    void PlayWhirlwind(Player* player, std::vector<ObjectGuid> const& hits)
++    {
++        PlaySpellVisual(player, WHIRLWIND_SPELL, hits);
++    }
++
++    // Heroic Strike (rank 1): its cast kit latches the red weapon trail onto the hero's next swing.
++    const uint32 RED_TRAIL_SPELL = 78;
++}
++
++void ZeldaSwingTrail(Player* player, Unit* victim)
++{
++    static bool const redTrail = sConfig.GetBoolDefault("Zelda.RedSwingTrail", true);
++    if (!redTrail || !player || !victim || t_meleeMultiplier > 1.0f)   // the spin plays Whirlwind instead
++        return;
++    std::vector<ObjectGuid> hits;
++    hits.push_back(victim->GetObjectGuid());
++    PlaySpellVisual(player, RED_TRAIL_SPELL, hits);
 +}
 +
 +float ZeldaMeleeMultiplier()
@@ -749,10 +767,10 @@ index 0000000..0fcd5bf
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..49c2288
+index 0000000..2d31157
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,59 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -806,6 +824,10 @@ index 0000000..49c2288
 +// Zelda.ChestBoEChance percent (50), one extra Bind on Equip weapon or armor piece whose required
 +// level fits the zone: green, sometimes blue, rarely purple.
 +void ZeldaChestBonus(Loot* loot, GameObject* chest, Player* opener);
++
++// Zelda of Warcraft: every melee swing of a hero leaves a red weapon trail (Heroic Strike's), sent
++// just before the swing so the swing animation draws it (Zelda.RedSwingTrail = 1).
++void ZeldaSwingTrail(Player* player, Unit* victim);
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -1070,7 +1092,7 @@ index 70b4e7d..45ee880 100644
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af..2f68e49 100644
+index 00986af..5097c70 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -1102,7 +1124,18 @@ index 00986af..2f68e49 100644
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -7050,7 +7058,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -2656,6 +2664,10 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+         meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
+     }
+ 
++    // Zelda of Warcraft: the hero's swing leaves the red weapon trail
++    if (GetTypeId() == TYPEID_PLAYER)
++        ZeldaSwingTrail(static_cast<Player*>(this), pVictim);
++
+     SendAttackStateUpdate(&meleeDamageInfo);
+     DealMeleeDamage(&meleeDamageInfo, true);
+     ProcDamageAndSpell(ProcSystemArguments(this, meleeDamageInfo.target, meleeDamageInfo.procAttacker, meleeDamageInfo.procVictim, meleeDamageInfo.procEx, meleeDamageInfo.totalDamage, meleeDamageInfo.absorb, meleeDamageInfo.attackType));
+@@ -7050,7 +7062,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
