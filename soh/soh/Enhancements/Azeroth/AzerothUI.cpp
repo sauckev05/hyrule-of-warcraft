@@ -1,6 +1,10 @@
 // Hyrule of Warcraft - WoW style interface: XP bar, nameplates, target frame, floating combat text,
 // chat log, quest tracker, character sheet, bags and quest log.
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4244 4267 4305 4838 4018 4389 4456 4457 4458 4459)
+#endif
+
 #include "AzerothInternal.h"
 
 #include <algorithm>

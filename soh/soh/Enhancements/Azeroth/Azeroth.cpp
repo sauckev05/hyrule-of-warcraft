@@ -1,5 +1,9 @@
 // Hyrule of Warcraft - core rules: levels, XP, stats, combat math, loot, quests, persistence.
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4244 4267 4305 4838 4018 4389 4456 4457 4458 4459)
+#endif
+
 #include "Azeroth.h"
 #include "AzerothInternal.h"
 
@@ -386,7 +390,7 @@ static void LevelUp() {
     if (gPlayState != nullptr && gSaveContext.health > 0) {
         gSaveContext.health = gSaveContext.healthCapacity;
         if (gSaveContext.magicLevel > 0) {
-            gSaveContext.magic = gSaveContext.magicCapacity;
+            gSaveContext.magic = (s8)gSaveContext.magicCapacity;
         }
         Audio_PlayFanfare(NA_BGM_HEART_GET);
     }

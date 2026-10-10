@@ -1,0 +1,248 @@
+name: build-solo-wow
+# Offline, single-player World of Warcraft 1.12.1 server package for Windows:
+# CMaNGOS Classic + Playerbots + SoloCraft dungeon/raid scaling, a portable MariaDB with a
+# pre-built world database, map extractors and one-click scripts.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'solo-wow/**'
+      - '.github/workflows/build-solo-wow.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CMANGOS_SHA: 8ec338a1704e7dcb1c0213eb7ed58f9231ade40f
+  PLAYERBOTS_SHA: da4419afc44f97bb950ca2ebccc3f29a902a3fab
+  CLASSICDB_SHA: ec4f596146be6467ea93c57397858e329e2db852
+  MARIADB_VERSION: 10.11.10
+
+jobs:
+  server:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    env:
+      BUILD_TYPE: RelWithDebInfo
+      BOOST_VERSION: "1.87.0"
+    steps:
+      - name: Checkout package files
+        uses: actions/checkout@v7
+        with:
+          path: repo
+      - name: Checkout CMaNGOS Classic
+        shell: pwsh
+        run: |
+          git clone https://github.com/cmangos/mangos-classic.git cmangos
+          cd cmangos
+          git checkout $env:CMANGOS_SHA
+          git apply ../repo/solo-wow/patches/solocraft.patch
+          # Pin the playerbots module to a known commit
+          (Get-Content src/CMakeLists.txt) -replace 'GIT_TAG "master"', "GIT_TAG `"$env:PLAYERBOTS_SHA`"" | Set-Content src/CMakeLists.txt
+          git diff --stat
+      - name: Install Boost
+        uses: MarkusJx/install-boost@v2.6.0
+        id: install-boost
+        with:
+          boost_version: ${{ env.BOOST_VERSION }}
+          platform_version: "2022"
+          toolset: msvc
+      - name: Configure
+        env:
+          BOOST_ROOT: ${{ steps.install-boost.outputs.BOOST_ROOT }}
+        run: cmake -DBUILD_EXTRACTORS=ON -DBUILD_PLAYERBOTS=ON -DBUILD_AHBOT=ON -DPCH=ON -B cmangos/bin/builddir -S cmangos
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build cmangos/bin/builddir --config ${{ env.BUILD_TYPE }} --parallel *> build.log
+          $code = $LASTEXITCODE
+          Get-Content build.log -Tail 40
+          if ($code -ne 0) { exit $code }
+      - name: Publish build errors (ci-logs-solo branch)
+        if: failure()
+        shell: pwsh
+        run: |
+          $lines = Select-String -Path build.log -Pattern 'error C[0-9]+|error LNK[0-9]+|: error|CMake Error' -Context 0,2 | Select-Object -First 120 | Out-String -Width 400
+          New-Item -ItemType Directory logrepo | Out-Null
+          Set-Content -Path logrepo/errors.txt -Value $lines
+          cd logrepo
+          git init -q
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add .
+          git commit -qm "solo build errors for ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/heads/ci-logs-solo
+      - name: Collect binaries
+        shell: pwsh
+        run: |
+          $out = "server-bin"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $bin = Get-ChildItem -Recurse -Directory "cmangos/bin" | Where-Object { $_.Name -eq "x64_$env:BUILD_TYPE" } | Select-Object -First 1
+          Write-Host "Binaries in $($bin.FullName)"
+          Copy-Item -Recurse "$($bin.FullName)/*" $out
+          Get-ChildItem -Recurse $out -Include *.pdb | Remove-Item -Force
+          # make sure every *.conf.dist is next to the executables
+          Get-ChildItem -Recurse cmangos/bin/builddir, cmangos/src -Filter *.conf.dist -ErrorAction SilentlyContinue | ForEach-Object {
+            if (-not (Test-Path (Join-Path $out $_.Name))) { Copy-Item $_.FullName $out; Write-Host "added $($_.Name)" }
+          }
+          # mmaps/vmaps helper configs + base sql (for reference)
+          Copy-Item cmangos/contrib/extractor_scripts/config.json $out/
+          Copy-Item cmangos/contrib/extractor_scripts/offmesh.txt $out/
+          Get-ChildItem -Recurse $out | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
+      - name: Upload binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-bin
+          path: server-bin
+          retention-days: 3
+
+  database:
+    runs-on: ubuntu-22.04
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - name: Install MariaDB client
+        run: sudo apt-get update && sudo apt-get install -y mariadb-client
+      - name: Fetch sources
+        run: |
+          git clone https://github.com/cmangos/mangos-classic.git cmangos
+          git -C cmangos checkout $CMANGOS_SHA
+          git clone https://github.com/cmangos/playerbots.git cmangos/src/modules/PlayerBots
+          git -C cmangos/src/modules/PlayerBots checkout $PLAYERBOTS_SHA
+          git clone https://github.com/cmangos/classic-db.git classicdb
+          git -C classicdb checkout $CLASSICDB_SHA
+      - name: Install full database
+        working-directory: classicdb
+        run: |
+          cat > InstallFullDB.config <<EOF
+          MYSQL_HOST="127.0.0.1"
+          MYSQL_PORT="3306"
+          MYSQL_USERNAME="mangos"
+          MYSQL_PASSWORD="mangos"
+          MYSQL_USERIP="%"
+          MYSQL_COLSTAT=""
+          WORLD_DB_NAME="classicmangos"
+          REALM_DB_NAME="classicrealmd"
+          CHAR_DB_NAME="classiccharacters"
+          LOGS_DB_NAME="classiclogs"
+          MYSQL_PATH="$(which mysql)"
+          MYSQL_DUMP_PATH="$(which mysqldump)"
+          CORE_PATH="${GITHUB_WORKSPACE}/cmangos"
+          LOCALES="NO"
+          DEV_UPDATES="NO"
+          AHBOT="YES"
+          PLAYERBOTS_DB="YES"
+          FORCE_WAIT="NO"
+          EOF
+          sed -i 's/^ *//' InstallFullDB.config
+          bash ./InstallFullDB.sh -InstallAll root root DeleteAll
+      - name: Customize realm for single player
+        run: |
+          mysql -h127.0.0.1 -uroot -proot classicrealmd -e "UPDATE realmlist SET name='Azeroth Solo', icon=0, address='127.0.0.1' WHERE id=1;"
+          mysql -h127.0.0.1 -uroot -proot -e "SELECT COUNT(*) AS creatures FROM classicmangos.creature; SELECT name, address, port FROM classicrealmd.realmlist; SELECT username, gmlevel FROM classicrealmd.account;"
+      - name: Dump database
+        run: |
+          mkdir -p db
+          mysqldump -h127.0.0.1 -uroot -proot --single-transaction --hex-blob --routines --default-character-set=utf8 \
+            --databases classicmangos classiccharacters classicrealmd classiclogs > db/azeroth_solo.sql
+          ls -la db
+      - name: Upload database
+        uses: actions/upload-artifact@v7
+        with:
+          name: database
+          path: db
+          retention-days: 3
+
+  package:
+    needs: [server, database]
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout package files
+        uses: actions/checkout@v7
+        with:
+          path: repo
+      - name: Download binaries
+        uses: actions/download-artifact@v8
+        with:
+          name: server-bin
+          path: SoloWoW/server
+      - name: Download database
+        uses: actions/download-artifact@v8
+        with:
+          name: database
+          path: SoloWoW/db
+      - name: Portable MariaDB
+        shell: pwsh
+        run: |
+          $v = $env:MARIADB_VERSION
+          $url = "https://archive.mariadb.org/mariadb-$v/winx64-packages/mariadb-$v-winx64.zip"
+          Invoke-WebRequest -Uri $url -OutFile mariadb.zip
+          Expand-Archive mariadb.zip -DestinationPath mdb
+          $src = Get-ChildItem mdb | Select-Object -First 1
+          New-Item -ItemType Directory -Force SoloWoW/mariadb | Out-Null
+          Copy-Item -Recurse "$($src.FullName)/bin" SoloWoW/mariadb/
+          Copy-Item -Recurse "$($src.FullName)/share" SoloWoW/mariadb/
+          Get-ChildItem -Recurse SoloWoW/mariadb -Include *.pdb | Remove-Item -Force
+      - name: Configure server for single player
+        shell: pwsh
+        run: |
+          $s = "SoloWoW/server"
+          foreach ($n in @("mangosd", "realmd", "ahbot", "aiplayerbot", "mods")) {
+            $dist = Get-ChildItem -Recurse $s -Filter "$n.conf.dist" | Select-Object -First 1
+            if ($dist) { Copy-Item $dist.FullName (Join-Path $dist.DirectoryName "$n.conf") }
+          }
+          $m = Get-ChildItem -Recurse $s -Filter "mangosd.conf" | Select-Object -First 1
+          $c = Get-Content $m.FullName
+          $c = $c -replace '^DataDir\s*=.*', 'DataDir = "data"'
+          $c = $c -replace '^GameType\s*=.*', 'GameType = 0'
+          $c = $c -replace '^Console\.Enable\s*=.*', 'Console.Enable = 1'
+          $c += ''
+          $c += '###################################################################################################'
+          $c += '# SOLOCRAFT - dungeon & raid scaling so one player can clear everything'
+          $c += '#   Health/damage multipliers for 5-player dungeons; raids scale further by (5/maxPlayers)^exponent.'
+          $c += '#   Lower numbers = easier. Set SoloCraft.Enable = 0 for the original group difficulty.'
+          $c += '###################################################################################################'
+          $c += 'SoloCraft.Enable = 1'
+          $c += 'SoloCraft.DungeonHealth = 0.45'
+          $c += 'SoloCraft.DungeonDamage = 0.55'
+          $c += 'SoloCraft.RaidHealthExponent = 0.9'
+          $c += 'SoloCraft.RaidDamageExponent = 0.55'
+          Set-Content $m.FullName $c
+          # Playerbots: companions on demand, no random-bot population by default (keeps it light)
+          $pb = Get-ChildItem -Recurse $s -Filter "aiplayerbot.conf" | Select-Object -First 1
+          if ($pb) {
+            $p = Get-Content $pb.FullName
+            $p = $p -replace '^AiPlayerbot\.RandomBotAutologin\s*=.*', 'AiPlayerbot.RandomBotAutologin = 0'
+            $p = $p -replace '^AiPlayerbot\.MinRandomBots\s*=.*', 'AiPlayerbot.MinRandomBots = 0'
+            $p = $p -replace '^AiPlayerbot\.MaxRandomBots\s*=.*', 'AiPlayerbot.MaxRandomBots = 0'
+            $p = $p -replace '^AiPlayerbot\.RandomBotAccountCount\s*=.*', 'AiPlayerbot.RandomBotAccountCount = 0'
+            Set-Content $pb.FullName $p
+          } else { Write-Host "::warning::aiplayerbot.conf not found" }
+          Copy-Item -Recurse -Force repo/solo-wow/package/* SoloWoW/
+          Get-ChildItem SoloWoW | Format-Table Name
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: AzerothSolo-Windows
+          path: SoloWoW
+      - name: Zip for download
+        shell: pwsh
+        run: 7z a -tzip AzerothSolo-Windows.zip SoloWoW
+      - name: Publish download (Releases page)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: azeroth-solo-latest
+          name: "Azeroth Solo - offline WoW 1.12.1 server for Windows (latest build)"
+          body: "Unzip anywhere, run SETUP.bat once, then PLAY.bat. Needs your own WoW 1.12.1 client. See 'README - START HERE.txt'."
+          prerelease: false
+          files: AzerothSolo-Windows.zip
