@@ -8,6 +8,7 @@ $DbDataDir   = Join-Path $Root 'mariadb-data'
 $SqlDir      = Join-Path $Root 'db'
 $SettingsFile = Join-Path $Root 'settings.json'
 $DbPort      = 3310
+$LogFile     = Join-Path $Root 'setup.log'
 $DbRootPass  = 'root'
 
 function Write-Title($text) {
@@ -67,32 +68,55 @@ function Start-Database {
     if (Test-Port $DbPort) { return }
     Write-Step 'Starting database...'
     $mysqld = Find-MariaExe @('mariadbd.exe', 'mysqld.exe')
-    Start-Process -FilePath $mysqld -ArgumentList @("--datadir=`"$DbDataDir`"", "--port=$DbPort", '--bind-address=127.0.0.1', '--max_allowed_packet=256M') -WindowStyle Hidden | Out-Null
+    # --no-defaults: ignore any my.ini left behind by other MySQL/MariaDB installs on this PC
+    Start-Process -FilePath $mysqld -ArgumentList @('--no-defaults', "--datadir=`"$DbDataDir`"", "--port=$DbPort", '--bind-address=127.0.0.1', '--max_allowed_packet=256M', '--skip-name-resolve') -WindowStyle Hidden | Out-Null
     Wait-Port $DbPort 90 'The database' | Out-Null
     Write-Host ''
+    # The port opens a moment before the server accepts logins - wait until a real query works
+    $deadline = (Get-Date).AddSeconds(60)
+    while ($true) {
+        if ((Invoke-MariaDb '-e "SELECT 1"' '' -Quiet) -eq 0) { break }
+        if ((Get-Date) -gt $deadline) { throw "The database is running but refuses logins. Details: $(Get-LogTail)" }
+        Start-Sleep -Seconds 2
+    }
     Write-Ok 'Database running'
+}
+
+function Get-LogTail {
+    if (Test-Path $LogFile) { return ((Get-Content $LogFile -Tail 12) -join ' | ') }
+    return '(no log)'
+}
+
+# Runs the MariaDB command-line client through cmd.exe so quoting and < redirection behave,
+# appending all output to setup.log. Returns the exit code.
+function Invoke-MariaDb([string]$arguments, [string]$inputFile, [switch]$Quiet) {
+    $client = Find-MariaExe @('mariadb.exe', 'mysql.exe')
+    $line = "`"$client`" --no-defaults --protocol=TCP -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort --max_allowed_packet=256M --default-character-set=utf8 $arguments"
+    if ($inputFile) { $line += " < `"$inputFile`"" }
+    $line += " >> `"$LogFile`" 2>&1"
+    if (-not $Quiet) { Add-Content -Path $LogFile -Value "---- $(Get-Date -Format s) mariadb $arguments $inputFile" }
+    cmd /c "`"$line`""
+    return $LASTEXITCODE
 }
 
 function Stop-Database {
     if (-not (Test-Port $DbPort)) { return }
     Write-Step 'Stopping database...'
     $admin = Find-MariaExe @('mariadb-admin.exe', 'mysqladmin.exe')
-    cmd /c "`"`"$admin`" -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort shutdown 2>nul`""
+    cmd /c "`"`"$admin`" --no-defaults --protocol=TCP -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort shutdown >> `"$LogFile`" 2>&1`""
     $deadline = (Get-Date).AddSeconds(30)
     while ((Test-Port $DbPort) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
 }
 
 function Invoke-Sql([string]$sql) {
-    $mysql = Find-MariaExe @('mariadb.exe', 'mysql.exe')
-    & $mysql -uroot "-p$DbRootPass" -h127.0.0.1 "-P$DbPort" -e $sql
-    if ($LASTEXITCODE -ne 0) { throw "SQL failed: $sql" }
+    if ($sql.Contains('"')) { throw 'Invoke-Sql: SQL must not contain double quotes' }
+    $code = Invoke-MariaDb "-e `"$sql`"" ''
+    if ($code -ne 0) { throw "Database command failed. Details: $(Get-LogTail)" }
 }
 
 function Import-SqlFile([string]$file) {
-    $mysql = Find-MariaExe @('mariadb.exe', 'mysql.exe')
-    $cmd = "`"`"$mysql`" -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort --max_allowed_packet=256M --default-character-set=utf8 < `"$file`"`""
-    cmd /c $cmd
-    if ($LASTEXITCODE -ne 0) { throw "Importing $file failed." }
+    $code = Invoke-MariaDb '' $file
+    if ($code -ne 0) { throw "Importing $file failed. Details: $(Get-LogTail)" }
 }
 
 function Test-WowFolder([string]$p) {
