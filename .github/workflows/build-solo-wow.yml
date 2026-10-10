@@ -242,6 +242,8 @@ jobs:
           $c += '#   DayLengthMinutes    real minutes per game day (60: a full day and night every hour)'
           $c += '#   ChestBoEChance      percent chance a treasure chest also holds a Bind on Equip item of the zone level'
           $c += '#   RedSwingTrail       melee swings leave a red weapon trail'
+          $c += '#   PassiveBattleShout  Battle Shout is always on: no rage, no casting, never runs out'
+          $c += '#   FishingSkillGain    fishing skill points for every fish caught (0 = normal fishing skill-ups)'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
@@ -252,6 +254,8 @@ jobs:
           $c += 'Zelda.DayLengthMinutes = 60'
           $c += 'Zelda.ChestBoEChance = 50'
           $c += 'Zelda.RedSwingTrail = 1'
+          $c += 'Zelda.PassiveBattleShout = 1'
+          $c += 'Zelda.FishingSkillGain = 10'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1

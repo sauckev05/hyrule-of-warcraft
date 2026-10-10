@@ -39,10 +39,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..500904d
+index 0000000..4d1849a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,722 @@
+@@ -0,0 +1,776 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -78,6 +78,7 @@ index 0000000..500904d
 +#include "Server/WorldPacket.h"
 +#include "Server/Opcodes.h"
 +#include "Loot/LootMgr.h"
++#include "Spells/SpellAuras.h"
 +#include "Entities/GameObject.h"
 +#include "Server/DBCStores.h"
 +#include "Server/SQLStorages.h"
@@ -103,6 +104,7 @@ index 0000000..500904d
 +        uint32 boomerangReadyAt = 0;
 +        uint32 bowReadyAt = 0;
 +        bool shield = false;
++        uint32 shoutCheckIn = 0;
 +    };
 +
 +    // Commands run on the session's thread and damage on map threads, so the table is locked.
@@ -247,6 +249,58 @@ index 0000000..500904d
 +    std::vector<ObjectGuid> hits;
 +    hits.push_back(victim->GetObjectGuid());
 +    PlaySpellVisual(player, RED_TRAIL_SPELL, hits);
++}
++
++void ZeldaPlayerUpdate(Player* player, uint32 diff)
++{
++    static bool const passiveShout = sConfig.GetBoolDefault("Zelda.PassiveBattleShout", true);
++    if (!passiveShout || !player)
++        return;
++
++    ZeldaState& state = StateFor(player);
++    if (state.shoutCheckIn > diff)
++    {
++        state.shoutCheckIn -= diff;
++        return;
++    }
++    state.shoutCheckIn = 2000;
++
++    if (!player->IsAlive() || player->IsTaxiFlying() || player->IsBeingTeleported())
++        return;
++
++    // the best Battle Shout the hero has learned, highest rank first
++    static uint32 const ranks[] = { 25289, 11551, 11550, 11549, 6192, 5242, 6673 };
++    uint32 shout = 0;
++    for (uint32 id : ranks)
++    {
++        if (player->HasSpell(id))
++        {
++            shout = id;
++            break;
++        }
++    }
++    if (!shout)
++        return;
++
++    SpellAuraHolder* holder = player->GetSpellAuraHolder(shout, player->GetObjectGuid());
++    if (!holder)
++    {
++        player->CastSpell(player, shout, TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
++        holder = player->GetSpellAuraHolder(shout, player->GetObjectGuid());
++    }
++    // it never runs out: a passive, not a 2 minute buff
++    if (holder && holder->GetAuraMaxDuration() != -1)
++    {
++        holder->SetAuraMaxDuration(-1);
++        holder->SetAuraDuration(-1);
++        holder->UpdateAuraDuration();
++    }
++}
++
++uint32 ZeldaFishingSkillGain()
++{
++    static uint32 const gain = uint32(std::max(0, sConfig.GetIntDefault("Zelda.FishingSkillGain", 10)));
++    return gain;
 +}
 +
 +float ZeldaMeleeMultiplier()
@@ -767,10 +821,10 @@ index 0000000..500904d
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..2d31157
+index 0000000..17a69ca
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,68 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -828,6 +882,15 @@ index 0000000..2d31157
 +// Zelda of Warcraft: every melee swing of a hero leaves a red weapon trail (Heroic Strike's), sent
 +// just before the swing so the swing animation draws it (Zelda.RedSwingTrail = 1).
 +void ZeldaSwingTrail(Player* player, Unit* victim);
++
++// Zelda of Warcraft: per-player upkeep from Player::Update. Battle Shout is a passive: the best
++// learned rank is kept up on the hero at all times, free and without running out
++// (Zelda.PassiveBattleShout = 1).
++void ZeldaPlayerUpdate(Player* player, uint32 diff);
++
++// Zelda of Warcraft: fishing skill points for every fish caught (Zelda.FishingSkillGain, 10);
++// 0 keeps the original slow fishing skill-ups.
++uint32 ZeldaFishingSkillGain();
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -956,6 +1019,29 @@ index a378c4e..f53dd65 100644
 +float SoloCraftFactor(Creature const* creature, bool health);
 +
  #endif
+diff --git a/src/game/Entities/GameObject.cpp b/src/game/Entities/GameObject.cpp
+index 043cad6..232434e 100644
+--- a/src/game/Entities/GameObject.cpp
++++ b/src/game/Entities/GameObject.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Entities/GameObject.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Quests/QuestDef.h"
+ #include "Globals/ObjectMgr.h"
+ #include "Globals/ObjectAccessor.h"
+@@ -1787,7 +1788,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+                         // TODO: find reasonable value for fishing hole search
+                         fishingHole = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
+ 
+-                    player->UpdateFishingSkill();
++                    // Zelda of Warcraft: with Zelda.FishingSkillGain, only a catch raises the skill
++                    if (success || !ZeldaFishingSkillGain())
++                        player->UpdateFishingSkill();
+ 
+                     // fish catch or fail and junk allowed (after 3.1.0)
+                     if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
 diff --git a/src/game/Entities/ItemHandler.cpp b/src/game/Entities/ItemHandler.cpp
 index bf44698..98818ac 100644
 --- a/src/game/Entities/ItemHandler.cpp
@@ -978,7 +1064,7 @@ index bf44698..98818ac 100644
          data << pProto->Block;
          data << pProto->ItemSet;
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e916..ddd53d7 100644
+index 4d8e916..6fc32b9 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -989,7 +1075,17 @@ index 4d8e916..ddd53d7 100644
  #include "Tools/Language.h"
  #include "Database/DatabaseEnv.h"
  #include "Log/Log.h"
-@@ -4895,7 +4896,7 @@ float Player::GetMeleeCritFromAgility() const
+@@ -1413,6 +1414,9 @@ void Player::Update(const uint32 diff)
+     Unit::Update(diff);
+     SetCanDelayTeleport(false);
+ 
++    // Zelda of Warcraft: passive Battle Shout and other upkeep
++    ZeldaPlayerUpdate(this, diff);
++
+     if (IsHasDelayedTeleport() && m_semaphoreTeleport_Near)
+         TeleportTo(m_teleport_dest, m_teleport_options);
+ 
+@@ -4895,7 +4899,7 @@ float Player::GetMeleeCritFromAgility() const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -998,7 +1094,7 @@ index 4d8e916..ddd53d7 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -4939,7 +4940,7 @@ float Player::GetDodgeFromAgility(float amount) const
+@@ -4939,7 +4943,7 @@ float Player::GetDodgeFromAgility(float amount) const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -1007,7 +1103,18 @@ index 4d8e916..ddd53d7 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -18082,9 +18083,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -5154,6 +5158,10 @@ bool Player::UpdateFishingSkill()
+     if (SkillValue >= GetSkillMax(SKILL_FISHING))
+         return false;
+ 
++    // Zelda of Warcraft: every fish caught is worth Zelda.FishingSkillGain points
++    if (uint32 const zeldaGain = ZeldaFishingSkillGain())
++        return UpdateSkillPro(SKILL_FISHING, 100 * 10, uint16(zeldaGain));
++
+     uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
+     ++m_fishingSteps;
+     // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
+@@ -18082,9 +18090,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -1022,7 +1129,7 @@ index 4d8e916..ddd53d7 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19669,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19676,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -1050,7 +1157,7 @@ index 4d8e916..ddd53d7 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20221,6 +20246,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20253,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -1092,7 +1199,7 @@ index 70b4e7d..45ee880 100644
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af..5097c70 100644
+index 00986af..eaa4eff 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -1135,7 +1242,19 @@ index 00986af..5097c70 100644
      SendAttackStateUpdate(&meleeDamageInfo);
      DealMeleeDamage(&meleeDamageInfo, true);
      ProcDamageAndSpell(ProcSystemArguments(this, meleeDamageInfo.target, meleeDamageInfo.procAttacker, meleeDamageInfo.procVictim, meleeDamageInfo.procEx, meleeDamageInfo.totalDamage, meleeDamageInfo.absorb, meleeDamageInfo.attackType));
-@@ -7050,7 +7062,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -4976,6 +4988,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+                 || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
+             continue;
+ 
++        // Zelda of Warcraft: resource tracking (Find Herbs, Find Minerals, ...) stays on side by side
++        if (spellId != existingSpellId && IsSpellHaveAura(spellProto, SPELL_AURA_TRACK_RESOURCES) &&
++                IsSpellHaveAura(existingSpellProto, SPELL_AURA_TRACK_RESOURCES))
++            continue;
++
+         bool unique = false;
+         bool personal = false;
+         if (spellId == existingSpellId)
+@@ -7050,7 +7067,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -1226,3 +1345,18 @@ index a9fb230..c852bff 100644
      // special cases
      switch (triggered_spell_id)
      {
+diff --git a/src/game/Spells/SpellStacking.cpp b/src/game/Spells/SpellStacking.cpp
+index 330ad8f..3916c50 100644
+--- a/src/game/Spells/SpellStacking.cpp
++++ b/src/game/Spells/SpellStacking.cpp
+@@ -141,6 +141,10 @@ bool SpellStacker::IsStackableAuraEffect(SpellEntry const* entry, SpellEntry con
+     if (entry->SpellFamilyName == SPELLFAMILY_POTION || entry2->SpellFamilyName == SPELLFAMILY_POTION)
+         return true;
+ 
++    // Zelda of Warcraft: Find Herbs, Find Minerals and Find Treasure track side by side
++    if (aura == SPELL_AURA_TRACK_RESOURCES && entry->Id != entry2->Id)
++        return true;
++
+     // Special rule for food buffs - TODO: Remove one day
+     auto firstItr = m_spellGroupSpellData.find(entry->Id);
+     auto secondItr = m_spellGroupSpellData.find(entry2->Id);
