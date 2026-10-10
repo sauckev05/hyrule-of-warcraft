@@ -224,11 +224,13 @@ jobs:
           $c += '#   WarriorScaling      weapon damage, crit and dodge use the Warrior formulas for every class'
           $c += '#   PassiveTalentsOnly  talents that add or change abilities cannot be learned'
           $c += '#   NoPotionCooldown    healing/mana potions have no cooldown - drink as many as you carry'
+          $c += '#   AutoLoot            loot from your kills goes straight into your bags'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
           $c += 'Zelda.PassiveTalentsOnly = 1'
           $c += 'Zelda.NoPotionCooldown = 1'
+          $c += 'Zelda.AutoLoot = 1'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1

@@ -116,7 +116,7 @@ try {
         $addonDst = Join-Path $wow 'Interface\AddOns'
         New-Item -ItemType Directory -Force $addonDst | Out-Null
         Copy-Item -Recurse -Force (Join-Path $addonSrc '*') $addonDst
-        Write-Ok 'Zelda Controls addon installed (1 sword, 2 bow, 3 shield, 4 hookshot, Shift+W roll, hold Shift to lock on)'
+        Write-Ok 'Zelda Controls addon installed (1 sword, 2 bow, 3 shield, 4 boomerang, 5 roll, tap Shift to lock on)'
     }
     Write-Ok 'Client pointed at your own PC (realmlist 127.0.0.1). Original saved as realmlist.wtf.original'
     try {

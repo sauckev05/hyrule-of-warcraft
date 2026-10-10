@@ -1,8 +1,8 @@
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba..10b7cd1 100644
+index ffa25ba..ea8cbc6 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,13 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,14 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
@@ -13,14 +13,15 @@ index ffa25ba..10b7cd1 100644
 +        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
 +        { "zhook",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaHookCommand,           "", nullptr },
 +        { "zbow",           SEC_PLAYER,         false, &ChatHandler::HandleZeldaBowCommand,            "", nullptr },
++        { "zboomerang",     SEC_PLAYER,         false, &ChatHandler::HandleZeldaBoomerangCommand,      "", nullptr },
          { "guid",           SEC_GAMEMASTER,     false, &ChatHandler::HandleGUIDCommand,                "", nullptr },
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a..1a7de9a 100644
+index 00fde0a..c794795 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,14 @@ class ChatHandler
+@@ -679,6 +679,15 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
@@ -32,15 +33,16 @@ index 00fde0a..1a7de9a 100644
 +        bool HandleZeldaShieldCommand(char* args);
 +        bool HandleZeldaHookCommand(char* args);
 +        bool HandleZeldaBowCommand(char* args);
++        bool HandleZeldaBoomerangCommand(char* args);
          bool HandleTaxiCheatCommand(char* args);
          bool HandleWhispersCommand(char* args);
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..72a2092
+index 0000000..a07669a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,492 @@
+@@ -0,0 +1,535 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -75,6 +77,7 @@ index 0000000..72a2092
 +#include "Maps/MapManager.h"
 +#include "Server/WorldPacket.h"
 +#include "Server/Opcodes.h"
++#include "Loot/LootMgr.h"
 +
 +#include <algorithm>
 +#include <cmath>
@@ -91,7 +94,7 @@ index 0000000..72a2092
 +        uint32 spinReadyAt = 0;
 +        uint32 dodgeReadyAt = 0;
 +        uint32 invulnerableUntil = 0;
-+        uint32 hookReadyAt = 0;
++        uint32 boomerangReadyAt = 0;
 +        uint32 bowReadyAt = 0;
 +        bool shield = false;
 +    };
@@ -110,13 +113,15 @@ index 0000000..72a2092
 +    const uint32 SPIN_COOLDOWN_MS = 2500;
 +    const uint32 SPIN_RAGE_COST = 50 * 10;        // 50 rage (stored x10)
 +    const float SPIN_DAMAGE_MULTIPLIER = 3.0f;    // a spin hit is three normal swings
++    const uint32 SPIN_STRIKES = 2;                // and every enemy in reach is hit twice
 +
 +    // Set while the spin attack's swings resolve; CalculateMeleeDamage reads it on the same thread.
 +    thread_local float t_meleeMultiplier = 1.0f;
 +    const uint32 DODGE_COOLDOWN_MS = 900;
 +    const uint32 DODGE_INVULN_MS = 450;
-+    const uint32 HOOK_COOLDOWN_MS = 4000;
-+    const float HOOK_RANGE = 30.0f;
++    const uint32 BOOMERANG_COOLDOWN_MS = 10000;
++    const float BOOMERANG_RANGE = 30.0f;
++    const uint32 BOOMERANG_SPELL = 15712;          // Linken's Boomerang: throw, flight and return visuals
 +    const float BOW_RANGE = 35.0f;
 +    const uint32 BOW_COOLDOWN_MS = 1100;
 +
@@ -347,10 +352,10 @@ index 0000000..72a2092
 +    }
 +    // the Whirlwind spin goes out first so the hits land while the hero is turning
 +    PlayWhirlwind(player, hitGuids);
-+    // one strike per enemy, worth three normal swings
++    // two strikes per enemy, each worth three normal swings
 +    t_meleeMultiplier = SPIN_DAMAGE_MULTIPLIER;
 +    for (Unit* unit : victims)
-+        ZeldaSwing(player, unit, 1);
++        ZeldaSwing(player, unit, SPIN_STRIKES);
 +    t_meleeMultiplier = 1.0f;
 +    return true;
 +}
@@ -364,8 +369,8 @@ index 0000000..72a2092
 +    state.dodgeReadyAt = now + DODGE_COOLDOWN_MS;
 +    state.invulnerableUntil = now + DODGE_INVULN_MS;
 +
-+    // KnockBackWithAngle pushes away from the angle given, so aim it opposite to where we want to go.
-+    float angle = player->GetOrientation() + angleOffset + M_PI_F;
++    // KnockBackWithAngle launches the hero along the angle given (0 = straight ahead, pi/2 = left).
++    float angle = MapManager::NormalizeOrientation(player->GetOrientation() + angleOffset);
 +    player->KnockBackWithAngle(angle, horizontal, vertical);
 +}
 +
@@ -435,7 +440,37 @@ index 0000000..72a2092
 +    return true;
 +}
 +
-+bool ChatHandler::HandleZeldaHookCommand(char* /*args*/)
++// The selected enemy if it is alive, in range and in sight; otherwise the enemy closest to where the
++// hero faces, within 60 degrees.
++static Unit* ZeldaAimTarget(Player* player, float range)
++{
++    Unit* target = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
++    if (target && (target == player || !target->IsAlive() || !player->CanAttack(target) ||
++                   !player->IsWithinDistInMap(target, range) || !player->IsWithinLOSInMap(target)))
++        target = nullptr;
++    if (target)
++        return target;
++
++    std::list<Unit*> enemies;
++    CollectEnemies(player, range, enemies);
++    float best = M_PI_F / 3.0f;
++    for (Unit* unit : enemies)
++    {
++        float off = std::fabs(MapManager::NormalizeOrientation(player->GetAngle(unit) - player->GetOrientation()));
++        if (off > M_PI_F)
++            off = 2.0f * M_PI_F - off;
++        if (off < best)
++        {
++            best = off;
++            target = unit;
++        }
++    }
++    return target;
++}
++
++// Linken's Boomerang, the hero's boomerang: thrown at the enemy, it hits as hard as the weapon in
++// hand and either stuns (Knockdown) or disarms the enemy, 50/50, then flies back. 10 s per throw.
++bool ChatHandler::HandleZeldaBoomerangCommand(char* /*args*/)
 +{
 +    Player* player = m_session->GetPlayer();
 +    if (!CanAct(player))
@@ -443,29 +478,60 @@ index 0000000..72a2092
 +
 +    ZeldaState& state = StateFor(player);
 +    uint32 now = WorldTimer::getMSTime();
-+    if (now < state.hookReadyAt)
++    if (now < state.boomerangReadyAt)
 +    {
-+        SendSysMessage("The hookshot is still retracting.");
++        player->GetSession()->SendNotification("The boomerang is not back yet (%u s)", (state.boomerangReadyAt - now + 999) / 1000);
 +        return true;
 +    }
 +
-+    Unit* target = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
-+    if (!target || target == player || !player->IsWithinDistInMap(target, HOOK_RANGE) || !player->IsWithinLOSInMap(target))
++    Unit* target = ZeldaAimTarget(player, BOOMERANG_RANGE);
++    if (!target)
 +    {
-+        SendSysMessage("Hookshot: select something within 30 yards that you can see.");
++        player->GetSession()->SendNotification("No enemy in range for the boomerang");
 +        return true;
 +    }
-+    state.hookReadyAt = now + HOOK_COOLDOWN_MS;
 +
-+    // Land just in front of the target, facing it.
-+    float angle = target->GetAngle(player);
-+    float dist = target->GetCombatReach() + 1.5f;
-+    float x = target->GetPositionX() + std::cos(angle) * dist;
-+    float y = target->GetPositionY() + std::sin(angle) * dist;
-+    float z = target->GetPositionZ();
-+    player->UpdateAllowedPositionZ(x, y, z);
-+    player->NearTeleportTo(x, y, z, player->GetAngle(target));
++    state.boomerangReadyAt = now + BOOMERANG_COOLDOWN_MS;
++    player->SetFacingToObject(target);
++    player->CastSpell(target, BOOMERANG_SPELL, TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
 +    return true;
++}
++
++// .zhook is the boomerang now (the old hookshot key)
++bool ChatHandler::HandleZeldaHookCommand(char* args)
++{
++    return HandleZeldaBoomerangCommand(args);
++}
++
++void ZeldaAutoLoot(Player* looter, Loot* loot)
++{
++    static bool const autoLoot = sConfig.GetBoolDefault("Zelda.AutoLoot", true);
++    if (!autoLoot || !looter || !loot || !looter->IsInWorld() || !looter->GetSession() || looter->GetGroup())
++        return;
++
++    loot->AutoStore(looter);
++
++    uint32 const gold = loot->GetGoldAmount();
++    if (gold)
++    {
++        ChatHandler(looter).PSendSysMessage("|cffffff00You loot %ug %us %uc.|r", gold / 10000, (gold % 10000) / 100, gold % 100);
++        loot->SendGold(looter);               // releases the corpse when it is now empty
++    }
++    else if (loot->IsLootedFor(looter))
++        loot->Release(looter);                // empty: stop the sparkle, allow skinning
++}
++
++uint32 ZeldaBoomerangDamage(Player* player)
++{
++    // one roll of the main-hand weapon, as a normal swing would deal before armor
++    return player->CalculateDamage(BASE_ATTACK, false, 0);
++}
++
++bool ZeldaBoomerangTrigger(Player* player, Unit* target, uint8 effIndex)
++{
++    if (effIndex == 1 && target && target->IsAlive())
++        player->CastSpell(target, roll_chance_i(50) ? 15753u : 15752u, TRIGGERED_OLD_TRIGGERED); // Knockdown : Disarm
++    return true; // the DBC's own triggers (both at 101%) are replaced by the 50/50 above
 +}
 +
 +bool ChatHandler::HandleZeldaBowCommand(char* /*args*/)
@@ -499,28 +565,7 @@ index 0000000..72a2092
 +    if (now < state.bowReadyAt)
 +        return true;
 +
-+    // The selected enemy if it is in range and in sight; otherwise the enemy closest to where we face.
-+    Unit* target = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
-+    if (target && (!target->IsAlive() || !player->CanAttack(target) || !player->IsWithinDistInMap(target, BOW_RANGE) ||
-+                   !player->IsWithinLOSInMap(target)))
-+        target = nullptr;
-+    if (!target)
-+    {
-+        std::list<Unit*> enemies;
-+        CollectEnemies(player, BOW_RANGE, enemies);
-+        float best = M_PI_F / 3.0f; // within 60 degrees of straight ahead
-+        for (Unit* unit : enemies)
-+        {
-+            float off = std::fabs(MapManager::NormalizeOrientation(player->GetAngle(unit) - player->GetOrientation()));
-+            if (off > M_PI_F)
-+                off = 2.0f * M_PI_F - off;
-+            if (off < best)
-+            {
-+                best = off;
-+                target = unit;
-+            }
-+        }
-+    }
++    Unit* target = ZeldaAimTarget(player, BOW_RANGE);
 +    if (!target)
 +    {
 +        SendSysMessage("No enemy in your sights.");
@@ -535,10 +580,10 @@ index 0000000..72a2092
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..adc5fc4
+index 0000000..16e0785
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,38 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -548,6 +593,7 @@ index 0000000..adc5fc4
 +class Unit;
 +struct SpellEntry;
 +struct ItemPrototype;
++class Loot;
 +
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
@@ -563,6 +609,17 @@ index 0000000..adc5fc4
 +// Zelda of Warcraft: extra factor on the melee hit being calculated right now (3 during a Spin
 +// Attack, otherwise 1).
 +float ZeldaMeleeMultiplier();
++
++// Zelda of Warcraft: Linken's Boomerang (15712) thrown by a hero. The damage is one roll of the
++// weapon in hand; the stun/disarm trigger effects are replaced by one of the two, 50/50. Returns
++// true when the trigger effect was handled.
++uint32 ZeldaBoomerangDamage(Player* player);
++bool ZeldaBoomerangTrigger(Player* player, Unit* target, uint8 effIndex);
++
++// Zelda of Warcraft: moves a fresh corpse's loot (items and money) into the killer's bags, so
++// nothing has to be clicked (Zelda.AutoLoot = 1, the default). Whatever does not fit stays on the
++// corpse to loot by hand.
++void ZeldaAutoLoot(Player* looter, Loot* loot);
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -590,10 +647,18 @@ index 0656744..40ccbe6 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb..4137851 100644
+index a10fdbb..692272f 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
-@@ -48,6 +48,8 @@
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Entities/Creature.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Database/DatabaseEnv.h"
+ #include "Server/WorldPacket.h"
+ #include "World/World.h"
+@@ -48,6 +49,8 @@
  #include "Movement/MoveSplineInit.h"
  #include "Entities/CreatureLinkingMgr.h"
  #include "Maps/SpawnManager.h"
@@ -602,7 +667,18 @@ index a10fdbb..4137851 100644
  
  // apply implementation of the singletons
  #include "Policies/Singleton.h"
-@@ -1262,6 +1264,39 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1086,6 +1089,10 @@ void Creature::PrepareBodyLootState(Unit* killer)
+ 
+         if (looter || GetSettings().HasFlag(CreatureStaticFlags::CAN_WIELD_LOOT))
+             m_loot = new Loot(looter, this, LOOT_CORPSE);
++
++        // Zelda of Warcraft: the hero's kills loot themselves, straight into the bags
++        if (m_loot && looter && m_loot->GetLootType() == LOOT_CORPSE)
++            ZeldaAutoLoot(looter, m_loot);
+     }
+ 
+     if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
+@@ -1262,6 +1269,39 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -642,7 +718,7 @@ index a10fdbb..4137851 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1340,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1345,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -651,7 +727,7 @@ index a10fdbb..4137851 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1449,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1454,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -836,3 +912,38 @@ index bf5c5c5..a950e6d 100644
      InitializeDamageMultipliers();
  
      OnCast();
+diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
+index a9fb230..c852bff 100644
+--- a/src/game/Spells/SpellEffects.cpp
++++ b/src/game/Spells/SpellEffects.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Common.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Database/DatabaseEnv.h"
+ #include "Server/WorldPacket.h"
+ #include "Server/Opcodes.h"
+@@ -241,6 +242,10 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
+ {
+     if (unitTarget && unitTarget->IsAlive())
+     {
++        // Zelda of Warcraft: a hero's boomerang hits as hard as the weapon in hand
++        if (m_spellInfo->Id == 15712 && m_caster && m_caster->IsPlayer())
++            damage = int32(ZeldaBoomerangDamage(static_cast<Player*>(m_caster)));
++
+         switch (m_spellInfo->SpellFamilyName)
+         {
+             case SPELLFAMILY_GENERIC:
+@@ -1535,6 +1540,11 @@ void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
+ {
+     uint32 triggered_spell_id = m_spellInfo->EffectTriggerSpell[effIndex];
+ 
++    // Zelda of Warcraft: a hero's boomerang either stuns or disarms, 50/50
++    if (m_spellInfo->Id == 15712 && m_caster && m_caster->IsPlayer() &&
++        ZeldaBoomerangTrigger(static_cast<Player*>(m_caster), unitTarget, uint8(effIndex)))
++        return;
++
+     // special cases
+     switch (triggered_spell_id)
+     {
