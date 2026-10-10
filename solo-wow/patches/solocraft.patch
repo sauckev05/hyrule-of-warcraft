@@ -39,10 +39,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..a07669a
+index 0000000..69de5a3
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,535 @@
+@@ -0,0 +1,550 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -119,7 +119,7 @@ index 0000000..a07669a
 +    thread_local float t_meleeMultiplier = 1.0f;
 +    const uint32 DODGE_COOLDOWN_MS = 900;
 +    const uint32 DODGE_INVULN_MS = 450;
-+    const uint32 BOOMERANG_COOLDOWN_MS = 10000;
++    const uint32 BOOMERANG_COOLDOWN_MS = 5000;
 +    const float BOOMERANG_RANGE = 30.0f;
 +    const uint32 BOOMERANG_SPELL = 15712;          // Linken's Boomerang: throw, flight and return visuals
 +    const float BOW_RANGE = 35.0f;
@@ -392,7 +392,12 @@ index 0000000..a07669a
 +            default: break;
 +        }
 +    }
-+    ZeldaDodge(player, offset, 11.0f, 2.5f);
++    // the forward roll covers about 9 yards (20 yd/s for ~0.47 s in the air); the side rolls are
++    // short hops of about 3 yards
++    if (offset == 0.0f)
++        ZeldaDodge(player, offset, 20.0f, 4.5f);
++    else
++        ZeldaDodge(player, offset, 11.0f, 2.5f);
 +    return true;
 +}
 +
@@ -469,7 +474,7 @@ index 0000000..a07669a
 +}
 +
 +// Linken's Boomerang, the hero's boomerang: thrown at the enemy, it hits as hard as the weapon in
-+// hand and either stuns (Knockdown) or disarms the enemy, 50/50, then flies back. 10 s per throw.
++// hand and either stuns (Knockdown) or disarms the enemy, 50/50, then flies back. 5 s per throw.
 +bool ChatHandler::HandleZeldaBoomerangCommand(char* /*args*/)
 +{
 +    Player* player = m_session->GetPlayer();
@@ -501,6 +506,16 @@ index 0000000..a07669a
 +bool ChatHandler::HandleZeldaHookCommand(char* args)
 +{
 +    return HandleZeldaBoomerangCommand(args);
++}
++
++uint32 ZeldaItemSheath(ItemPrototype const* proto)
++{
++    static bool const oneHandOnBack = sConfig.GetBoolDefault("Zelda.OneHandOnBack", true);
++    if (oneHandOnBack && proto->Class == ITEM_CLASS_WEAPON && proto->Sheath == 3 &&
++        (proto->InventoryType == INVTYPE_WEAPON || proto->InventoryType == INVTYPE_WEAPONMAINHAND ||
++         proto->InventoryType == INVTYPE_WEAPONOFFHAND))
++        return 1; // on the back, drawn over the shoulder
++    return proto->Sheath;
 +}
 +
 +void ZeldaAutoLoot(Player* looter, Loot* loot)
@@ -580,10 +595,10 @@ index 0000000..a07669a
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..16e0785
+index 0000000..d50f64f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,42 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -620,6 +635,10 @@ index 0000000..16e0785
 +// nothing has to be clicked (Zelda.AutoLoot = 1, the default). Whatever does not fit stays on the
 +// corpse to loot by hand.
 +void ZeldaAutoLoot(Player* looter, Loot* loot);
++
++// Zelda of Warcraft: the sheath type the client is told for an item. One-handed weapons that hang
++// at the hip (3) are worn on the back (1) instead, like Link's sword (Zelda.OneHandOnBack = 1).
++uint32 ZeldaItemSheath(ItemPrototype const* proto);
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -748,6 +767,27 @@ index a378c4e..f53dd65 100644
 +float SoloCraftFactor(Creature const* creature, bool health);
 +
  #endif
+diff --git a/src/game/Entities/ItemHandler.cpp b/src/game/Entities/ItemHandler.cpp
+index bf44698..98818ac 100644
+--- a/src/game/Entities/ItemHandler.cpp
++++ b/src/game/Entities/ItemHandler.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Common.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Server/WorldPacket.h"
+ #include "Server/WorldSession.h"
+ #include "Server/Opcodes.h"
+@@ -401,7 +402,7 @@ void WorldSession::HandleItemQuerySingleOpcode(WorldPacket& recv_data)
+         data << pProto->StartQuest;
+         data << pProto->LockID;
+         data << pProto->Material;
+-        data << pProto->Sheath;
++        data << ZeldaItemSheath(pProto);                  // Zelda of Warcraft: one-handers on the back
+         data << pProto->RandomProperty;
+         data << pProto->Block;
+         data << pProto->ItemSet;
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
 index 4d8e916..63e42c9 100644
 --- a/src/game/Entities/Player.cpp
