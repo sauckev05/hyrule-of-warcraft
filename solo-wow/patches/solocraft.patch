@@ -37,10 +37,10 @@ index 00fde0a..1a7de9a 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..be93aa4
+index 0000000..72a2092
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,468 @@
+@@ -0,0 +1,492 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -108,6 +108,11 @@ index 0000000..be93aa4
 +
 +    const uint32 COMBO_WINDOW_MS = 1100;
 +    const uint32 SPIN_COOLDOWN_MS = 2500;
++    const uint32 SPIN_RAGE_COST = 50 * 10;        // 50 rage (stored x10)
++    const float SPIN_DAMAGE_MULTIPLIER = 3.0f;    // a spin hit is three normal swings
++
++    // Set while the spin attack's swings resolve; CalculateMeleeDamage reads it on the same thread.
++    thread_local float t_meleeMultiplier = 1.0f;
 +    const uint32 DODGE_COOLDOWN_MS = 900;
 +    const uint32 DODGE_INVULN_MS = 450;
 +    const uint32 HOOK_COOLDOWN_MS = 4000;
@@ -215,6 +220,11 @@ index 0000000..be93aa4
 +    }
 +}
 +
++float ZeldaMeleeMultiplier()
++{
++    return t_meleeMultiplier;
++}
++
 +uint8 ZeldaStatClass(Player const* player)
 +{
 +    static bool const warriorScaling = sConfig.GetBoolDefault("Zelda.WarriorScaling", true);
@@ -308,6 +318,17 @@ index 0000000..be93aa4
 +    uint32 now = WorldTimer::getMSTime();
 +    if (now < state.spinReadyAt)
 +        return true;
++
++    // The spin costs 50 rage; without it there is no spin.
++    bool const usesRage = player->GetPowerType() == POWER_RAGE;
++    if (usesRage && player->GetPower(POWER_RAGE) < SPIN_RAGE_COST)
++    {
++        player->GetSession()->SendNotification("Not enough rage for a Spin Attack (50 needed)");
++        return true;
++    }
++    if (usesRage)
++        player->ModifyPower(POWER_RAGE, -int32(SPIN_RAGE_COST));
++
 +    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
 +    state.comboCount = 0;
 +
@@ -326,8 +347,11 @@ index 0000000..be93aa4
 +    }
 +    // the Whirlwind spin goes out first so the hits land while the hero is turning
 +    PlayWhirlwind(player, hitGuids);
++    // one strike per enemy, worth three normal swings
++    t_meleeMultiplier = SPIN_DAMAGE_MULTIPLIER;
 +    for (Unit* unit : victims)
-+        ZeldaSwing(player, unit, stats.spinHits);
++        ZeldaSwing(player, unit, 1);
++    t_meleeMultiplier = 1.0f;
 +    return true;
 +}
 +
@@ -511,10 +535,10 @@ index 0000000..be93aa4
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..2cb882d
+index 0000000..adc5fc4
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,26 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -535,6 +559,10 @@ index 0000000..2cb882d
 +// Zelda of Warcraft: potions have no cooldown (Zelda.NoPotionCooldown = 1, the default), so you can
 +// drink as many as you carry, like Ocarina's bottles. True when this item use should skip its cooldown.
 +bool ZeldaFreePotion(SpellEntry const& spell, ItemPrototype const* item);
++
++// Zelda of Warcraft: extra factor on the melee hit being calculated right now (3 during a Spin
++// Attack, otherwise 1).
++float ZeldaMeleeMultiplier();
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -744,7 +772,7 @@ index 70b4e7d..45ee880 100644
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af..442475e 100644
+index 00986af..2f68e49 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -766,7 +794,17 @@ index 00986af..442475e 100644
      // remove affects from attacker at any non-DoT damage (including 0 damage)
      if (damagetype != DOT && damagetype != INSTAKILL)
      {
-@@ -7050,7 +7055,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -1933,6 +1938,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+         // Add melee damage bonus
+         subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
+         subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
++        // Zelda of Warcraft: the Spin Attack's strike
++        if (GetTypeId() == TYPEID_PLAYER)
++            subDamage->damage = uint32(subDamage->damage * ZeldaMeleeMultiplier());
+ 
+         // Calculate armor reduction
+         if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
+@@ -7050,7 +7058,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
