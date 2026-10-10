@@ -32,6 +32,7 @@ pub(crate) fn apply_script_calls(
         crate::ui_pet::PetPress,
         crate::ui_action::AttackPress,
     )>,
+    mut zelda: Option<ResMut<crate::player::ZeldaLock>>,
 ) {
     let Some(mut script) = script else {
         return;
@@ -70,6 +71,11 @@ pub(crate) fn apply_script_calls(
             }
             ScriptCall::PetAction(slot) => appliers.p6().press_slot(slot),
             ScriptCall::PetOrder(packed) => appliers.p6().order(packed),
+            ScriptCall::ZeldaLock(mode) => {
+                if let Some(lock) = zelda.as_deref_mut() {
+                    lock.request(mode);
+                }
+            }
         }
         // TryCast's attack pick can move the selection mid-cast (`0x6e4efb`), so a press held
         // there is picked and resumed before the next call reads the selection.

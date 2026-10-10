@@ -336,6 +336,20 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
             })?,
         )?;
     }
+    // Zelda of Warcraft: `ZeldaLock([mode])`, the Z-targeting lock the ZeldaControls addon binds.
+    g.set(
+        "ZeldaLock",
+        lua.create_function(|lua, mode: Option<Value>| {
+            let mode = match mode {
+                Some(Value::Integer(n)) => n as i32,
+                Some(Value::Number(n)) => n as i32,
+                Some(Value::Boolean(b)) => i32::from(b),
+                _ => -1,
+            };
+            push_call(lua, ScriptCall::ZeldaLock(mode));
+            Ok(())
+        })?,
+    )?;
     // `TargetLastTarget()` (`0x489b00`) and `AttackTarget()` (`0x489b50`) read no argument.
     g.set(
         "TargetLastTarget",

@@ -9,7 +9,7 @@ BINDING_NAME_ZELDA_ROLL_LEFT = "Roll left"
 BINDING_NAME_ZELDA_ROLL_RIGHT = "Roll right"
 BINDING_NAME_ZELDA_FLIP = "Backflip"
 BINDING_NAME_ZELDA_HOOK = "Hookshot to target"
-BINDING_NAME_ZELDA_TARGET = "Z-Target nearest enemy"
+BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on)"
 
 local SPIN_HOLD = 0.8
 local attackDownAt = nil
@@ -42,8 +42,17 @@ function ZeldaControls_Shield(state)
 	end
 end
 
-function ZeldaControls_Target()
-	TargetNearestEnemy()
+-- Hold to lock on, as in Ocarina of Time. The camera lock exists in the Zelda of Warcraft client
+-- (Benilla); in the stock client this simply targets the nearest enemy.
+function ZeldaControls_Target(state)
+	if state == "up" then
+		if ZeldaLock then ZeldaLock(0) end
+		return
+	end
+	if not UnitExists("target") or UnitIsDead("target") or not UnitCanAttack("player", "target") then
+		TargetNearestEnemy()
+	end
+	if ZeldaLock then ZeldaLock(1) end
 end
 
 -- default keys, applied once per account
@@ -72,7 +81,7 @@ frame:SetScript("OnEvent", function()
 			ZeldaControlsDB.keysSet = true
 		end
 	elseif event == "PLAYER_ENTERING_WORLD" then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, H hookshot, Z target. Change them in Key Bindings.")
+		DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, H hookshot, hold Z to lock on. Change them in Key Bindings.")
 	end
 end)
 
@@ -85,5 +94,5 @@ shieldText:Hide()
 -- the server answers moves silently; hide the rare system replies about cooldowns from spamming
 SLASH_ZELDA1 = "/zelda"
 SlashCmdList["ZELDA"] = function()
-	DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, H hookshot, Z target.")
+	DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, H hookshot, hold Z to lock on.")
 end

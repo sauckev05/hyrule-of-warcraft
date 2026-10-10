@@ -51,6 +51,9 @@ pub enum ScriptCall {
     PetAction(u32),
     /// `PetAttack` and the other one-shot orders, as their bar slot's packed word.
     PetOrder(u32),
+    /// Zelda of Warcraft: `ZeldaLock(mode)` turns Z-targeting off (0), on (1) or toggles it
+    /// (anything else, or no argument).
+    ZeldaLock(i32),
 }
 
 /// The mode the four `TargetNearest*` shims hand the TAB cycler `0x493f60`, the only byte that

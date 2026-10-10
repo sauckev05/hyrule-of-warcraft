@@ -64,6 +64,7 @@ pub(crate) mod step_probe;
 mod swim;
 mod view_subject;
 mod walk;
+mod zelda_lock;
 mod wire_in;
 
 // The last writer of a self body part's render alpha: `entities::apply_unit_mat_alpha` orders
@@ -101,6 +102,7 @@ pub(crate) use swim::{may_swim, swim_enter_depth};
 /// The camera's followed unit when not our body; [`crate::camera_shake`] takes its body frame and
 /// two suspend gates from it, as the reference does from `[cam+0x88]`.
 pub(crate) use view_subject::ViewSubject;
+pub(crate) use zelda_lock::ZeldaLock;
 
 /// `UNIT_FLAG_STUNNED`, the `UNIT_FIELD_FLAGS` bit that stops turning. The reference reads it off
 /// the descriptor (`[[unit+0x110]+0xa0]`, predicate `0x5145b0`, an inverted `not/shr/and` test) at
@@ -211,6 +213,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         net::register(app);
         follow::plugin(app);
+        zelda_lock::plugin(app);
         approach::plugin(app);
         camera_saved::plugin(app);
         camera_view::plugin(app);

@@ -6,5 +6,5 @@
 	<Binding name="ZELDA_ROLL_RIGHT">ZeldaControls_Command(".zroll r")</Binding>
 	<Binding name="ZELDA_FLIP">ZeldaControls_Command(".zflip")</Binding>
 	<Binding name="ZELDA_HOOK">ZeldaControls_Command(".zhook")</Binding>
-	<Binding name="ZELDA_TARGET">ZeldaControls_Target()</Binding>
+	<Binding name="ZELDA_TARGET" runOnUp="true">ZeldaControls_Target(keystate)</Binding>
 </Bindings>

@@ -286,6 +286,9 @@ pub(crate) fn incapacitated_flags(flags: u32, translate_gated: bool, turn_gated:
 #[derive(Resource, Default, PartialEq)]
 pub(crate) struct Player {
     pub(crate) active: bool,
+    /// Zelda of Warcraft: Z-targeting holds the facing on the locked unit, so A/D strafe around
+    /// it as the right mouse button's look does ([`super::zelda_lock`]).
+    pub(crate) zelda_locked: bool,
     /// The modes the server has granted our mover.
     pub(super) modes: MoveModes,
     /// Autorun: the reference's input bit `0x1000` at `[MOVE+4]`, flipped by `ToggleAutoRun`
