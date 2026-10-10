@@ -143,6 +143,8 @@ jobs:
   package:
     needs: [server, database]
     runs-on: windows-2022
+    permissions:
+      contents: write
     steps:
       - name: Checkout package files
         uses: actions/checkout@v7
@@ -212,3 +214,14 @@ jobs:
         with:
           name: AzerothSolo-Windows
           path: SoloWoW
+      - name: Zip for download
+        shell: pwsh
+        run: 7z a -tzip AzerothSolo-Windows.zip SoloWoW
+      - name: Publish download (Releases page)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: azeroth-solo-latest
+          name: "Azeroth Solo - offline WoW 1.12.1 server for Windows (latest build)"
+          body: "Unzip anywhere, run SETUP.bat once, then PLAY.bat. Needs your own WoW 1.12.1 client. See 'README - START HERE.txt'."
+          prerelease: false
+          files: AzerothSolo-Windows.zip

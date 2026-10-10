@@ -42,6 +42,8 @@ jobs:
   build-windows:
     needs: generate-soh-otr
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
     - name: Install dependencies
       run: |
@@ -94,6 +96,17 @@ jobs:
       with:
         name: HyruleOfWarcraft-Windows
         path: HyruleOfWarcraft
+    - name: Zip for download
+      shell: pwsh
+      run: Compress-Archive -Path HyruleOfWarcraft -DestinationPath HyruleOfWarcraft-Windows.zip
+    - name: Publish download (Releases page)
+      uses: softprops/action-gh-release@v3
+      with:
+        tag_name: hyrule-of-warcraft-latest
+        name: "Hyrule of Warcraft - Windows (latest build)"
+        body: "Unzip, run soh.exe and choose your own Ocarina of Time ROM the first time. See HOW TO PLAY.txt inside."
+        prerelease: false
+        files: HyruleOfWarcraft-Windows.zip
     - name: Save Cache VCPKG folder
       if: always()
       uses: actions/cache/save@v5
