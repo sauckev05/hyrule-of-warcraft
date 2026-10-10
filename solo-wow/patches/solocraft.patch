@@ -37,10 +37,10 @@ index 00fde0a..1a7de9a 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..7802d02
+index 0000000..be93aa4
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,430 @@
+@@ -0,0 +1,468 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -73,8 +73,12 @@ index 0000000..7802d02
 +#include "Globals/ObjectAccessor.h"
 +#include "Config/Config.h"
 +#include "Maps/MapManager.h"
++#include "Server/WorldPacket.h"
++#include "Server/Opcodes.h"
 +
++#include <algorithm>
 +#include <cmath>
++#include <vector>
 +#include <mutex>
 +#include <unordered_map>
 +
@@ -183,6 +187,32 @@ index 0000000..7802d02
 +        for (uint32 i = 0; i < hits && victim->IsAlive(); ++i)
 +            player->AttackerStateUpdate(victim, BASE_ATTACK, true);
 +    }
++
++    // Warrior Whirlwind (rank 1). Its cast animation is the spin attack's look.
++    const uint32 WHIRLWIND_SPELL = 1680;
++
++    // Plays Whirlwind's spinning animation, swoosh and sound on the hero for every client nearby,
++    // without casting the spell: an SMSG_SPELL_GO with no effects, listing the enemies the spin hit
++    // so they show Whirlwind's impact too. The damage itself still comes from ZeldaSwing.
++    void PlayWhirlwind(Player* player, std::vector<ObjectGuid> const& hits)
++    {
++        uint8 const count = uint8(std::min<size_t>(hits.size(), 255));
++        WorldPacket data(SMSG_SPELL_GO, 32 + count * 8);
++        data << player->GetPackGUID();                 // caster (no item)
++        data << player->GetPackGUID();                 // caster unit
++        data << uint32(WHIRLWIND_SPELL);
++        data << uint16(0x0100 | 0x0001);               // CAST_FLAG_UNKNOWN9 | CAST_FLAG_HIDDEN_COMBATLOG
++        data << count;                                 // hit targets
++        for (uint8 i = 0; i < count; ++i)
++            data << hits[i];
++        data << uint8(0);                              // missed targets
++        data << uint16(0);                             // TARGET_FLAG_SELF
++        player->SendMessageToSet(data, true);
++
++        // the hero's own client starts Whirlwind's cooldown and global cooldown when the GO
++        // arrives - clear them, so the spin never locks the action bar
++        player->SendClearCooldown(WHIRLWIND_SPELL, player);
++    }
 +}
 +
 +uint8 ZeldaStatClass(Player const* player)
@@ -284,12 +314,20 @@ index 0000000..7802d02
 +    StyleStats stats = StatsFor(StyleOf(player));
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, stats.spinRange + 2.0f, enemies);
++    std::vector<Unit*> victims;
++    std::vector<ObjectGuid> hitGuids;
 +    for (Unit* unit : enemies)
 +    {
 +        if (player->IsWithinDistInMap(unit, stats.spinRange + unit->GetCombatReach()))
-+            ZeldaSwing(player, unit, stats.spinHits);
++        {
++            victims.push_back(unit);
++            hitGuids.push_back(unit->GetObjectGuid());
++        }
 +    }
-+    player->HandleEmoteCommand(EMOTE_ONESHOT_ATTACK2HTIGHT);
++    // the Whirlwind spin goes out first so the hits land while the hero is turning
++    PlayWhirlwind(player, hitGuids);
++    for (Unit* unit : victims)
++        ZeldaSwing(player, unit, stats.spinHits);
 +    return true;
 +}
 +
