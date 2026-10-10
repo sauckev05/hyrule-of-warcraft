@@ -39,10 +39,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..69de5a3
+index 0000000..0dea9e6
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,550 @@
+@@ -0,0 +1,552 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -511,7 +511,9 @@ index 0000000..69de5a3
 +uint32 ZeldaItemSheath(ItemPrototype const* proto)
 +{
 +    static bool const oneHandOnBack = sConfig.GetBoolDefault("Zelda.OneHandOnBack", true);
++    // one-handed maces stay at the hip: on the back they clash with the shield
 +    if (oneHandOnBack && proto->Class == ITEM_CLASS_WEAPON && proto->Sheath == 3 &&
++        proto->SubClass != ITEM_SUBCLASS_WEAPON_MACE &&
 +        (proto->InventoryType == INVTYPE_WEAPON || proto->InventoryType == INVTYPE_WEAPONMAINHAND ||
 +         proto->InventoryType == INVTYPE_WEAPONOFFHAND))
 +        return 1; // on the back, drawn over the shoulder
@@ -595,10 +597,10 @@ index 0000000..69de5a3
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..d50f64f
+index 0000000..c5801a7
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,43 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -637,7 +639,8 @@ index 0000000..d50f64f
 +void ZeldaAutoLoot(Player* looter, Loot* loot);
 +
 +// Zelda of Warcraft: the sheath type the client is told for an item. One-handed weapons that hang
-+// at the hip (3) are worn on the back (1) instead, like Link's sword (Zelda.OneHandOnBack = 1).
++// at the hip (3) are worn on the back (1) instead, like Link's sword - except maces, which stay at
++// the hip (Zelda.OneHandOnBack = 1).
 +uint32 ZeldaItemSheath(ItemPrototype const* proto);
 +
 +#endif

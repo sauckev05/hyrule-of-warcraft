@@ -225,7 +225,7 @@ jobs:
           $c += '#   PassiveTalentsOnly  talents that add or change abilities cannot be learned'
           $c += '#   NoPotionCooldown    healing/mana potions have no cooldown - drink as many as you carry'
           $c += '#   AutoLoot            loot from your kills goes straight into your bags'
-          $c += '#   OneHandOnBack       one-handed weapons are worn on the back instead of the hip'
+          $c += '#   OneHandOnBack       one-handed weapons (not maces) are worn on the back instead of the hip'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
