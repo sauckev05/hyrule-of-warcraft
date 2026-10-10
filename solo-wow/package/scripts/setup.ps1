@@ -97,7 +97,7 @@ try {
             $cfg = Join-Path $PSScriptRoot 'config.json'
             $off = Join-Path $PSScriptRoot 'offmesh.txt'
             Push-Location $data
-            & $mm --silent --configInputPath "$cfg" --offMeshInput "$off" --workdir "$data\" --buildGameObjects --threads $threads | Out-Host
+            & $mm --silent --configInputPath "$cfg" --offMeshInput "$off" --workdir "$($data -replace '\\', '/')/" --buildGameObjects --threads $threads | Out-Host
             $code = $LASTEXITCODE
             Pop-Location
             if ($code -ne 0) { throw 'Movement map generation failed.' }

@@ -77,7 +77,7 @@ function Stop-Database {
     if (-not (Test-Port $DbPort)) { return }
     Write-Step 'Stopping database...'
     $admin = Find-MariaExe @('mariadb-admin.exe', 'mysqladmin.exe')
-    cmd /c "`"$admin`" -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort shutdown 2>nul"
+    cmd /c "`"`"$admin`" -uroot -p$DbRootPass -h127.0.0.1 -P$DbPort shutdown 2>nul`""
     $deadline = (Get-Date).AddSeconds(30)
     while ((Test-Port $DbPort) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
 }
