@@ -2,6 +2,7 @@
 #include "vt.h"
 #include "overlays/effects/ovl_Effect_Ss_HitMark/z_eff_ss_hitmark.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
+#include "soh/Enhancements/Azeroth/Azeroth.h"
 #include <assert.h>
 #include <libultraship/bridge/consolevariablebridge.h>
 
@@ -3024,6 +3025,9 @@ void CollisionCheck_ApplyDamage(PlayState* play, CollisionCheckContext* colChkCt
         damage = tbl->table[i] & 0xF;
         collider->actor->colChkInfo.damageEffect = tbl->table[i] >> 4 & 0xF;
     }
+    // Hyrule of Warcraft: stats, crits and level differences scale damage dealt by the player
+    damage = Azeroth_ModifyOutgoingDamage(play, collider, damage);
+
     if (!(collider->acFlags & AC_HARD)) {
         collider->actor->colChkInfo.damage += damage;
     }

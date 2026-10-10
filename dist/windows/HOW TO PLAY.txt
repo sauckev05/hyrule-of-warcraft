@@ -1,0 +1,44 @@
+HYRULE OF WARCRAFT
+==================
+Ocarina of Time's movement and combat, with World of Warcraft's RPG systems on top.
+Runs fully offline and single-player.
+
+FIRST LAUNCH (one time only)
+  1. Double-click soh.exe
+  2. When it asks for a ROM, choose your Ocarina of Time .z64 file
+     (your NTSC 1.2 US ROM works).
+  3. Wait about a minute while it builds oot.o2r from your ROM. After that it starts instantly.
+
+DEFAULT KEYBOARD CONTROLS (change them under Esc > Settings > Controls, or plug in a controller)
+  Move .......... W A S D        Attack / B .... C
+  Action / A .... X              Z-Target ...... Z
+  Shield / R .... R              Map / L ....... E
+  C-buttons ..... Arrow keys     Start/Pause ... Space
+  Menu .......... Esc            Fullscreen .... F11
+
+WARCRAFT HOTKEYS
+  I = Character sheet (gear + stats)     B = Bags (equip, sell)
+  L = Quest Log                          N = Talents
+  K = Professions                        Q = Drink best healing potion
+  (There are also clickable buttons above the XP bar.)
+
+HOW IT WORKS
+  * Levels 1-60. Kill enemies, discover zones and finish quests for XP.
+  * Every enemy has a level and a nameplate. The color shows the difficulty:
+    grey = trivial, green = easy, yellow = even, orange = hard, red = very hard, ?? = deadly.
+  * Strength = damage, Agility = critical hits, Stamina and Armor = less damage taken,
+    Spirit = faster health regen out of combat.
+  * Loot has WoW rarities: grey (junk - sell it), white, green, blue, purple, orange (legendary).
+  * Quests: when you enter an area with work to do, a yellow "!" floats over a nearby
+    person. Press L to accept. Go back to that area to turn in the quest ("?").
+  * Talents: 1 point per level from 10 onward, in three trees (Courage / Wisdom / Power).
+  * Professions: pick 2. Herbalism (cut grass and bushes), Mining (break rocks),
+    Skinning (defeat beasts), Alchemy (potions and elixirs), Blacksmithing and
+    Leatherworking (craft gear).
+  * Dungeons (the Deku Tree, all temples, etc.) are tougher and drop better loot.
+    The Raid is Ganon's Castle and Tower. Pick Normal, Heroic or Mythic difficulty in the
+    Character sheet or under Esc > Enhancements > Warcraft.
+  * Everything can be completed solo.
+
+All Warcraft options (XP rate, regen, nameplates, etc.) are under Esc > Enhancements > Warcraft.
+Your level, gear, quests and talents are saved with your normal save file.

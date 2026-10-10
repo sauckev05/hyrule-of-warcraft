@@ -27,6 +27,7 @@
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Enhancements/Azeroth/Azeroth.h"
 #include "soh/Enhancements/randomizer/randomizer_entrance.h"
 #include "soh/Enhancements/randomizer/randomizer_grotto.h"
 #include "soh/frame_interpolation.h"
@@ -4496,6 +4497,8 @@ s32 func_80837B18_modified(PlayState* play, Player* this, s32 damage, u8 modifie
     s32 modifiedDamage = damage;
     if (modified) {
         modifiedDamage *= (1 << CVarGetInteger(CVAR_ENHANCEMENT("DamageMult"), 0));
+        // Hyrule of Warcraft: armor, stamina and dungeon/raid difficulty scale damage taken
+        modifiedDamage = Azeroth_ModifyIncomingDamage(play, modifiedDamage);
     }
 
     return Health_ChangeBy(play, modifiedDamage);
