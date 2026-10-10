@@ -58,18 +58,22 @@ function ZeldaControls_Target(state)
 	if ZeldaLock then ZeldaLock(1) end
 end
 
--- default keys, applied once per account
+-- default keys, applied once per account (version 3: sword 1, bow 2, shield 3, hookshot 4, roll Shift+W)
 local DEFAULT_KEYS = {
-	{ "F", "ZELDA_ATTACK" },
-	{ "R", "ZELDA_SHIELD" },
-	{ "V", "ZELDA_ROLL" },
+	{ "1", "ZELDA_ATTACK" },
+	{ "2", "ZELDA_BOW" },
+	{ "3", "ZELDA_SHIELD" },
+	{ "4", "ZELDA_HOOK" },
+	{ "SHIFT-W", "ZELDA_ROLL" },
 	{ "SHIFT-A", "ZELDA_ROLL_LEFT" },
 	{ "SHIFT-D", "ZELDA_ROLL_RIGHT" },
 	{ "SHIFT-S", "ZELDA_FLIP" },
-	{ "G", "ZELDA_BOW" },
-	{ "H", "ZELDA_HOOK" },
 	{ "Z", "ZELDA_TARGET" },
 }
+-- keys older versions used; freed if they still hold a Zelda move
+local OLD_KEYS = { "F", "G", "R", "V", "H" }
+local KEYS_VERSION = 3
+local HELP = "|cff33ff99Zelda Controls|r: 1 sword (hold = spin attack), 2 bow, 3 shield (hold), 4 hookshot, Shift+W roll, Shift+A/D side roll, Shift+S backflip, hold Z to lock on."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
@@ -77,15 +81,23 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function()
 	if event == "VARIABLES_LOADED" then
 		if not ZeldaControlsDB then ZeldaControlsDB = {} end
-		if (ZeldaControlsDB.keysVersion or 0) < 2 then
+		if (ZeldaControlsDB.keysVersion or 0) < KEYS_VERSION then
+			if GetBindingAction then
+				for _, key in ipairs(OLD_KEYS) do
+					local action = GetBindingAction(key)
+					if action and string.find(action, "^ZELDA_") then
+						SetBinding(key)
+					end
+				end
+			end
 			for _, kv in ipairs(DEFAULT_KEYS) do
 				SetBinding(kv[1], kv[2])
 			end
 			SaveBindings(1)
-			ZeldaControlsDB.keysVersion = 2
+			ZeldaControlsDB.keysVersion = KEYS_VERSION
 		end
 	elseif event == "PLAYER_ENTERING_WORLD" then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, G bow, H hookshot, hold Z to lock on. Change them in Key Bindings.")
+		DEFAULT_CHAT_FRAME:AddMessage(HELP .. " Change them in Key Bindings.")
 	end
 end)
 
@@ -98,5 +110,5 @@ shieldText:Hide()
 -- the server answers moves silently; hide the rare system replies about cooldowns from spamming
 SLASH_ZELDA1 = "/zelda"
 SlashCmdList["ZELDA"] = function()
-	DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, G bow, H hookshot, hold Z to lock on.")
+	DEFAULT_CHAT_FRAME:AddMessage(HELP)
 end
