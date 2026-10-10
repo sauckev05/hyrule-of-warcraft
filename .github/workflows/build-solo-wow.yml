@@ -217,6 +217,16 @@ jobs:
           $c += 'SoloCraft.DungeonDamage = 0.55'
           $c += 'SoloCraft.RaidHealthExponent = 0.9'
           $c += 'SoloCraft.RaidDamageExponent = 0.55'
+          $c += ''
+          $c += '###################################################################################################'
+          $c += '# ZELDA OF WARCRAFT'
+          $c += '#   WarriorOnly         new characters are always Warriors (race and looks are kept)'
+          $c += '#   WarriorScaling      weapon damage, crit and dodge use the Warrior formulas for every class'
+          $c += '#   PassiveTalentsOnly  talents that add or change abilities cannot be learned'
+          $c += '###################################################################################################'
+          $c += 'Zelda.WarriorOnly = 1'
+          $c += 'Zelda.WarriorScaling = 1'
+          $c += 'Zelda.PassiveTalentsOnly = 1'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1
