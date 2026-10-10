@@ -1,0 +1,73 @@
+name: build-zelda-wow
+# "Zelda of Warcraft": the Benilla 1.12.1 client (Rust/Bevy) with Zelda-style movement and combat,
+# packaged for Windows to run against the Azeroth Solo server.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'zelda-wow/**'
+      - '.github/workflows/build-zelda-wow.yml'
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Toolchain
+        working-directory: zelda-wow/benilla
+        run: |
+          rustup show
+          rustc -V
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: zelda-wow/benilla
+      - name: Build client (player build)
+        working-directory: zelda-wow/benilla
+        shell: pwsh
+        run: |
+          cargo build --release -p benilla --no-default-features *> ../../build.log
+          $code = $LASTEXITCODE
+          Get-Content ../../build.log -Tail 60
+          if ($code -ne 0) { exit $code }
+      - name: Publish build errors (ci-logs-zelda branch)
+        if: failure()
+        shell: pwsh
+        run: |
+          $lines = Select-String -Path build.log -Pattern '^error|^warning: unused|-->' -Context 0,6 | Select-Object -First 150 | Out-String -Width 400
+          New-Item -ItemType Directory logrepo | Out-Null
+          Set-Content -Path logrepo/errors.txt -Value $lines
+          Get-Content build.log -Tail 200 | Set-Content logrepo/tail.txt
+          cd logrepo
+          git init -q
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add .
+          git commit -qm "zelda build errors for ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/heads/ci-logs-zelda
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory ZeldaWoW | Out-Null
+          Copy-Item zelda-wow/benilla/target/release/benilla.exe ZeldaWoW/
+          Copy-Item -Recurse -Force zelda-wow/package/* ZeldaWoW/
+          Copy-Item zelda-wow/benilla/LICENSE-MIT ZeldaWoW/LICENSE-benilla-MIT.txt
+          Get-ChildItem ZeldaWoW | Format-Table Name, Length
+          Compress-Archive -Path ZeldaWoW -DestinationPath ZeldaWoW-Windows.zip
+      - name: Publish download (Releases page)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: zelda-wow-latest
+          name: "Zelda of Warcraft - Windows client (latest build)"
+          body: "Put the ZeldaWoW folder next to AzerothSolo, then run PLAY-ZELDA.bat. Needs Azeroth Solo set up first."
+          prerelease: false
+          files: ZeldaWoW-Windows.zip
