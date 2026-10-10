@@ -1,8 +1,8 @@
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba..bc272ad 100644
+index ffa25ba..10b7cd1 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,12 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,13 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
@@ -12,14 +12,15 @@ index ffa25ba..bc272ad 100644
 +        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
 +        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
 +        { "zhook",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaHookCommand,           "", nullptr },
++        { "zbow",           SEC_PLAYER,         false, &ChatHandler::HandleZeldaBowCommand,            "", nullptr },
          { "guid",           SEC_GAMEMASTER,     false, &ChatHandler::HandleGUIDCommand,                "", nullptr },
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a..dbbfe69 100644
+index 00fde0a..1a7de9a 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,13 @@ class ChatHandler
+@@ -679,6 +679,14 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
@@ -30,15 +31,16 @@ index 00fde0a..dbbfe69 100644
 +        bool HandleZeldaFlipCommand(char* args);
 +        bool HandleZeldaShieldCommand(char* args);
 +        bool HandleZeldaHookCommand(char* args);
++        bool HandleZeldaBowCommand(char* args);
          bool HandleTaxiCheatCommand(char* args);
          bool HandleWhispersCommand(char* args);
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..9cc1477
+index 0000000..0ffeb7c
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,339 @@
+@@ -0,0 +1,417 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -49,6 +51,7 @@ index 0000000..9cc1477
 + *   .zflip      backflip away with a short moment of invulnerability
 + *   .zshield    toggles the shield: heavy damage reduction from the front, slower movement
 + *   .zhook      hookshot: pulls you to your target
++ *   .zbow       fire your bow, crossbow, gun, thrown weapon or wand at the target (or the enemy you face)
 + *
 + * Your WoW weapons decide your fighting style, as Link's sword and shield or the Biggoron's Sword:
 + *   one-handed weapon + shield   quick slashes, and the shield can block
@@ -68,6 +71,8 @@ index 0000000..9cc1477
 +#include "Entities/Item.h"
 +#include "Entities/ItemPrototype.h"
 +#include "Globals/ObjectAccessor.h"
++#include "Config/Config.h"
++#include "Maps/MapManager.h"
 +
 +#include <cmath>
 +#include <mutex>
@@ -83,6 +88,7 @@ index 0000000..9cc1477
 +        uint32 dodgeReadyAt = 0;
 +        uint32 invulnerableUntil = 0;
 +        uint32 hookReadyAt = 0;
++        uint32 bowReadyAt = 0;
 +        bool shield = false;
 +    };
 +
@@ -102,6 +108,8 @@ index 0000000..9cc1477
 +    const uint32 DODGE_INVULN_MS = 450;
 +    const uint32 HOOK_COOLDOWN_MS = 4000;
 +    const float HOOK_RANGE = 30.0f;
++    const float BOW_RANGE = 35.0f;
++    const uint32 BOW_COOLDOWN_MS = 1100;
 +
 +    enum class Style { OneHanded, TwoHanded, DualWield, Unarmed };
 +
@@ -175,6 +183,12 @@ index 0000000..9cc1477
 +        for (uint32 i = 0; i < hits && victim->IsAlive(); ++i)
 +            player->AttackerStateUpdate(victim, BASE_ATTACK, true);
 +    }
++}
++
++uint8 ZeldaStatClass(Player const* player)
++{
++    static bool const warriorScaling = sConfig.GetBoolDefault("Zelda.WarriorScaling", true);
++    return warriorScaling ? uint8(CLASS_WARRIOR) : player->getClass();
 +}
 +
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage)
@@ -378,12 +392,78 @@ index 0000000..9cc1477
 +    player->NearTeleportTo(x, y, z, player->GetAngle(target));
 +    return true;
 +}
++
++bool ChatHandler::HandleZeldaBowCommand(char* /*args*/)
++{
++    Player* player = m_session->GetPlayer();
++    if (!CanAct(player))
++        return true;
++
++    Item* ranged = player->GetWeaponForAttack(RANGED_ATTACK, true, true);
++    if (!ranged)
++    {
++        SendSysMessage("Equip a bow, crossbow, gun, thrown weapon or wand in your ranged slot first.");
++        return true;
++    }
++
++    uint32 spellId = 0;
++    switch (ranged->GetProto()->SubClass)
++    {
++        case ITEM_SUBCLASS_WEAPON_BOW:      spellId = 2480; break; // Shoot Bow
++        case ITEM_SUBCLASS_WEAPON_GUN:      spellId = 7918; break; // Shoot Gun
++        case ITEM_SUBCLASS_WEAPON_CROSSBOW: spellId = 7919; break; // Shoot Crossbow
++        case ITEM_SUBCLASS_WEAPON_THROWN:   spellId = 2764; break; // Throw
++        case ITEM_SUBCLASS_WEAPON_WAND:     spellId = 5019; break; // Shoot (wand)
++        default:
++            SendSysMessage("That ranged item can't be fired.");
++            return true;
++    }
++
++    ZeldaState& state = StateFor(player);
++    uint32 now = WorldTimer::getMSTime();
++    if (now < state.bowReadyAt)
++        return true;
++
++    // The selected enemy if it is in range and in sight; otherwise the enemy closest to where we face.
++    Unit* target = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
++    if (target && (!target->IsAlive() || !player->CanAttack(target) || !player->IsWithinDistInMap(target, BOW_RANGE) ||
++                   !player->IsWithinLOSInMap(target)))
++        target = nullptr;
++    if (!target)
++    {
++        std::list<Unit*> enemies;
++        CollectEnemies(player, BOW_RANGE, enemies);
++        float best = M_PI_F / 3.0f; // within 60 degrees of straight ahead
++        for (Unit* unit : enemies)
++        {
++            float off = std::fabs(MapManager::NormalizeOrientation(player->GetAngle(unit) - player->GetOrientation()));
++            if (off > M_PI_F)
++                off = 2.0f * M_PI_F - off;
++            if (off < best)
++            {
++                best = off;
++                target = unit;
++            }
++        }
++    }
++    if (!target)
++    {
++        SendSysMessage("No enemy in your sights.");
++        return true;
++    }
++
++    state.bowReadyAt = now + BOW_COOLDOWN_MS;
++    player->SetFacingToObject(target);
++    // Arrows come from your ammo pouch, like Link's quiver: no ammo, no shot.
++    player->CastSpell(target, spellId, TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
++    return true;
++}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..08fb353
+index 0000000..677d12c
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,16 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -394,6 +474,10 @@ index 0000000..08fb353
 +
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
++
++// Zelda of Warcraft: the class whose stat formulas weapons scale with. Every hero fights like a
++// warrior (Zelda.WarriorScaling = 1, the default), whatever class the character is.
++uint8 ZeldaStatClass(Player const* player);
 +
 +#endif
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
@@ -479,6 +563,66 @@ index a378c4e..f53dd65 100644
 +float SoloCraftFactor(Creature const* creature, bool health);
 +
  #endif
+diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
+index 4d8e916..d09e23f 100644
+--- a/src/game/Entities/Player.cpp
++++ b/src/game/Entities/Player.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Entities/Player.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Tools/Language.h"
+ #include "Database/DatabaseEnv.h"
+ #include "Log/Log.h"
+@@ -4895,7 +4896,7 @@ float Player::GetMeleeCritFromAgility() const
+     float valLevel1 = 0.0f;
+     float valLevel60 = 0.0f;
+     // critical
+-    switch (getClass())
++    switch (ZeldaStatClass(this))
+     {
+         case CLASS_PALADIN:
+         case CLASS_SHAMAN:
+@@ -4939,7 +4940,7 @@ float Player::GetDodgeFromAgility(float amount) const
+     float valLevel1 = 0.0f;
+     float valLevel60 = 0.0f;
+     // critical
+-    switch (getClass())
++    switch (ZeldaStatClass(this))
+     {
+         case CLASS_PALADIN:
+         case CLASS_SHAMAN:
+diff --git a/src/game/Entities/StatSystem.cpp b/src/game/Entities/StatSystem.cpp
+index 70b4e7d..45ee880 100644
+--- a/src/game/Entities/StatSystem.cpp
++++ b/src/game/Entities/StatSystem.cpp
+@@ -21,6 +21,7 @@
+ #include "Entities/Pet.h"
+ #include "Entities/Creature.h"
+ #include "Globals/SharedDefines.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Spells/SpellAuras.h"
+ 
+ /*#######################################
+@@ -220,7 +221,7 @@ void Player::UpdateAttackPowerAndDamage(bool ranged)
+ 
+         mod = AttackPowerMod::RANGED_ATTACK_POWER;
+ 
+-        switch (getClass())
++        switch (ZeldaStatClass(this))
+         {
+             case CLASS_HUNTER: val2 = level * 2.0f + GetStat(STAT_AGILITY) * 2.0f - 10.0f;    break;
+             case CLASS_ROGUE:  val2 = level        + GetStat(STAT_AGILITY) - 10.0f;    break;
+@@ -241,7 +242,7 @@ void Player::UpdateAttackPowerAndDamage(bool ranged)
+     }
+     else
+     {
+-        switch (getClass())
++        switch (ZeldaStatClass(this))
+         {
+             case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
+             case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
 index 00986af..442475e 100644
 --- a/src/game/Entities/Unit.cpp

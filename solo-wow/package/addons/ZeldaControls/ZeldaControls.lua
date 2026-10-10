@@ -10,6 +10,7 @@ BINDING_NAME_ZELDA_ROLL = "Roll forward"
 BINDING_NAME_ZELDA_ROLL_LEFT = "Roll left"
 BINDING_NAME_ZELDA_ROLL_RIGHT = "Roll right"
 BINDING_NAME_ZELDA_FLIP = "Backflip"
+BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon"
 BINDING_NAME_ZELDA_HOOK = "Hookshot to target"
 BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on)"
 
@@ -65,6 +66,7 @@ local DEFAULT_KEYS = {
 	{ "SHIFT-A", "ZELDA_ROLL_LEFT" },
 	{ "SHIFT-D", "ZELDA_ROLL_RIGHT" },
 	{ "SHIFT-S", "ZELDA_FLIP" },
+	{ "G", "ZELDA_BOW" },
 	{ "H", "ZELDA_HOOK" },
 	{ "Z", "ZELDA_TARGET" },
 }
@@ -75,15 +77,15 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function()
 	if event == "VARIABLES_LOADED" then
 		if not ZeldaControlsDB then ZeldaControlsDB = {} end
-		if not ZeldaControlsDB.keysSet then
+		if (ZeldaControlsDB.keysVersion or 0) < 2 then
 			for _, kv in ipairs(DEFAULT_KEYS) do
 				SetBinding(kv[1], kv[2])
 			end
 			SaveBindings(1)
-			ZeldaControlsDB.keysSet = true
+			ZeldaControlsDB.keysVersion = 2
 		end
 	elseif event == "PLAYER_ENTERING_WORLD" then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, H hookshot, hold Z to lock on. Change them in Key Bindings.")
+		DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, G bow, H hookshot, hold Z to lock on. Change them in Key Bindings.")
 	end
 end)
 
@@ -96,5 +98,5 @@ shieldText:Hide()
 -- the server answers moves silently; hide the rare system replies about cooldowns from spamming
 SLASH_ZELDA1 = "/zelda"
 SlashCmdList["ZELDA"] = function()
-	DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, H hookshot, hold Z to lock on.")
+	DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Zelda Controls|r: F sword (hold = spin attack), R shield, V roll, Shift+A/D side roll, Shift+S backflip, G bow, H hookshot, hold Z to lock on.")
 end
