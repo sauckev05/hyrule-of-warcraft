@@ -37,10 +37,10 @@ index 00fde0a..1a7de9a 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..1448dd6
+index 0000000..7802d02
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,417 @@
+@@ -0,0 +1,430 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -189,6 +189,19 @@ index 0000000..1448dd6
 +{
 +    static bool const warriorScaling = sConfig.GetBoolDefault("Zelda.WarriorScaling", true);
 +    return warriorScaling ? uint8(CLASS_WARRIOR) : player->getClass();
++}
++
++bool ZeldaFreePotion(SpellEntry const& spell, ItemPrototype const* item)
++{
++    static bool const noPotionCooldown = sConfig.GetBoolDefault("Zelda.NoPotionCooldown", true);
++    if (!noPotionCooldown || !item || item->Class != ITEM_CLASS_CONSUMABLE)
++        return false;
++
++    uint32 category = spell.Category;
++    for (auto const& itemSpell : item->Spells)
++        if (itemSpell.SpellId == spell.Id && itemSpell.SpellCategory)
++            category = itemSpell.SpellCategory;
++    return category == 4; // SPELLCATEGORY_HEALTH_MANA_POTIONS: healing, mana and rejuvenation potions
 +}
 +
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage)
@@ -460,10 +473,10 @@ index 0000000..1448dd6
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..677d12c
+index 0000000..2cb882d
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,22 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -471,6 +484,8 @@ index 0000000..677d12c
 +
 +class Player;
 +class Unit;
++struct SpellEntry;
++struct ItemPrototype;
 +
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
@@ -478,6 +493,10 @@ index 0000000..677d12c
 +// Zelda of Warcraft: the class whose stat formulas weapons scale with. Every hero fights like a
 +// warrior (Zelda.WarriorScaling = 1, the default), whatever class the character is.
 +uint8 ZeldaStatClass(Player const* player);
++
++// Zelda of Warcraft: potions have no cooldown (Zelda.NoPotionCooldown = 1, the default), so you can
++// drink as many as you carry, like Ocarina's bottles. True when this item use should skip its cooldown.
++bool ZeldaFreePotion(SpellEntry const& spell, ItemPrototype const* item);
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -588,7 +607,7 @@ index a378c4e..f53dd65 100644
 +
  #endif
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e916..6f5fc8a 100644
+index 4d8e916..63e42c9 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -645,6 +664,17 @@ index 4d8e916..6f5fc8a 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
+@@ -20221,6 +20243,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+     if (itemProto)
+         pickCooldowns(itemProto);
+ 
++    // Zelda of Warcraft: potions can be drunk back to back
++    if (!forcedDuration && ZeldaFreePotion(spellEntry, itemProto))
++        return;
++
+     bool haveToSendEvent = false;
+     bool wasPermanent = false;
+     uint32 oldItemId = 0;
 diff --git a/src/game/Entities/StatSystem.cpp b/src/game/Entities/StatSystem.cpp
 index 70b4e7d..45ee880 100644
 --- a/src/game/Entities/StatSystem.cpp
@@ -707,3 +737,26 @@ index 00986af..442475e 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
+diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
+index bf5c5c5..a950e6d 100644
+--- a/src/game/Spells/Spell.cpp
++++ b/src/game/Spells/Spell.cpp
+@@ -47,6 +47,7 @@
+ #include "Spells/Scripts/SpellScript.h"
+ #include "Entities/ObjectGuid.h"
+ #include "Spells/SpellStacking.h"
++#include "Chat/ZeldaCommands.h"
+ 
+ #ifdef ENABLE_PLAYERBOTS
+ #include "playerbot/PlayerbotAI.h"
+@@ -3280,6 +3281,10 @@ SpellCastResult Spell::cast(bool skipCheck)
+     SendCastResult(castResult);
+     SendSpellGo();                                          // we must send smsg_spell_go packet before m_castItem delete in TakeCastItem()...
+ 
++    // Zelda of Warcraft: the client starts the potion cooldown by itself when the cast goes off - clear it
++    if (m_CastItem && m_trueCaster->IsPlayer() && ZeldaFreePotion(*m_spellInfo, m_CastItem->GetProto()))
++        static_cast<Player*>(m_trueCaster)->SendClearCooldown(m_spellInfo->Id, static_cast<Player*>(m_trueCaster));
++
+     InitializeDamageMultipliers();
+ 
+     OnCast();
