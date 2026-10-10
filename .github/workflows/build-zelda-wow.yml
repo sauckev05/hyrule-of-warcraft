@@ -7,6 +7,7 @@ on:
     paths:
       - 'zelda-wow/**'
       - 'solo-wow/package/addons/**'
+      - 'solo-wow/tools/**'
       - '.github/workflows/build-zelda-wow.yml'
   workflow_dispatch:
 concurrency:
@@ -55,6 +56,9 @@ jobs:
           git add .
           git commit -qm "zelda build errors for ${{ github.sha }}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/heads/ci-logs-zelda
+      - name: Quest map addon (pfQuest)
+        shell: bash
+        run: bash solo-wow/tools/fetch-pfquest.sh solo-wow/package/addons
       - name: Package
         shell: pwsh
         run: |

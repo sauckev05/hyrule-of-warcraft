@@ -171,6 +171,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: repo
+      - name: Quest map addon (pfQuest)
+        shell: bash
+        run: bash repo/solo-wow/tools/fetch-pfquest.sh repo/solo-wow/package/addons
       - name: Download binaries
         uses: actions/download-artifact@v8
         with:
@@ -206,6 +209,8 @@ jobs:
           $c = $c -replace '^DataDir\s*=.*', 'DataDir = "data"'
           $c = $c -replace '^GameType\s*=.*', 'GameType = 0'
           $c = $c -replace '^Console\.Enable\s*=.*', 'Console.Enable = 1'
+          # every profession can be learned, not just two
+          $c = $c -replace '^MaxPrimaryTradeSkill\s*=.*', 'MaxPrimaryTradeSkill = 9'
           $c += ''
           $c += '###################################################################################################'
           $c += '# SOLOCRAFT - dungeon & raid scaling so one player can clear everything'
@@ -226,6 +231,8 @@ jobs:
           $c += '#   NoPotionCooldown    healing/mana potions have no cooldown - drink as many as you carry'
           $c += '#   AutoLoot            loot from your kills goes straight into your bags'
           $c += '#   OneHandOnBack       one-handed weapons (not maces) are worn on the back instead of the hip'
+          $c += '#   DayLengthMinutes    real minutes per game day (60: a full day and night every hour)'
+          $c += '#   ChestBoEChance      percent chance a treasure chest also holds a Bind on Equip item of the zone level'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
@@ -233,6 +240,8 @@ jobs:
           $c += 'Zelda.NoPotionCooldown = 1'
           $c += 'Zelda.AutoLoot = 1'
           $c += 'Zelda.OneHandOnBack = 1'
+          $c += 'Zelda.DayLengthMinutes = 60'
+          $c += 'Zelda.ChestBoEChance = 50'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1

@@ -39,10 +39,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..0dea9e6
+index 0000000..0fcd5bf
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,552 @@
+@@ -0,0 +1,704 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -78,6 +78,12 @@ index 0000000..0dea9e6
 +#include "Server/WorldPacket.h"
 +#include "Server/Opcodes.h"
 +#include "Loot/LootMgr.h"
++#include "Entities/GameObject.h"
++#include "Server/DBCStores.h"
++#include "Server/SQLStorages.h"
++#include <array>
++#include <cctype>
++#include <string>
 +
 +#include <algorithm>
 +#include <cmath>
@@ -508,6 +514,22 @@ index 0000000..0dea9e6
 +    return HandleZeldaBoomerangCommand(args);
 +}
 +
++uint32 ZeldaPackedGameTime(time_t now, float& speed)
++{
++    static float const dayMinutes = sConfig.GetFloatDefault("Zelda.DayLengthMinutes", 60.0f);
++    if (dayMinutes <= 0.0f || dayMinutes >= 1440.0f)
++    {
++        speed = 1.0f / 60.0f;                       // real time
++        return secsToTimeBitFields(now);
++    }
++    float const factor = 1440.0f / dayMinutes;      // game seconds per real second
++    time_t const anchor = 1767225600;               // 2026-01-01: keeps the packed year small
++    double const elapsed = double(now > anchor ? now - anchor : 0);
++    time_t const gameNow = anchor + time_t(elapsed * factor);
++    speed = factor / 60.0f;
++    return secsToTimeBitFields(gameNow);
++}
++
 +uint32 ZeldaItemSheath(ItemPrototype const* proto)
 +{
 +    static bool const oneHandOnBack = sConfig.GetBoolDefault("Zelda.OneHandOnBack", true);
@@ -518,6 +540,136 @@ index 0000000..0dea9e6
 +         proto->InventoryType == INVTYPE_WEAPONOFFHAND))
 +        return 1; // on the back, drawn over the shoulder
 +    return proto->Sheath;
++}
++
++namespace
++{
++    // Bind on Equip weapons and armor by quality (green, blue, purple) and required level 1..60.
++    struct BoePools
++    {
++        std::array<std::array<std::vector<uint32>, 61>, 3> byQuality;
++    };
++
++    bool StartsWith(std::string const& s, char const* prefix)
++    {
++        return s.compare(0, std::char_traits<char>::length(prefix), prefix) == 0;
++    }
++
++    BoePools BuildBoePools()
++    {
++        BoePools pools;
++        for (uint32 id = 0; id < sItemStorage.GetMaxEntry(); ++id)
++        {
++            ItemPrototype const* proto = sItemStorage.LookupEntry<ItemPrototype>(id);
++            if (!proto || proto->Bonding != BIND_WHEN_EQUIPPED)
++                continue;
++            if (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR)
++                continue;
++            if (proto->InventoryType == INVTYPE_NON_EQUIP || proto->InventoryType == INVTYPE_BODY || proto->InventoryType == INVTYPE_TABARD)
++                continue;
++            if (proto->Quality < ITEM_QUALITY_UNCOMMON || proto->Quality > ITEM_QUALITY_EPIC)
++                continue;
++            if (proto->RequiredLevel < 1 || proto->RequiredLevel > 60)
++                continue;
++            std::string const name = proto->Name1 ? proto->Name1 : "";
++            if (name.empty() || StartsWith(name, "Deprecated") || StartsWith(name, "Test") || StartsWith(name, "TEST") ||
++                StartsWith(name, "Monster") || StartsWith(name, "[PH]") || StartsWith(name, "OLD") || StartsWith(name, "QA") ||
++                name.find("Test ") != std::string::npos || name.find("(test)") != std::string::npos)
++                continue;
++            pools.byQuality[proto->Quality - ITEM_QUALITY_UNCOMMON][proto->RequiredLevel].push_back(proto->ItemId);
++        }
++        return pools;
++    }
++
++    // herbs, ore veins and fishing pools are chests to the game; they get nothing extra
++    bool IsGatheringNode(GameObjectInfo const* info)
++    {
++        if (LockEntry const* lock = sLockStore.LookupEntry(info->chest.lockId))
++            for (uint32 i = 0; i < MAX_LOCK_CASE; ++i)
++                if (lock->Type[i] == LOCK_KEY_SKILL &&
++                    (lock->Index[i] == LOCKTYPE_HERBALISM || lock->Index[i] == LOCKTYPE_MINING || lock->Index[i] == LOCKTYPE_FISHING))
++                    return true;
++        return false;
++    }
++
++    bool LooksLikeTreasure(GameObjectInfo const* info)
++    {
++        std::string name = info->name ? info->name : "";
++        for (char& c : name)
++            c = char(std::tolower(static_cast<unsigned char>(c)));
++        for (char const* word : { "chest", "strongbox", "coffer", "trunk", "footlocker", "lockbox", "treasure" })
++            if (name.find(word) != std::string::npos)
++                return true;
++        return false;
++    }
++
++    uint32 PickBoe(BoePools const& pools, uint32 quality, int32 level)
++    {
++        std::vector<uint32> const* lists[12];
++        uint32 count = 0;
++        uint32 total = 0;
++        // first the five levels up to the zone's, then a wider band
++        for (int32 spread : { 4, 8 })
++        {
++            count = 0;
++            total = 0;
++            for (int32 l = std::max(1, level - spread); l <= std::min(60, level + (spread > 4 ? 2 : 0)); ++l)
++            {
++                auto const& list = pools.byQuality[quality][l];
++                if (!list.empty() && count < 12)
++                {
++                    lists[count++] = &list;
++                    total += uint32(list.size());
++                }
++            }
++            if (total)
++                break;
++        }
++        if (!total)
++            return 0;
++        uint32 pick = urand(0, total - 1);
++        for (uint32 i = 0; i < count; ++i)
++        {
++            if (pick < lists[i]->size())
++                return (*lists[i])[pick];
++            pick -= uint32(lists[i]->size());
++        }
++        return 0;
++    }
++}
++
++void ZeldaChestBonus(Loot* loot, GameObject* chest, Player* opener)
++{
++    static int32 const chance = sConfig.GetIntDefault("Zelda.ChestBoEChance", 50);
++    if (!loot || !chest || !opener || chance <= 0)
++        return;
++    GameObjectInfo const* info = chest->GetGOInfo();
++    if (!info || info->type != GAMEOBJECT_TYPE_CHEST || IsGatheringNode(info) || !LooksLikeTreasure(info))
++        return;
++    if (!roll_chance_i(chance))
++        return;
++
++    // the zone's level: the area's exploration level, else its zone's, else the hero's own
++    uint32 zoneId = 0, areaId = 0;
++    chest->GetZoneAndAreaId(zoneId, areaId);
++    int32 level = 0;
++    if (AreaTableEntry const* area = GetAreaEntryByAreaID(areaId))
++        level = area->area_level;
++    if (level <= 0)
++        if (AreaTableEntry const* zone = GetAreaEntryByAreaID(zoneId))
++            level = zone->area_level;
++    if (level <= 0)
++        level = int32(opener->GetLevel());
++    level = std::min(60, std::max(1, level));
++
++    static BoePools const pools = BuildBoePools();
++    uint32 const roll = urand(1, 100);
++    uint32 quality = roll <= 2 ? 2u : (roll <= 17 ? 1u : 0u); // 2% purple, 15% blue, else green
++    uint32 itemId = 0;
++    for (int32 q = int32(quality); q >= 0 && !itemId; --q)
++        itemId = PickBoe(pools, uint32(q), level);
++    if (itemId)
++        loot->AddItem(LootStoreItem(0, itemId, 100.0f, 0, 0, 1, 1));
 +}
 +
 +void ZeldaAutoLoot(Player* looter, Loot* loot)
@@ -597,10 +749,10 @@ index 0000000..0dea9e6
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..c5801a7
+index 0000000..49c2288
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,55 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -611,6 +763,7 @@ index 0000000..c5801a7
 +struct SpellEntry;
 +struct ItemPrototype;
 +class Loot;
++class GameObject;
 +
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
@@ -642,6 +795,17 @@ index 0000000..c5801a7
 +// at the hip (3) are worn on the back (1) instead, like Link's sword - except maces, which stay at
 +// the hip (Zelda.OneHandOnBack = 1).
 +uint32 ZeldaItemSheath(ItemPrototype const* proto);
++
++// Zelda of Warcraft: the game clock the client is told at login. A game day lasts
++// Zelda.DayLengthMinutes real minutes (60 by default, so the sun crosses the sky in an hour). The
++// clock runs from a fixed start, so every login agrees on the hour. Sets speed (game minutes per
++// real second) and returns the packed time.
++uint32 ZeldaPackedGameTime(time_t now, float& speed);
++
++// Zelda of Warcraft: a treasure chest (not an herb, ore or fishing node) being opened gets, with
++// Zelda.ChestBoEChance percent (50), one extra Bind on Equip weapon or armor piece whose required
++// level fits the zone: green, sometimes blue, rarely purple.
++void ZeldaChestBonus(Loot* loot, GameObject* chest, Player* opener);
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -792,7 +956,7 @@ index bf44698..98818ac 100644
          data << pProto->Block;
          data << pProto->ItemSet;
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e916..63e42c9 100644
+index 4d8e916..ddd53d7 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -821,7 +985,22 @@ index 4d8e916..63e42c9 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -19665,6 +19666,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -18082,9 +18083,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+ 
+     // SMSG_SET_AURA_SINGLE
+ 
++    // Zelda of Warcraft: a faster day/night cycle (Zelda.DayLengthMinutes real minutes per game day)
++    float gameSpeed = 0.01666667f;                          // game minutes per real second
++    uint32 const packedGameTime = ZeldaPackedGameTime(sWorld.GetGameTime(), gameSpeed);
+     data.Initialize(SMSG_LOGIN_SETTIMESPEED, 4 + 4);
+-    data << uint32(secsToTimeBitFields(sWorld.GetGameTime()));
+-    data << (float)0.01666667f;                             // game speed
++    data << uint32(packedGameTime);
++    data << float(gameSpeed);                               // game speed
+     GetSession()->SendPacket(data);
+ 
+     if (!GetSession()->PlayerLoading())
+@@ -19665,6 +19669,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -849,7 +1028,7 @@ index 4d8e916..63e42c9 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20221,6 +20243,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20246,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -932,6 +1111,30 @@ index 00986af..2f68e49 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
+diff --git a/src/game/Loot/LootMgr.cpp b/src/game/Loot/LootMgr.cpp
+index 79b2664..8d676c4 100644
+--- a/src/game/Loot/LootMgr.cpp
++++ b/src/game/Loot/LootMgr.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Loot/LootMgr.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Log/Log.h"
+ #include "Util/ProgressBar.h"
+ #include "World/World.h"
+@@ -1844,7 +1845,11 @@ Loot::Loot(Player* player, GameObject* gameObject, LootType type) :
+                 if (uint32 lootid = gameObject->GetGOInfo()->GetLootId())
+                 {
+                     if (gameObject->GetGOInfo()->type == GAMEOBJECT_TYPE_CHEST)
++                    {
+                         m_isChest = true;
++                        // Zelda of Warcraft: treasure chests may hold a Bind on Equip item of the zone's level
++                        ZeldaChestBonus(this, gameObject, player);
++                    }
+ 
+                     SetGroupLootRight(player);
+                     FillLoot(lootid, LootTemplates_Gameobject, player, false);
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
 index bf5c5c5..a950e6d 100644
 --- a/src/game/Spells/Spell.cpp
