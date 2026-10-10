@@ -81,9 +81,27 @@ jobs:
         VCPKG_ROOT: ${{github.workspace}}/vcpkg
       run: |
         cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        cmake --build build-windows --config Release --parallel 4
+        cmake --build build-windows --config Release --parallel 4 -- -k 0 *> build.log
+        $code = $LASTEXITCODE
+        Get-Content build.log -Tail 60
+        if ($code -ne 0) { exit $code }
         (cd build-windows && cpack)
         cd ..
+    - name: Publish build errors (ci-logs branch)
+      if: failure()
+      shell: pwsh
+      run: |
+        $lines = Select-String -Path build.log -Pattern ': error |error C[0-9]+|error LNK[0-9]+|FAILED:' -Context 0,3 | Select-Object -First 120 | Out-String -Width 400
+        New-Item -ItemType Directory logrepo | Out-Null
+        Set-Content -Path logrepo/errors.txt -Value $lines
+        Get-Content build.log -Tail 200 | Set-Content logrepo/tail.txt
+        cd logrepo
+        git init -q
+        git config user.name "ci"
+        git config user.email "ci@users.noreply.github.com"
+        git add .
+        git commit -qm "build errors for ${{ github.sha }}"
+        git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/heads/ci-logs
     - name: Assemble game folder
       shell: pwsh
       run: |
