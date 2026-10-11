@@ -100,6 +100,8 @@ jobs:
 
   database:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     services:
       mariadb:
         image: mariadb:10.11
@@ -151,8 +153,15 @@ jobs:
       - name: Load and check the Zelda story content
         run: |
           # stops at the first bad statement, so a broken quest file fails the build
-          mysql -h127.0.0.1 -uroot -proot classicmangos < repo/solo-wow/content/zelda-sql/001_companions.sql
-          mysql -h127.0.0.1 -uroot -proot classicmangos -e "SELECT COUNT(*) AS zelda_quests FROM quest_template WHERE entry BETWEEN 90100 AND 90499; SELECT COUNT(*) AS zelda_creatures FROM creature WHERE id BETWEEN 190000 AND 190999; SELECT COUNT(*) AS stages FROM zelda_stage;"
+          mysql -h127.0.0.1 -uroot -proot classicmangos < repo/solo-wow/content/zelda-sql/001_companions.sql 2> zelda-sql.err || { cat zelda-sql.err; exit 1; }
+          mysql -h127.0.0.1 -uroot -proot classicmangos -e "SELECT COUNT(*) AS zelda_quests FROM quest_template WHERE entry BETWEEN 90100 AND 90599; SELECT COUNT(*) AS zelda_creatures FROM creature WHERE id BETWEEN 190000 AND 190999; SELECT COUNT(*) AS stages FROM zelda_stage;"
+      - name: Publish story content errors (ci-logs-solo-db branch)
+        if: failure()
+        run: |
+          mkdir logrepo && cp zelda-sql.err logrepo/errors.txt 2>/dev/null || echo "no sql error file" > logrepo/errors.txt
+          cd logrepo && git init -q && git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add . && git commit -qm "story content errors for ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/heads/ci-logs-solo-db
       - name: Customize realm for single player
         run: |
           mysql -h127.0.0.1 -uroot -proot classicrealmd -e "UPDATE realmlist SET name='Azeroth Solo', icon=0, address='127.0.0.1' WHERE id=1;"
@@ -280,6 +289,8 @@ jobs:
           $c += 'Zelda.RangedDamageRate = 2'
           $c += 'Zelda.RunSpeedRate = 2'
           $c += 'Zelda.CrossFaction = 1'
+          $c += 'Zelda.NaviHealPercent = 5'
+          $c += 'Zelda.HeartPieceChance = 15'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1

@@ -11,47 +11,48 @@ CREATE TABLE IF NOT EXISTS `zelda_stage` (
 
 DELETE FROM `zelda_stage`;
 
-DELETE FROM `creature` WHERE `id` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404);
+DELETE FROM `creature` WHERE `id` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190601);
 
-DELETE FROM `creature_template` WHERE `Entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404);
+DELETE FROM `creature_template` WHERE `Entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190601);
 
-DELETE FROM `creature_template_addon` WHERE `entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404);
+DELETE FROM `creature_template_addon` WHERE `entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190601);
 
-DELETE FROM `creature_questrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90106,90107,90108,90109,90110,90111,90201,90202,90203,90204,90205,90206,90207,90301,90302,90303,90304,90305,90306,90401,90402,90403,90404,90405,90406);
+DELETE FROM `creature_questrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90106,90107,90108,90109,90110,90111,90201,90202,90203,90204,90205,90206,90207,90301,90302,90303,90304,90305,90306,90401,90402,90403,90404,90405,90406,90501,90502,90503);
 
-DELETE FROM `creature_involvedrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90106,90107,90108,90109,90110,90111,90201,90202,90203,90204,90205,90206,90207,90301,90302,90303,90304,90305,90306,90401,90402,90403,90404,90405,90406);
+DELETE FROM `creature_involvedrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90106,90107,90108,90109,90110,90111,90201,90202,90203,90204,90205,90206,90207,90301,90302,90303,90304,90305,90306,90401,90402,90403,90404,90405,90406,90501,90502,90503);
 
-DELETE FROM `quest_template` WHERE `entry` IN (90101,90102,90103,90104,90105,90106,90107,90108,90109,90110,90111,90201,90202,90203,90204,90205,90206,90207,90301,90302,90303,90304,90305,90306,90401,90402,90403,90404,90405,90406);
+DELETE FROM `quest_template` WHERE `entry` IN (90101,90102,90103,90104,90105,90106,90107,90108,90109,90110,90111,90201,90202,90203,90204,90205,90206,90207,90301,90302,90303,90304,90305,90306,90401,90402,90403,90404,90405,90406,90501,90502,90503);
 
-DELETE FROM `item_template` WHERE `entry` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532);
+DELETE FROM `item_template` WHERE `entry` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532,190601,190602);
 
-DELETE FROM `creature_loot_template` WHERE `item` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532);
+DELETE FROM `creature_loot_template` WHERE `item` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532,190601,190602);
 
 DELETE FROM `npc_text` WHERE `ID` BETWEEN 900000 AND 900999;
 
-DELETE FROM `gossip_menu` WHERE `entry` BETWEEN 190000 AND 190999;
+DELETE FROM `gossip_menu` WHERE `entry` BETWEEN 64001 AND 64100;
 
-INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,`DisplayId1`,`DisplayIdProbability1`,`Faction`,`Scale`,`CreatureType`,`InhabitType`,`RegenerateStats`,`NpcFlags`,`SpeedWalk`,`SpeedRun`,`UnitClass`,`Rank`,`HealthMultiplier`,`PowerMultiplier`,`DamageMultiplier`,`ArmorMultiplier`,`ExperienceMultiplier`,`MeleeBaseAttackTime`,`RangedBaseAttackTime`,`EquipmentTemplateId`,`GossipMenuId`,`AIName`,`ScriptName`) VALUES
-(190001,'Bishop Aldous Grey','Cathedral of Light',55,55,7008,100,12,1.0,7,3,3,3,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,0,190001,'',''),
-(190002,'Widow Carrow',NULL,30,30,1692,100,12,1.0,7,3,3,3,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,238,190002,'',''),
-(190003,'Elder Sentinel Ilthara','Sentinel Army',45,45,2865,100,80,1.0,7,3,3,3,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,2930,190003,'',''),
-(190004,'Elder Grimtusk','Earthen Ring',50,50,3846,100,29,1.0,7,3,3,3,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,3464,190004,'',''),
-(190005,'Gravekeeper Hollis',NULL,30,30,1582,100,68,1.0,7,3,3,3,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,1568,190005,'',''),
-(190101,'Lyra Ashford','Prisoner of the Defias',18,18,1295,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
-(190102,'Lyra Ashford','Acolyte of the Light',20,20,1295,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
-(190103,'Lyra Ashford','Acolyte of the Light',28,28,1295,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
-(190104,'Lyra Ashford','Acolyte of the Light',55,55,1295,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
-(190105,'Lyra Ashford','Acolyte of the Light',60,60,1295,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
-(190201,'Faelin Swiftbreeze','Huntress',15,15,9937,100,35,1.0,7,3,3,3,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,10604,0,'','npc_zelda_companion'),
-(190202,'Faelin Swiftbreeze','Huntress',30,30,9937,100,35,1.0,7,3,3,3,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,10604,0,'','npc_zelda_companion'),
-(190203,'Faelin Swiftbreeze','Huntress',58,58,9937,100,35,1.0,7,3,3,3,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,10604,0,'','npc_zelda_companion'),
-(190301,'Durza Stormcaller','Shaman of the Earthen Ring',12,12,3897,100,35,1.0,7,3,3,3,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,4049,0,'','npc_zelda_companion'),
-(190302,'Durza Stormcaller','Shaman of the Earthen Ring',45,45,3897,100,35,1.0,7,3,3,3,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,4049,0,'','npc_zelda_companion'),
-(190303,'Durza Stormcaller','Shaman of the Earthen Ring',57,57,3897,100,35,1.0,7,3,3,3,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,4049,0,'','npc_zelda_companion'),
-(190401,'Vesper Duskhollow','Forsaken Warlock',10,10,10550,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
-(190402,'Vesper Duskhollow','Forsaken Warlock',38,38,10550,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
-(190403,'Vesper Duskhollow','Forsaken Warlock',56,56,10550,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
-(190404,'Vesper Duskhollow','Forsaken Warlock',60,60,10550,100,35,1.0,7,3,3,3,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion');
+INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,`DisplayId1`,`DisplayIdProbability1`,`Faction`,`Scale`,`CreatureType`,`InhabitType`,`RegenerateStats`,`NpcFlags`,`UnitFlags`,`SpeedWalk`,`SpeedRun`,`UnitClass`,`Rank`,`HealthMultiplier`,`PowerMultiplier`,`DamageMultiplier`,`ArmorMultiplier`,`ExperienceMultiplier`,`MeleeBaseAttackTime`,`RangedBaseAttackTime`,`EquipmentTemplateId`,`GossipMenuId`,`AIName`,`ScriptName`) VALUES
+(190001,'Bishop Aldous Grey','Cathedral of Light',55,55,7008,100,12,1.0,7,3,3,3,0,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,0,64001,'',''),
+(190002,'Widow Carrow',NULL,30,30,1692,100,12,1.0,7,3,3,3,0,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,238,64002,'',''),
+(190003,'Elder Sentinel Ilthara','Sentinel Army',45,45,2865,100,80,1.0,7,3,3,3,0,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,2930,64003,'',''),
+(190004,'Elder Grimtusk','Earthen Ring',50,50,3846,100,29,1.0,7,3,3,3,0,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,3464,64004,'',''),
+(190005,'Gravekeeper Hollis',NULL,30,30,1582,100,68,1.0,7,3,3,3,0,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,1568,64005,'',''),
+(190101,'Lyra Ashford','Prisoner of the Defias',18,18,1295,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
+(190102,'Lyra Ashford','Acolyte of the Light',20,20,1295,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
+(190103,'Lyra Ashford','Acolyte of the Light',28,28,1295,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
+(190104,'Lyra Ashford','Acolyte of the Light',55,55,1295,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
+(190105,'Lyra Ashford','Acolyte of the Light',60,60,1295,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,6267,0,'','npc_zelda_companion'),
+(190201,'Faelin Swiftbreeze','Huntress',15,15,9937,100,35,1.0,7,3,3,3,0,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,10604,0,'','npc_zelda_companion'),
+(190202,'Faelin Swiftbreeze','Huntress',30,30,9937,100,35,1.0,7,3,3,3,0,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,10604,0,'','npc_zelda_companion'),
+(190203,'Faelin Swiftbreeze','Huntress',58,58,9937,100,35,1.0,7,3,3,3,0,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,10604,0,'','npc_zelda_companion'),
+(190301,'Durza Stormcaller','Shaman of the Earthen Ring',12,12,3897,100,35,1.0,7,3,3,3,0,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,4049,0,'','npc_zelda_companion'),
+(190302,'Durza Stormcaller','Shaman of the Earthen Ring',45,45,3897,100,35,1.0,7,3,3,3,0,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,4049,0,'','npc_zelda_companion'),
+(190303,'Durza Stormcaller','Shaman of the Earthen Ring',57,57,3897,100,35,1.0,7,3,3,3,0,1.0,1.14286,2,0,1.5,2.0,1.0,1.0,0,2000,2000,4049,0,'','npc_zelda_companion'),
+(190401,'Vesper Duskhollow','Forsaken Warlock',10,10,10550,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
+(190402,'Vesper Duskhollow','Forsaken Warlock',38,38,10550,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
+(190403,'Vesper Duskhollow','Forsaken Warlock',56,56,10550,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
+(190404,'Vesper Duskhollow','Forsaken Warlock',60,60,10550,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
+(190601,'Navi','Fairy of the Lost Woods',10,10,10045,100,35,0.6,7,4,3,3,2,1.0,1.14286,8,0,1.0,1.0,1.0,1.0,0,2000,2000,0,0,'','npc_zelda_navi');
 
 INSERT INTO `creature` (`guid`,`id`,`map`,`spawnMask`,`position_x`,`position_y`,`position_z`,`orientation`,`spawntimesecsmin`,`spawntimesecsmax`,`spawndist`,`MovementType`) VALUES
 (9100001,190001,0,1,-8529.0,856.5,106.6,3.7,60,60,0,0),
@@ -73,7 +74,13 @@ INSERT INTO `creature` (`guid`,`id`,`map`,`spawnMask`,`position_x`,`position_y`,
 (9100017,190401,0,1,2258.0,240.0,33.7,0.5,60,60,3,1),
 (9100018,190402,0,1,548.0,1590.5,130.1,0.8,60,60,2,1),
 (9100019,190403,0,1,1764.5,-726.5,60.0,2.5,60,60,2,1),
-(9100020,190404,0,1,2307.5,-5352.5,91.7,2.4,60,60,2,1);
+(9100020,190404,0,1,2307.5,-5352.5,91.7,2.4,60,60,2,1),
+(9100021,190601,0,1,-8930.5,-133.0,83.4,4.0,60,60,2,1),
+(9100022,190601,0,1,-6211.5,331.5,383.7,4.0,60,60,2,1),
+(9100023,190601,1,1,10325.5,829.5,1326.5,5.5,60,60,2,1),
+(9100024,190601,1,1,-603.5,-4248.0,38.9,3.3,60,60,2,1),
+(9100025,190601,1,1,-2909.0,-254.0,53.0,3.5,60,60,2,1),
+(9100026,190601,0,1,1682.5,1671.0,135.8,3.8,60,60,2,1);
 
 INSERT INTO `creature_template_addon` (`entry`,`mount`,`stand_state`,`sheath_state`,`emote`,`moveflags`,`auras`) VALUES
 (190101,0,8,0,0,0,NULL);
@@ -92,6 +99,8 @@ INSERT INTO `npc_text` (`ID`,`text0_0`,`text0_1`,`lang0`,`prob0`,`em0_0`,`em0_1`
 (900310,'I''m Durza. My mother was the finest fire-speaker in Durotar. A fire spirit went mad and took her, and the elders said ''the elements are in balance''. BALANCE.$B$BNow the fire won''t listen to me, the earth groans in Desolace and something under Blackrock Mountain is screaming. Everyone says I''m too angry.$B$B...Maybe. But someone has to find out who is making the elements suffer. And hit them.','I''m Durza. My mother was the finest fire-speaker in Durotar. A fire spirit went mad and took her, and the elders said ''the elements are in balance''. BALANCE.$B$BNow the fire won''t listen to me, the earth groans in Desolace and something under Blackrock Mountain is screaming. Everyone says I''m too angry.$B$B...Maybe. But someone has to find out who is making the elements suffer. And hit them.',0,1,0,1),
 (900401,'Hello, living thing. Or not-quite-living thing. I don''t judge. Much.','Hello, living thing. Or not-quite-living thing. I don''t judge. Much.',0,1,0,1),
 (900410,'Vesper. I died in Lordaeron when the plague came, and I woke up in a field of corpses, which I found... clarifying.$B$BThe Scourge took everything. My family, my name, my favorite cloak. I study the shadows because they are the only thing the Lich King cannot command.$B$BOne day I will stand in his floating necropolis and tell his lieutenant exactly what I think of him. It will be a long speech.','Vesper. I died in Lordaeron when the plague came, and I woke up in a field of corpses, which I found... clarifying.$B$BThe Scourge took everything. My family, my name, my favorite cloak. I study the shadows because they are the only thing the Lich King cannot command.$B$BOne day I will stand in his floating necropolis and tell his lieutenant exactly what I think of him. It will be a long speech.',0,1,0,1),
+(900601,'Hey! Listen! ...Oh! You can hear me? Nobody ever hears me!','Hey! Listen! ...Oh! You can hear me? Nobody ever hears me!',0,1,0,1),
+(900610,'I''m Navi! A long, long time ago I was a priestess of Elune. Now I''m a wisp. It''s a long story. Okay, it''s a short story, but it''s sad, so I don''t tell it.$B$BI''m looking for a hero. He wore green, he carried a sword that sang, and he got LOST. Very, very lost. His name was Linken.$B$BUntil I find him... I''ll look after you instead! Hey! Listen! That''s my job now!','I''m Navi! A long, long time ago I was a priestess of Elune. Now I''m a wisp. It''s a long story. Okay, it''s a short story, but it''s sad, so I don''t tell it.$B$BI''m looking for a hero. He wore green, he carried a sword that sang, and he got LOST. Very, very lost. His name was Linken.$B$BUntil I find him... I''ll look after you instead! Hey! Listen! That''s my job now!',0,1,0,1),
 (900100,'*A young woman in torn acolyte robes is huddled against the hull, wrists bound with rope.*$B$BP-please... are you with the Defias? You don''t look like the Defias. You look... kind.','*A young woman in torn acolyte robes is huddled against the hull, wrists bound with rope.*$B$BP-please... are you with the Defias? You don''t look like the Defias. You look... kind.',0,1,0,1),
 (900500,'Another adventurer seeking an audience. How... quaint.$B$BThe Highlord is very busy, and I am busier. Stormwind runs on paperwork and patience, $N, and I have an endless supply of one of them.','Another adventurer seeking an audience. How... quaint.$B$BThe Highlord is very busy, and I am busier. Stormwind runs on paperwork and patience, $N, and I have an endless supply of one of them.',0,1,0,1),
 (900501,'Ah, my little courier. Darkshire''s roads are so dreadfully dangerous these days, aren''t they? I do hope my letter reached its... destination.$B$BRun along. The court has no further need of you.','Ah, my little courier. Darkshire''s roads are so dreadfully dangerous these days, aren''t they? I do hope my letter reached its... destination.$B$BRun along. The court has no further need of you.',0,1,0,1),
@@ -100,11 +109,11 @@ INSERT INTO `npc_text` (`ID`,`text0_0`,`text0_1`,`lang0`,`prob0`,`em0_0`,`em0_1`
 (900504,'*Lady Prestor''s eyes flash red. For a moment her shadow on the wall is enormous, winged.*$B$BHow DARE you. In my court. Before my king.$B$BVery well. If you want to see what I truly am, come to Dustwallow Marsh. I will show you.','*Lady Prestor''s eyes flash red. For a moment her shadow on the wall is enormous, winged.*$B$BHow DARE you. In my court. Before my king.$B$BVery well. If you want to see what I truly am, come to Dustwallow Marsh. I will show you.',0,1,0,1);
 
 INSERT INTO `gossip_menu` (`entry`,`text_id`,`script_id`,`condition_id`) VALUES
-(190001,900001,0,0),
-(190002,900002,0,0),
-(190003,900003,0,0),
-(190004,900004,0,0),
-(190005,900005,0,0);
+(64001,900001,0,0),
+(64002,900002,0,0),
+(64003,900003,0,0),
+(64004,900004,0,0),
+(64005,900005,0,0);
 
 INSERT INTO `zelda_stage` (`entry`,`show_quest`,`show_state`,`hide_quest`,`hide_state`) VALUES
 (190101,0,1,90102,1),
@@ -122,6 +131,7 @@ INSERT INTO `zelda_stage` (`entry`,`show_quest`,`show_state`,`hide_quest`,`hide_
 (190402,90403,0,90404,0),
 (190403,90404,0,90405,0),
 (190404,90405,0,0,1),
+(190601,0,1,90501,1),
 (1749,0,1,90110,1);
 
 INSERT INTO `item_template` (`entry`,`class`,`subclass`,`name`,`displayid`,`Quality`,`Flags`,`BuyCount`,`BuyPrice`,`SellPrice`,`InventoryType`,`AllowableClass`,`AllowableRace`,`ItemLevel`,`RequiredLevel`,`maxcount`,`stackable`,`bonding`,`description`,`Material`,`sheath`) VALUES
@@ -137,7 +147,9 @@ INSERT INTO `item_template` (`entry`,`class`,`subclass`,`name`,`displayid`,`Qual
 (190522,12,0,'Corrupted Earth Shard',13703,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'The earth itself, sick and weeping.',4,0),
 (190523,12,0,'Thaurissan''s Brand',9116,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'A brand of living fire, still burning with the Firelord''s favor.',4,0),
 (190531,12,0,'Arugal''s Grimoire',7264,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'Arugal''s notes on calling beings from beyond death.',4,0),
-(190532,12,0,'Phylactery Fragment',7277,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'Part of a lich''s phylactery. It is very cold.',4,0);
+(190532,12,0,'Phylactery Fragment',7277,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'Part of a lich''s phylactery. It is very cold.',4,0),
+(190601,4,0,'Navi''s Light',24730,5,0,1,0,2500,12,-1,-1,60,1,1,1,1,'Equip: Navi follows you. In combat she heals you for 5% of your health every 2 sec. If you die, she can bring you back (once every 30 min). Hey! Listen!',0,0),
+(190602,12,0,'Piece of Heart',6614,1,0,1,0,0,0,-1,-1,1,0,4,4,4,'A quarter of something that wants to be whole.',4,0);
 
 INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`groupid`,`mincountOrRef`,`maxcount`,`condition_id`,`comments`) VALUES
 (639,190501,-100,0,1,1,0,'Zelda of Warcraft quest drop'),
@@ -184,7 +196,10 @@ INSERT INTO `quest_template` (`entry`,`Method`,`ZoneOrSort`,`MinLevel`,`MaxLevel
 (90403,2,85,33,0,40,81,0,0,0,0,0,90402,0,90404,0,0,'Cold Words in the Downs','Amnennar the Coldbringer. A lich of the Scourge, nesting among the quilboar of Razorfen Downs in the southern Barrens. He spreads the plague to the quilboar and raises them in the Lich King''s name.$B$BBring me a fragment of his phylactery. I''m moving to the Sepulcher in Silverpine - the air is better. Mustier. More atmospheric.$B$BDo be careful. Liches are terribly rude.','Defeat Amnennar the Coldbringer in Razorfen Downs and bring a Phylactery Fragment to Vesper at the Sepulcher in Silverpine Forest.','*The fragment frosts Vesper''s fingers. She doesn''t seem to notice.*$B$BHe was a messenger. His phylactery hums with a single name: Kel''Thuzad. The Lich King''s favorite servant. He hides in a floating citadel, they say, high above the Plaguelands.$B$BI am going to find him. And when I do, I am going to be VERY polite. Right up until the end.','The Sepulcher''s bats have names now. I named them. Don''t tell anyone.','',12800,3600,1,2,1,0,'',190532,1,7358,1,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,6830,1,6802,1,9664,1,0,0,0,0,0,0,0,0,68,350),
 (90404,2,130,52,0,58,81,0,0,0,0,0,90403,0,90405,0,0,'The Dark Academy','Kel''Thuzad founded a school of necromancy in Caer Darrow: Scholomance. The headmaster, Darkmaster Gandling, still teaches its cruel lessons to the living and the dead.$B$BEnd the lessons, $N. Class dismissed. Permanently.$B$BI''ll meet you at the Bulwark in the Western Plaguelands afterward. The smell there is exquisite.','Slay Darkmaster Gandling in Scholomance, then find Vesper at the Bulwark in the Western Plaguelands.','Gandling''s notes all end the same way: reports sent to the Baron in Stratholme, and from the Baron to the citadel in the sky.$B$BEvery thread leads to Kel''Thuzad. We pull one more.','Did you find his grading scale? I''m curious how one fails necromancy.','',26912,5220,1,2,1,0,'',0,0,1853,1,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,18420,1,15806,1,20710,1,0,0,0,0,0,0,0,0,529,500),
 (90405,2,28,55,0,60,81,0,0,0,0,0,90404,0,90406,0,0,'The Baron''s Last Night','Baron Rivendare. Death knight. Master of Stratholme''s slaughterhouse. He holds the key that lets Kel''Thuzad''s servants come and go from the necropolis above.$B$BKill him, $N. With his seal broken, the Argent Dawn can take us up to Naxxramas itself.$B$BI''ll be at Light''s Hope Chapel. Yes, the paladins stare. I stare back. I''m better at it.','Slay Baron Rivendare in Stratholme, then meet Vesper at Light''s Hope Chapel in the Eastern Plaguelands.','The Baron''s seal is broken. The Argent Dawn has agreed to take us to the necropolis.$B$B*Vesper looks up at the dark shape drifting over the Plaguelands.*$B$BHe''s up there. Waiting. How lovely. I''ve been rehearsing my speech.','The paladins keep offering to ''cleanse'' me. I keep offering to curse them. We''re at an impasse.','',28800,5400,1,2,1,0,'',0,0,10440,1,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,529,1000),
-(90406,2,139,60,0,60,62,0,0,0,0,0,90405,0,0,0,0,'The Lich in the Sky','Naxxramas. Kel''Thuzad waits in its frozen heart, beyond the spider wing, the plague wing, the military wing and the house of constructs.$B$BI won''t pretend this doesn''t frighten me. Even the dead can be afraid. Especially the dead.$B$BBut he took everything from me. Let''s go take something back. His unlife, for instance.','Slay Kel''Thuzad in Naxxramas, then return to Vesper at Light''s Hope Chapel.','It''s done. Kel''Thuzad is dust.$B$B*Vesper''s voice is quiet.* I gave my speech. He didn''t listen. They never listen.$B$BThank you, $N. You''re the first living thing I''ve wanted to keep around. That''s a compliment. The highest I give.','*Vesper is staring at the sky, very still.*','',57600,5400,1,2,1,0,'',0,0,15990,1,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,529,1500);
+(90406,2,139,60,0,60,62,0,0,0,0,0,90405,0,0,0,0,'The Lich in the Sky','Naxxramas. Kel''Thuzad waits in its frozen heart, beyond the spider wing, the plague wing, the military wing and the house of constructs.$B$BI won''t pretend this doesn''t frighten me. Even the dead can be afraid. Especially the dead.$B$BBut he took everything from me. Let''s go take something back. His unlife, for instance.','Slay Kel''Thuzad in Naxxramas, then return to Vesper at Light''s Hope Chapel.','It''s done. Kel''Thuzad is dust.$B$B*Vesper''s voice is quiet.* I gave my speech. He didn''t listen. They never listen.$B$BThank you, $N. You''re the first living thing I''ve wanted to keep around. That''s a compliment. The highest I give.','*Vesper is staring at the sky, very still.*','',57600,5400,1,2,1,0,'',0,0,15990,1,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,529,1500),
+(90501,2,0,1,0,1,0,0,0,0,0,0,0,0,90502,0,0,'Hey! Listen!','Hey! Listen! HEY! Over here! Yes, you, the one with the face!$B$BI''ve been floating around this place for AGES waiting for someone who could hear me. You can! That means you''ve got a hero''s heart in there somewhere.$B$BI''m looking for a lost hero, and it''s dangerous to go alone. So here''s the deal: I''ll come with you. Wear my light and I''ll keep you safe - I''ll heal you when it hurts, and if you fall... well, I''ll pull you back. Just not too often, okay? It''s tiring!','Accept Navi''s Light.','Yay! Partners! Put my light on - a trinket slot is fine, I''m small.$B$BAnd if you ever hear ''Hey! Listen!'' in a dungeon... it''s important. Probably.','','',8,90,1,2,1,0,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,190601,1,0,0),
+(90502,2,0,12,0,18,0,0,0,0,0,0,90501,0,90503,0,0,'Pieces of Heart','Hey! Listen! Every now and then when you defeat something strong, I can feel a little Piece of Heart fall out of the world. Courage that got scattered around.$B$BBring me four of them! When four come together they make you tougher - that''s how it worked for my hero.$B$BAny worthy foe might drop one. Not the tiny ones. Those don''t count. Sorry, tiny ones.','Collect 4 Pieces of Heart from worthy foes and give them to Navi.','Four pieces! Look, look - they''re fitting together!$B$B*Navi spins in a happy circle.*$B$BThat''s a whole heart! Take something nice from my stash. Heroes need gear!','Did you find any? They sparkle a little.','',2592,1620,1,2,1,0,'',190602,4,0,0,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,5626,1,5279,1,1557,1,6481,1,0,0,0,0,0,0,0,0),
+(90503,2,490,45,0,47,0,0,0,0,0,0,90502,0,0,0,0,'The Hero of Time','Hey! LISTEN! I felt it! Something far, far south, in a crater full of dinosaurs and steam - a heartbeat I know!$B$BIt''s him. It''s Linken! He''s been lost in Un''Goro Crater all this time!$B$BPlease, please, please take me to Marshal''s Refuge. If he''s forgotten me... well. I''ll just have to remind him. Very loudly.','Find Linken in Un''Goro Crater.','*Linken blinks at the little wisp at your side.*$B$B...Navi? I... I know that voice. I don''t know how I know it. I washed up here with no memory and an old sword I can''t remember using.$B$BThere is a gnome in Winterspring, Donova Snowden, who studies the strange fruit of this crater. She says an elixir made from it could show me who I was. Will you help me find my way back, friend?','','',17672,4230,1,2,1,0,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 
 INSERT INTO `creature_questrelation` (`id`,`quest`) VALUES
 (190001,90101),
@@ -216,7 +231,10 @@ INSERT INTO `creature_questrelation` (`id`,`quest`) VALUES
 (190401,90403),
 (190402,90404),
 (190403,90405),
-(190404,90406);
+(190404,90406),
+(190601,90501),
+(190601,90502),
+(190601,90503);
 
 INSERT INTO `creature_involvedrelation` (`id`,`quest`) VALUES
 (190002,90101),
@@ -248,7 +266,18 @@ INSERT INTO `creature_involvedrelation` (`id`,`quest`) VALUES
 (190402,90403),
 (190403,90404),
 (190404,90405),
-(190404,90406);
+(190404,90406),
+(190601,90501),
+(190601,90502),
+(8737,90503);
+
+UPDATE `item_template` SET `Quality` = 5, `dmg_min1` = 120, `dmg_max1` = 160, `dmg_type1` = 0, `delay` = 2600, `ItemLevel` = 70, `DisenchantID` = 0, `MaxDurability` = 125, `stat_type1` = 3, `stat_value1` = 15, `stat_type2` = 4, `stat_value2` = 15, `stat_type3` = 5, `stat_value3` = 15, `stat_type4` = 6, `stat_value4` = 15, `stat_type5` = 7, `stat_value5` = 15, `spellid_1` = 25912, `spelltrigger_1` = 2, `spellppmRate_1` = 2.0, `spellcooldown_1` = -1, `spellcategorycooldown_1` = -1, `spellid_2` = 15494, `spelltrigger_2` = 2, `spellppmRate_2` = 1.15, `spellcooldown_2` = -1, `spellcategorycooldown_2` = -1 WHERE `entry` = 11902;
+
+UPDATE `quest_template` SET `RewChoiceItemId1` = 11902, `RewChoiceItemCount1` = 1, `RewChoiceItemId2` = 0, `RewChoiceItemCount2` = 0, `RewChoiceItemId3` = 0, `RewChoiceItemCount3` = 0, `RewChoiceItemId4` = 0, `RewChoiceItemCount4` = 0, `RewChoiceItemId5` = 0, `RewChoiceItemCount5` = 0, `RewChoiceItemId6` = 0, `RewChoiceItemCount6` = 0, `RewItemId1` = 0, `RewItemCount1` = 0 WHERE `entry` = 3962;
+
+UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;
+
+UPDATE `quest_template` SET `NextQuestInChain` = 3908 WHERE `entry` = 90503;
 
 UPDATE `creature_template` SET `NpcFlags` = `NpcFlags` | 3 WHERE `Entry` = 1749;
 

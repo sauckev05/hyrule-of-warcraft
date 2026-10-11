@@ -546,3 +546,78 @@ KATRANA_TEXTS = {
 # Companion gossip texts: greeting at 9001x1, "about" at 9001x0 + 10 (see the script).
 CAPTIVE_TEXT = (900100, "*A young woman in torn acolyte robes is huddled against the hull, wrists bound with rope.*"
                         "$B$BP-please... are you with the Defias? You don't look like the Defias. You look... kind.")
+
+# ------------------------------------------------------------------------------------ Navi
+# Navi, a night elf spirit bound into a wisp, waits in every starting area. She gives the first of
+# her quests at level 1; her reward, Navi's Light, keeps her at your side (zelda_companions.cpp
+# npc_zelda_navi) and the server gives it its powers (heal in combat, rise again on death).
+NAVI = dict(
+    entry=190601, name='Navi', subname='Fairy of the Lost Woods', display=10045, scale=0.6,
+    greeting="Hey! Listen! ...Oh! You can hear me? Nobody ever hears me!",
+    about="I'm Navi! A long, long time ago I was a priestess of Elune. Now I'm a wisp. It's a long story. "
+          "Okay, it's a short story, but it's sad, so I don't tell it.$B$BI'm looking for a hero. He wore green, "
+          "he carried a sword that sang, and he got LOST. Very, very lost. His name was Linken.$B$BUntil I find "
+          "him... I'll look after you instead! Hey! Listen! That's my job now!",
+    spawns=[  # one in every starting area, beside its first quest giver
+        (0, -8930.5, -133.0, 83.4, 4.0),      # Northshire Abbey
+        (0, -6211.5, 331.5, 383.7, 4.0),      # Coldridge Valley
+        (1, 10325.5, 829.5, 1326.5, 5.5),     # Shadowglen
+        (1, -603.5, -4248.0, 38.9, 3.3),      # Valley of Trials
+        (1, -2909.0, -254.0, 53.0, 3.5),      # Camp Narache
+        (0, 1682.5, 1671.0, 135.8, 3.8),      # Deathknell
+    ])
+
+NAVI_ITEMS = [
+    dict(entry=190601, name="Navi's Light", display=24730, quality=5, inventory=12, cls=4, subclass=0,
+         description="Equip: Navi follows you. In combat she heals you for 5% of your health every 2 sec. "
+                     "If you die, she can bring you back (once every 30 min). Hey! Listen!"),
+    dict(entry=190602, name='Piece of Heart', display=6614, quality=1, inventory=0, cls=12, subclass=0,
+         description='A quarter of something that wants to be whole.'),
+]
+
+quest(id=90501, level=1, min=1, kind='', zone=0, giver=190601, ender=190601,
+      title='Hey! Listen!',
+      details="Hey! Listen! HEY! Over here! Yes, you, the one with the face!$B$BI've been floating around this "
+              "place for AGES waiting for someone who could hear me. You can! That means you've got a hero's "
+              "heart in there somewhere.$B$BI'm looking for a lost hero, and it's dangerous to go alone. So "
+              "here's the deal: I'll come with you. Wear my light and I'll keep you safe - I'll heal you when it "
+              "hurts, and if you fall... well, I'll pull you back. Just not too often, okay? It's tiring!",
+      objectives="Accept Navi's Light.",
+      request=None,
+      reward="Yay! Partners! Put my light on - a trinket slot is fine, I'm small.$B$BAnd if you ever hear "
+             "'Hey! Listen!' in a dungeon... it's important. Probably.",
+      kills=[], items=[], reward_item=190601, rep=(0, 0))
+
+quest(id=90502, level=18, min=12, kind='', zone=0, giver=190601, ender=190601,
+      title='Pieces of Heart',
+      details="Hey! Listen! Every now and then when you defeat something strong, I can feel a little Piece of "
+              "Heart fall out of the world. Courage that got scattered around.$B$BBring me four of them! When "
+              "four come together they make you tougher - that's how it worked for my hero.$B$BAny worthy foe "
+              "might drop one. Not the tiny ones. Those don't count. Sorry, tiny ones.",
+      objectives="Collect 4 Pieces of Heart from worthy foes and give them to Navi.",
+      request="Did you find any? They sparkle a little.",
+      reward="Four pieces! Look, look - they're fitting together!$B$B*Navi spins in a happy circle.*$B$BThat's a "
+             "whole heart! Take something nice from my stash. Heroes need gear!",
+      kills=[], items=[(190602, 4)], rep=(0, 0))
+
+quest(id=90503, level=47, min=45, kind='', zone=490, giver=190601, ender=8737,
+      title='The Hero of Time',
+      details="Hey! LISTEN! I felt it! Something far, far south, in a crater full of dinosaurs and steam - a "
+              "heartbeat I know!$B$BIt's him. It's Linken! He's been lost in Un'Goro Crater all this time!$B$B"
+              "Please, please, please take me to Marshal's Refuge. If he's forgotten me... well. I'll just have to "
+              "remind him. Very loudly.",
+      objectives="Find Linken in Un'Goro Crater.",
+      request=None,
+      reward="*Linken blinks at the little wisp at your side.*$B$B...Navi? I... I know that voice. I don't know "
+             "how I know it. I washed up here with no memory and an old sword I can't remember using.$B$BThere "
+             "is a gnome in Winterspring, Donova Snowden, who studies the strange fruit of this crater. She says "
+             "an elixir made from it could show me who I was. Will you help me find my way back, friend?",
+      kills=[], items=[], rep=(0, 0))
+
+# Linken's Sword of Mastery becomes a legendary blade and It's Dangerous to Go Alone gives only it.
+LINKEN_SWORD = dict(entry=11902, quality=5, dmg_min=120, dmg_max=160, delay=2600, item_level=70,
+                    stats=[(3, 15), (4, 15), (5, 15), (6, 15), (7, 15)],   # agility, strength, intellect, spirit, stamina
+                    holy_spell=25912, holy_ppm=2.0,                         # Holy Shock (damage); the server sets 75-150 and heals as much
+                    extra_attack_spell=15494, extra_attack_ppm=1.15,        # 2 extra attacks, about 5% of swings at 2.60 speed
+                    durability=125)
+LINKEN_FINAL_QUEST = 3962

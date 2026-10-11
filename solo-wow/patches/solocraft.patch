@@ -65,10 +65,10 @@ index 20bcff2..a6c8243 100644
  }
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 0000000..893a818
+index 0000000..5f02ac0
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,644 @@
+@@ -0,0 +1,849 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -333,7 +333,7 @@ index 0000000..893a818
 +            return;
 +        m_boundToOwner = true;
 +        m_creature->SetOwnerGuid(owner->GetObjectGuid());
-+        m_creature->setFaction(owner->getFaction());
++        m_creature->setFaction(owner->GetFaction());
 +        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
 +        m_creature->SelectLevel(owner->GetLevel());
 +        m_creature->GetMotionMaster()->Clear();
@@ -703,6 +703,203 @@ index 0000000..893a818
 +    return false;
 +}
 +
++/*######
++## npc_zelda_navi - the wisp of Linken's story. In every starting area until a hero takes her light;
++## after that she floats at the shoulder of whoever wears Navi's Light (the core summons her and
++## does the healing and the revive, Chat/ZeldaCommands.cpp). She never fights.
++######*/
++
++namespace
++{
++    uint32 const NAVI_QUEST_LIGHT = 90501;
++    uint32 const NAVI_QUEST_HEART = 90502;
++    uint32 const NAVI_QUEST_HERO  = 90503;
++    uint32 const NAVI_TEXT_GREETING = 900601;
++    uint32 const NAVI_TEXT_ABOUT    = 900610;
++
++    char const* const NAVI_CHATTER[] =
++    {
++        "Hey! Listen!",
++        "Hey! ...Hello? Are you listening?",
++        "Look! Over there! ...Oh. Never mind. It was a squirrel.",
++        "Hey! Listen! You can tap Shift to lock on to an enemy!",
++        "Hey! Listen! Hold your sword and let go for a spin attack!",
++        "Hey! Listen! Worthy foes sometimes drop Pieces of Heart!",
++        "It's dangerous to go alone... good thing you've got me!",
++        "Hey! Linken used to hum while he walked. You don't hum. Why don't you hum?",
++        "Listen! ...No, really, listen. Hear that? Me neither. Isn't it nice?",
++    };
++    char const* const NAVI_WARNINGS[] =
++    {
++        "Watch out!",
++        "Hey! Your hearts are running out!",
++        "Look out! Drink a potion! Drink TWO!",
++    };
++    char const* const NAVI_CALLING[] =
++    {
++        "Hey! Listen! Over here! Can you hear me?",
++        "Hey! Listen! HEY!",
++        "Hello? Hey! You! With the face!",
++    };
++
++    template<size_t N>
++    char const* PickLine(char const* const (&lines)[N])
++    {
++        return lines[urand(0, N - 1)];
++    }
++}
++
++struct npc_zelda_naviAI : public ScriptedAI
++{
++    npc_zelda_naviAI(Creature* creature) : ScriptedAI(creature), m_follower(creature->IsTemporarySummon())
++    {
++        if (m_follower)
++            m_ownerGuid = creature->GetSpawnerGuid();
++        Reset();
++    }
++
++    bool m_follower;
++    ObjectGuid m_ownerGuid;
++    uint32 m_chatterTimer = 0;
++    uint32 m_warnTimer = 0;
++    bool m_following = false;
++
++    void Reset() override
++    {
++        m_chatterTimer = m_follower ? urand(60000, 120000) : urand(10000, 25000);
++        m_warnTimer = 0;
++    }
++
++    // a wisp: nothing to fight, nothing to chase
++    void MoveInLineOfSight(Unit* /*who*/) override {}
++    void AttackStart(Unit* /*who*/) override {}
++
++    Player* Owner() const
++    {
++        return m_ownerGuid ? m_creature->GetMap()->GetPlayer(m_ownerGuid) : nullptr;
++    }
++
++    char const* FollowerLine(Player* owner) const
++    {
++        // she nudges the hero toward the next part of her story
++        if (owner->GetLevel() >= 45 && owner->GetQuestStatus(NAVI_QUEST_HERO) == QUEST_STATUS_NONE &&
++            owner->GetQuestRewardStatus(NAVI_QUEST_HEART) && urand(0, 1))
++            return "Hey! Listen! I feel something far to the south... a heartbeat I know. Talk to me!";
++        if (owner->GetLevel() >= 12 && owner->GetQuestStatus(NAVI_QUEST_HEART) == QUEST_STATUS_NONE && urand(0, 1))
++            return "Hey! Listen! I've got something to ask you! Talk to me!";
++        return PickLine(NAVI_CHATTER);
++    }
++
++    void UpdateFollower(uint32 diff, Player* owner)
++    {
++        if (!owner)
++        {
++            m_creature->ForcedDespawn();
++            return;
++        }
++        if (!m_following)
++        {
++            m_following = true;
++            m_creature->GetMotionMaster()->Clear();
++            m_creature->GetMotionMaster()->MoveFollow(owner, 1.2f, M_PI_F * 0.3f);
++        }
++        if (!m_creature->IsWithinDistInMap(owner, 40.0f) && !owner->IsTaxiFlying())
++        {
++            float x, y, z;
++            owner->GetNearPoint(owner, x, y, z, 0.0f, 1.2f, owner->GetOrientation() + M_PI_F * 0.3f);
++            m_creature->NearTeleportTo(x, y, z + 1.0f, owner->GetOrientation());
++            m_following = false;
++            return;
++        }
++        if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
++            m_following = false;
++
++        if (m_warnTimer > diff) m_warnTimer -= diff; else m_warnTimer = 0;
++        if (!m_warnTimer && owner->IsAlive() && owner->IsInCombat() && owner->GetHealthPercent() < 30.0f)
++        {
++            m_creature->MonsterSay(PickLine(NAVI_WARNINGS), LANG_UNIVERSAL, owner);
++            m_warnTimer = 20000;
++        }
++
++        if (m_chatterTimer > diff)
++        {
++            m_chatterTimer -= diff;
++            return;
++        }
++        m_chatterTimer = urand(180000, 360000);
++        if (owner->IsAlive() && !owner->IsInCombat())
++            m_creature->MonsterSay(FollowerLine(owner), LANG_UNIVERSAL, owner);
++    }
++
++    void UpdateWaiting(uint32 diff)
++    {
++        if (m_chatterTimer > diff)
++        {
++            m_chatterTimer -= diff;
++            return;
++        }
++        m_chatterTimer = urand(20000, 40000);
++        // calls out to a hero who has not yet heard her
++        Map::PlayerList const& players = m_creature->GetMap()->GetPlayers();
++        for (auto const& ref : players)
++        {
++            Player* player = ref.getSource();
++            if (player && player->IsAlive() && m_creature->IsWithinDistInMap(player, 25.0f) &&
++                !ZeldaStageHidden(m_creature, player))
++            {
++                m_creature->MonsterSay(PickLine(NAVI_CALLING), LANG_UNIVERSAL, player);
++                break;
++            }
++        }
++    }
++
++    void UpdateAI(const uint32 diff) override
++    {
++        if (m_follower)
++            UpdateFollower(diff, Owner());
++        else
++            UpdateWaiting(diff);
++    }
++};
++
++UnitAI* GetAI_npc_zelda_navi(Creature* creature)
++{
++    return new npc_zelda_naviAI(creature);
++}
++
++bool GossipHello_npc_zelda_navi(Player* player, Creature* creature)
++{
++    if (creature->isQuestGiver())
++        player->PrepareQuestMenu(creature->GetObjectGuid());
++    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Who are you, little light?", GOSSIP_SENDER_MAIN, ACTION_ABOUT);
++    player->SEND_GOSSIP_MENU(NAVI_TEXT_GREETING, creature->GetObjectGuid());
++    return true;
++}
++
++bool GossipSelect_npc_zelda_navi(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
++{
++    if (action != ACTION_ABOUT)
++        return false;
++    player->SEND_GOSSIP_MENU(NAVI_TEXT_ABOUT, creature->GetObjectGuid());
++    return true;
++}
++
++bool QuestRewarded_npc_zelda_navi(Player* player, Creature* creature, Quest const* quest)
++{
++    switch (quest->GetQuestId())
++    {
++        case NAVI_QUEST_LIGHT:
++            creature->MonsterSay("Yay! Put my light on and I'll come find you. Don't go anywhere! ...Okay, go anywhere. I'll follow!", LANG_UNIVERSAL, player);
++            break;
++        case NAVI_QUEST_HEART:
++            creature->MonsterSay("A whole heart! You're getting tougher - I can feel it!", LANG_UNIVERSAL, player);
++            break;
++        default:
++            break;
++    }
++    return false;
++}
++
 +void AddSC_zelda_companions()
 +{
 +    Script* pNewScript = new Script;
@@ -711,6 +908,14 @@ index 0000000..893a818
 +    pNewScript->pGossipHello = &GossipHello_npc_zelda_companion;
 +    pNewScript->pGossipSelect = &GossipSelect_npc_zelda_companion;
 +    pNewScript->pQuestRewardedNPC = &QuestRewarded_npc_zelda_companion;
++    pNewScript->RegisterSelf();
++
++    pNewScript = new Script;
++    pNewScript->Name = "npc_zelda_navi";
++    pNewScript->GetAI = &GetAI_npc_zelda_navi;
++    pNewScript->pGossipHello = &GossipHello_npc_zelda_navi;
++    pNewScript->pGossipSelect = &GossipSelect_npc_zelda_navi;
++    pNewScript->pQuestRewardedNPC = &QuestRewarded_npc_zelda_navi;
 +    pNewScript->RegisterSelf();
 +}
 diff --git a/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp b/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp
@@ -774,10 +979,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..e6586ae
+index 0000000..d6c1c62
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1116 @@
+@@ -0,0 +1,1205 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -849,10 +1054,11 @@ index 0000000..e6586ae
 +        bool shield = false;
 +        uint32 shoutCheckIn = 0;
 +        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
-+        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper)
-+        uint32 followerEntry[4] = { 0, 0, 0, 0 };
-+        ObjectGuid followerGuid[4];
-+        uint32 followerBackAt[4] = { 0, 0, 0, 0 };   // after she falls, she rejoins at this time
++        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper, Navi)
++        uint32 followerEntry[5] = { 0, 0, 0, 0, 0 };
++        ObjectGuid followerGuid[5];
++        uint32 followerBackAt[5] = { 0, 0, 0, 0, 0 };   // after she falls, she rejoins at this time
++        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
 +    };
 +
 +    // Commands run on the session's thread and damage on map threads, so the table is locked.
@@ -1082,7 +1288,28 @@ index 0000000..e6586ae
 +        return false;
 +    }
 +
-+    uint32 const COMPANION_COUNT = 4;
++    uint32 const COMPANION_COUNT = 5;
++
++    // Navi and her light: while the trinket is worn, the wisp follows, heals in combat and revives
++    uint32 const NAVI_INDEX = 4;
++    uint32 const NAVI_ENTRY = 190601;
++    uint32 const NAVI_TRINKET = 190601;
++    uint32 const NAVI_HEAL_VISUAL = 2061;          // Flash Heal's golden glow on the hero
++    uint32 const NAVI_REVIVE_COOLDOWN = 30 * 60;   // seconds
++    uint32 const HEART_PIECE = 190602;
++    uint32 const HEART_PIECE_QUEST = 90502;
++
++    bool WearsNavisLight(Player const* player)
++    {
++        return player->HasItemWithIdEquipped(NAVI_TRINKET, 1);
++    }
++
++    Creature* NaviOf(Player* player, ZeldaState const& state)
++    {
++        if (!state.followerGuid[NAVI_INDEX] || !player->IsInWorld())
++            return nullptr;
++        return player->GetMap()->GetCreature(state.followerGuid[NAVI_INDEX]);
++    }
 +}
 +
 +void ZeldaLoadStages()
@@ -1156,6 +1383,18 @@ index 0000000..e6586ae
 +static void KeepCompanionsClose(Player* player, ZeldaState& state)
 +{
 +    uint32 const now = WorldTimer::getMSTime();
++
++    // Navi comes with her light and goes when it is taken off
++    if (WearsNavisLight(player))
++        state.followerEntry[NAVI_INDEX] = NAVI_ENTRY;
++    else if (state.followerEntry[NAVI_INDEX])
++    {
++        if (Creature* navi = NaviOf(player, state))
++            navi->ForcedDespawn();
++        state.followerEntry[NAVI_INDEX] = 0;
++        state.followerGuid[NAVI_INDEX] = ObjectGuid();
++    }
++
 +    for (uint32 i = 0; i < COMPANION_COUNT; ++i)
 +    {
 +        if (!state.followerEntry[i])
@@ -1201,6 +1440,20 @@ index 0000000..e6586ae
 +
 +    KeepCompanionsClose(player, state);
 +
++    // Navi's Light: 5% of the hero's health every 2 seconds while fighting
++    if (player->IsInCombat() && player->GetHealth() < player->GetMaxHealth() && WearsNavisLight(player))
++    {
++        static uint32 const healPct = sConfig.GetIntDefault("Zelda.NaviHealPercent", 5);
++        uint32 const amount = std::max<uint32>(1, player->GetMaxHealth() * healPct / 100);
++        if (SpellEntry const* healInfo = sSpellTemplate.LookupEntry<SpellEntry>(NAVI_HEAL_VISUAL))
++            player->DealHeal(player, amount, healInfo);
++        else
++            player->ModifyHealth(int32(amount));
++        std::vector<ObjectGuid> self;
++        self.push_back(player->GetObjectGuid());
++        PlaySpellVisual(player, NAVI_HEAL_VISUAL, self);
++    }
++
 +    static bool const passiveShout = sConfig.GetBoolDefault("Zelda.PassiveBattleShout", true);
 +    if (!passiveShout)
 +        return;
@@ -1232,6 +1485,47 @@ index 0000000..e6586ae
 +        holder->SetAuraDuration(-1);
 +        holder->UpdateAuraDuration();
 +    }
++}
++
++uint32 ZeldaNaviResurrection(Player* player)
++{
++    if (!player || !WearsNavisLight(player))
++        return 0;
++    ZeldaState& state = StateFor(player);
++    time_t const now = time(nullptr);
++    Creature* navi = NaviOf(player, state);
++    if (now < state.naviReviveReadyAt)
++    {
++        if (navi)
++            navi->MonsterSay("Hey! Get... up...! I can't - I'm too tired! Not yet! Somebody help!", LANG_UNIVERSAL, player);
++        return 0;
++    }
++    state.naviReviveReadyAt = now + NAVI_REVIVE_COOLDOWN;
++    if (navi)
++        navi->MonsterSay("NO! Hey! LISTEN! You don't get to stop here! Take my light - get up!", LANG_UNIVERSAL, player);
++
++    // the soulstone's own self-resurrection, as strong as a warlock of the hero's level could make it
++    uint32 const level = player->GetLevel();
++    if (level >= 60) return 20761;
++    if (level >= 50) return 20760;
++    if (level >= 40) return 20759;
++    if (level >= 30) return 20758;
++    return 3026;
++}
++
++void ZeldaHeartPieceDrop(Player* looter, Creature* victim, Loot* loot)
++{
++    if (!looter || !victim || !loot || looter->GetQuestStatus(HEART_PIECE_QUEST) != QUEST_STATUS_INCOMPLETE)
++        return;
++    if (looter->GetItemCount(HEART_PIECE) >= 4)
++        return;
++    CreatureInfo const* info = victim->GetCreatureInfo();
++    if (!info || info->CreatureType == CREATURE_TYPE_CRITTER || victim->GetLevel() + 4 < looter->GetLevel())
++        return;                                    // the tiny ones don't count
++    static uint32 const chance = sConfig.GetIntDefault("Zelda.HeartPieceChance", 15);
++    if (!roll_chance_i(int(chance)))
++        return;
++    loot->AddItem(HEART_PIECE, 1, 0, 0);
 +}
 +
 +bool ZeldaAlternateQuestDone(Player const* player, uint32 requiredQuest)
@@ -1896,10 +2190,10 @@ index 0000000..e6586ae
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..777ba0b
+index 0000000..4553672
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,105 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -1996,6 +2290,11 @@ index 0000000..777ba0b
 +void ZeldaFollowerSet(Player* player, uint32 index, uint32 entry, ObjectGuid guid);
 +void ZeldaFollowerClear(Player* player, uint32 index);
 +void ZeldaFollowerDied(Player* player, uint32 index);
++// Navi's Light (item 190601): when the hero dies wearing it, the soulstone self-resurrection spell
++// for their level, at most once every 30 minutes; 0 when it cannot help.
++uint32 ZeldaNaviResurrection(Player* player);
++// Pieces of Heart for Navi's quest: a worthy foe (not grey, not a critter) sometimes drops one.
++void ZeldaHeartPieceDrop(Player* looter, Creature* victim, Loot* loot);
 +// A raid attunement quest the hero may stand in for with a companion's chapter.
 +bool ZeldaAlternateQuestDone(Player const* player, uint32 requiredQuest);
 +
@@ -2025,7 +2324,7 @@ index 0656744..40ccbe6 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb..4a93ecb 100644
+index a10fdbb..efe8235 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -2045,18 +2344,21 @@ index a10fdbb..4a93ecb 100644
  
  // apply implementation of the singletons
  #include "Policies/Singleton.h"
-@@ -1086,6 +1089,10 @@ void Creature::PrepareBodyLootState(Unit* killer)
+@@ -1086,6 +1089,13 @@ void Creature::PrepareBodyLootState(Unit* killer)
  
          if (looter || GetSettings().HasFlag(CreatureStaticFlags::CAN_WIELD_LOOT))
              m_loot = new Loot(looter, this, LOOT_CORPSE);
 +
-+        // Zelda of Warcraft: the hero's kills loot themselves, straight into the bags
++        // Zelda of Warcraft: Pieces of Heart for Navi, then the hero's kills loot themselves
 +        if (m_loot && looter && m_loot->GetLootType() == LOOT_CORPSE)
++        {
++            ZeldaHeartPieceDrop(looter, this, m_loot);
 +            ZeldaAutoLoot(looter, m_loot);
++        }
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1269,42 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1272,42 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -2099,7 +2401,7 @@ index a10fdbb..4a93ecb 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1348,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1351,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -2108,7 +2410,7 @@ index a10fdbb..4a93ecb 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1457,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1460,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -2117,7 +2419,7 @@ index a10fdbb..4a93ecb 100644
      if (health < 1)
          health = 1;
  
-@@ -2125,6 +2168,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -2125,6 +2171,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
@@ -2203,7 +2505,7 @@ index bf44698..1c413ca 100644
      for (auto i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
      {
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e916..122593e 100644
+index 4d8e916..a48bb9c 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -2224,7 +2526,18 @@ index 4d8e916..122593e 100644
      if (IsHasDelayedTeleport() && m_semaphoreTeleport_Near)
          TeleportTo(m_teleport_dest, m_teleport_options);
  
-@@ -4895,7 +4899,7 @@ float Player::GetMeleeCritFromAgility() const
+@@ -1680,6 +1684,10 @@ void Player::SetDeathState(DeathState s)
+         if (!ressSpellId)
+             ressSpellId = GetResurrectionSpellId();
+ 
++        // Zelda of Warcraft: Navi pulls the hero back up
++        if (!ressSpellId)
++            ressSpellId = ZeldaNaviResurrection(this);
++
+         if (InstanceData* mapInstance = GetInstanceData())
+             mapInstance->OnPlayerDeath(this);
+     }
+@@ -4895,7 +4903,7 @@ float Player::GetMeleeCritFromAgility() const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -2233,7 +2546,7 @@ index 4d8e916..122593e 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -4939,7 +4943,7 @@ float Player::GetDodgeFromAgility(float amount) const
+@@ -4939,7 +4947,7 @@ float Player::GetDodgeFromAgility(float amount) const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -2242,7 +2555,7 @@ index 4d8e916..122593e 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -5154,6 +5158,10 @@ bool Player::UpdateFishingSkill()
+@@ -5154,6 +5162,10 @@ bool Player::UpdateFishingSkill()
      if (SkillValue >= GetSkillMax(SKILL_FISHING))
          return false;
  
@@ -2253,7 +2566,7 @@ index 4d8e916..122593e 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -18082,9 +18090,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18094,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -2268,7 +2581,7 @@ index 4d8e916..122593e 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19676,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19680,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -2296,7 +2609,7 @@ index 4d8e916..122593e 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20064,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20068,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -2305,7 +2618,7 @@ index 4d8e916..122593e 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20253,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20257,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -2482,7 +2795,7 @@ index bf5c5c5..a950e6d 100644
  
      OnCast();
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
-index a9fb230..622b4fb 100644
+index a9fb230..e130970 100644
 --- a/src/game/Spells/SpellEffects.cpp
 +++ b/src/game/Spells/SpellEffects.cpp
 @@ -17,6 +17,7 @@
@@ -2493,7 +2806,7 @@ index a9fb230..622b4fb 100644
  #include "Database/DatabaseEnv.h"
  #include "Server/WorldPacket.h"
  #include "Server/Opcodes.h"
-@@ -241,6 +242,10 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
+@@ -241,6 +242,17 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
  {
      if (unitTarget && unitTarget->IsAlive())
      {
@@ -2501,10 +2814,17 @@ index a9fb230..622b4fb 100644
 +        if (m_spellInfo->Id == 15712 && m_caster && m_caster->IsPlayer())
 +            damage = int32(ZeldaBoomerangDamage(static_cast<Player*>(m_caster)));
 +
++        // Zelda of Warcraft: Linken's Sword of Mastery strikes with holy light and heals its wielder as much
++        if (m_spellInfo->Id == 25912 && m_CastItem && m_CastItem->GetEntry() == 11902 && m_caster)
++        {
++            damage = int32(urand(75, 150));
++            m_caster->CastSpell(m_caster, 25914, TRIGGERED_OLD_TRIGGERED, m_CastItem);
++        }
++
          switch (m_spellInfo->SpellFamilyName)
          {
              case SPELLFAMILY_GENERIC:
-@@ -1535,6 +1540,11 @@ void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
+@@ -1535,6 +1547,11 @@ void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
  {
      uint32 triggered_spell_id = m_spellInfo->EffectTriggerSpell[effIndex];
  
@@ -2516,7 +2836,18 @@ index a9fb230..622b4fb 100644
      // special cases
      switch (triggered_spell_id)
      {
-@@ -3555,6 +3565,10 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
+@@ -1836,6 +1853,10 @@ void Spell::EffectHeal(SpellEffectIndex eff_idx)
+ 
+         int32 addhealth = damage;
+ 
++        // Zelda of Warcraft: the holy light of Linken's Sword of Mastery
++        if (m_spellInfo->Id == 25914 && m_CastItem && m_CastItem->GetEntry() == 11902)
++            addhealth = int32(urand(75, 150));
++
+         // Swiftmend - consumes Regrowth or Rejuvenation
+         if (m_spellInfo->Id == 18562)
+         {
+@@ -3555,6 +3576,10 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
      }
  
      // total damage
