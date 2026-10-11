@@ -1,8 +1,10 @@
 ## Interface: 11200
 ## Title: Zelda HUD
-## Notes: Ocarina of Time style hearts and magic meter, equipped-gear comparison, and all bags in one window.
+## Notes: Ocarina of Time style hearts and magic meter, equipped-gear comparison, Zelda armor set tooltips, and all bags in one window.
 ## Author: Zelda of Warcraft
 ## SavedVariablesPerCharacter: ZeldaHUDDB
 hud.lua
 compare.lua
+setsdata.lua
+sets.lua
 bags.lua

@@ -979,10 +979,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..d6c1c62
+index 0000000..23b0c15
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1205 @@
+@@ -0,0 +1,1398 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1059,6 +1059,13 @@ index 0000000..d6c1c62
 +        ObjectGuid followerGuid[5];
 +        uint32 followerBackAt[5] = { 0, 0, 0, 0, 0 };   // after she falls, she rejoins at this time
 +        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
++        // running: after Zelda.SprintAfterSeconds of running without stopping the hero sprints
++        uint32 runningSince = 0;
++        bool sprinting = false;
++        // armor set bonuses worn right now, by bonus type, and the crit chance given to this login
++        float setBonus[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
++        float appliedCrit = 0.0f;
++        Player const* setsAppliedFor = nullptr;
 +    };
 +
 +    // Commands run on the session's thread and damage on map threads, so the table is locked.
@@ -1211,8 +1218,9 @@ index 0000000..d6c1c62
 +        return 1.0f;
 +    if (StateFor(player).shield)
 +        return 0.45f;                           // shield up: a careful walk, whatever the run speed
-+    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 2.0f));
-+    return runRate;
++    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 1.5f));
++    static float const sprintRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.SprintSpeedRate", 2.0f));
++    return StateFor(player).sprinting ? sprintRate : runRate;
 +}
 +
 +bool ZeldaQuestItemsAlwaysDrop()
@@ -1298,6 +1306,79 @@ index 0000000..d6c1c62
 +    uint32 const NAVI_REVIVE_COOLDOWN = 30 * 60;   // seconds
 +    uint32 const HEART_PIECE = 190602;
 +    uint32 const HEART_PIECE_QUEST = 90502;
++
++    // ---- Zelda armor sets (zelda_itemset_item / zelda_itemset_bonus, made by build_content.py) ----
++    enum SetBonusType
++    {
++        SET_BONUS_CRIT          = 1,    // % melee and ranged critical strike chance
++        SET_BONUS_CRIT_DAMAGE   = 2,    // % more critical strike damage
++        SET_BONUS_WEAPON_DAMAGE = 3,    // % more weapon damage
++        SET_BONUS_KNOCKBACK     = 4,    // % chance a hit pushes the enemy back
++        SET_BONUS_EXTRA_SWING   = 5,    // % chance a hit swings again at once
++        SET_BONUS_SPIN_RAGE     = 6,    // rage the Spin Attack costs less
++        SET_BONUS_HEAL_ON_KILL  = 7,    // % of health back on every kill
++        SET_BONUS_MAX           = 8
++    };
++    struct SetBonusRow
++    {
++        uint32 set;
++        uint32 pieces;
++        uint32 type;
++        float value;
++    };
++    std::unordered_map<uint32, uint32> s_setOfItem;
++    std::vector<SetBonusRow> s_setBonuses;
++
++    thread_local bool t_bonusSwing = false;     // an extra swing from a set never chains another
++
++    float SetBonusOf(Unit const* unit, uint32 type)
++    {
++        if (!unit || !unit->IsPlayer() || type >= SET_BONUS_MAX)
++            return 0.0f;
++        return StateFor(const_cast<Player*>(static_cast<Player const*>(unit))).setBonus[type];
++    }
++
++    void UpdateSetBonuses(Player* player, ZeldaState& state)
++    {
++        if (state.setsAppliedFor != player)
++        {
++            state.setsAppliedFor = player;      // a new login starts without the old crit bonus
++            state.appliedCrit = 0.0f;
++        }
++        std::unordered_map<uint32, uint32> worn;
++        if (!s_setOfItem.empty())
++        {
++            for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
++                if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
++                {
++                    auto itr = s_setOfItem.find(item->GetEntry());
++                    if (itr != s_setOfItem.end())
++                        ++worn[itr->second];
++                }
++        }
++        float totals[SET_BONUS_MAX] = { 0, 0, 0, 0, 0, 0, 0, 0 };
++        for (SetBonusRow const& row : s_setBonuses)
++        {
++            auto itr = worn.find(row.set);
++            if (itr != worn.end() && itr->second >= row.pieces && row.type < SET_BONUS_MAX)
++                totals[row.type] += row.value;
++        }
++        for (uint32 i = 0; i < SET_BONUS_MAX; ++i)
++            state.setBonus[i] = totals[i];
++
++        float const crit = totals[SET_BONUS_CRIT];
++        if (crit != state.appliedCrit)
++        {
++            for (BaseModGroup group : { CRIT_PERCENTAGE, OFFHAND_CRIT_PERCENTAGE, RANGED_CRIT_PERCENTAGE })
++            {
++                if (state.appliedCrit != 0.0f)
++                    player->HandleBaseModValue(group, FLAT_MOD, state.appliedCrit, false);
++                if (crit != 0.0f)
++                    player->HandleBaseModValue(group, FLAT_MOD, crit, true);
++            }
++            state.appliedCrit = crit;
++        }
++    }
 +
 +    bool WearsNavisLight(Player const* player)
 +    {
@@ -1428,12 +1509,43 @@ index 0000000..d6c1c62
 +        ApplyCrossFaction(player);
 +    }
 +
++    // running without stopping for a while turns into a sprint; stopping ends it
++    {
++        static uint32 const sprintAfter = uint32(std::max(0, sConfig.GetIntDefault("Zelda.SprintAfterSeconds", 15))) * 1000;
++        uint32 const now = WorldTimer::getMSTime();
++        bool const running = player->IsAlive() && player->IsMoving() && !player->IsWalking() && !player->IsTaxiFlying() &&
++                             !state.shield && player->IsInWorld();
++        if (running)
++        {
++            if (!state.runningSince)
++                state.runningSince = now ? now : 1;
++            else if (!state.sprinting && now - state.runningSince >= sprintAfter)
++            {
++                state.sprinting = true;
++                player->UpdateSpeed(MOVE_RUN, true);
++            }
++        }
++        else if (state.runningSince)
++        {
++            state.runningSince = 0;
++            if (state.sprinting)
++            {
++                state.sprinting = false;
++                if (player->IsInWorld())
++                    player->UpdateSpeed(MOVE_RUN, true);
++            }
++        }
++    }
++
 +    if (state.shoutCheckIn > diff)
 +    {
 +        state.shoutCheckIn -= diff;
 +        return;
 +    }
 +    state.shoutCheckIn = 2000;
++
++    if (player->IsInWorld())
++        UpdateSetBonuses(player, state);
 +
 +    if (!player->IsAlive() || player->IsTaxiFlying() || player->IsBeingTeleported() || !player->IsInWorld())
 +        return;
@@ -1672,9 +1784,87 @@ index 0000000..d6c1c62
 +    return gain;
 +}
 +
-+float ZeldaMeleeMultiplier()
++float ZeldaMeleeMultiplier(Unit const* attacker)
 +{
-+    return t_meleeMultiplier;
++    return t_meleeMultiplier * (1.0f + SetBonusOf(attacker, SET_BONUS_WEAPON_DAMAGE) / 100.0f);
++}
++
++float ZeldaCritDamageFactor(Unit const* attacker)
++{
++    return 1.0f + SetBonusOf(attacker, SET_BONUS_CRIT_DAMAGE) / 100.0f;
++}
++
++void ZeldaAfterMeleeHit(Unit* attacker, Unit* victim, bool hit)
++{
++    if (!hit || !attacker || !attacker->IsPlayer() || !victim || t_bonusSwing)
++        return;
++    Player* player = static_cast<Player*>(attacker);
++
++    // a solid hit sends the enemy back a step
++    float const knock = SetBonusOf(player, SET_BONUS_KNOCKBACK);
++    if (knock > 0.0f && victim->IsAlive() && roll_chance_f(knock))
++    {
++        if (victim->IsPlayer())
++            victim->KnockBackFrom(player, 6.0f, 2.0f);
++        else
++        {
++            Creature* creature = static_cast<Creature*>(victim);
++            CreatureInfo const* info = creature->GetCreatureInfo();
++            if (!creature->IsWorldBoss() && !(info && info->Rank == CREATURE_ELITE_WORLDBOSS))
++                creature->GetMotionMaster()->MovePushedBack(*player, 2.5f, 12.0f);
++        }
++    }
++
++    // and sometimes the blade swings again before the enemy can answer
++    float const extra = SetBonusOf(player, SET_BONUS_EXTRA_SWING);
++    if (extra > 0.0f && victim->IsAlive() && roll_chance_f(extra))
++    {
++        t_bonusSwing = true;
++        player->AttackerStateUpdate(victim, BASE_ATTACK, true);
++        t_bonusSwing = false;
++    }
++}
++
++void ZeldaOnKill(Player* killer, Creature* victim)
++{
++    if (!killer || !victim || !killer->IsAlive())
++        return;
++    float const pct = SetBonusOf(killer, SET_BONUS_HEAL_ON_KILL);
++    if (pct <= 0.0f || killer->GetHealth() >= killer->GetMaxHealth())
++        return;
++    CreatureInfo const* info = victim->GetCreatureInfo();
++    if (!info || info->CreatureType == CREATURE_TYPE_CRITTER || victim->GetLevel() + 8 < killer->GetLevel())
++        return;
++    uint32 const amount = std::max<uint32>(1, uint32(killer->GetMaxHealth() * pct / 100.0f));
++    if (SpellEntry const* healInfo = sSpellTemplate.LookupEntry<SpellEntry>(NAVI_HEAL_VISUAL))
++        killer->DealHeal(killer, amount, healInfo);
++    else
++        killer->ModifyHealth(int32(amount));
++}
++
++void ZeldaLoadItemSets()
++{
++    s_setOfItem.clear();
++    s_setBonuses.clear();
++    if (auto result = WorldDatabase.Query("SELECT item, set_id FROM zelda_itemset_item"))
++    {
++        do
++        {
++            Field* f = result->Fetch();
++            s_setOfItem[f[0].GetUInt32()] = f[1].GetUInt32();
++        }
++        while (result->NextRow());
++    }
++    if (auto result = WorldDatabase.Query("SELECT set_id, pieces, bonus_type, value FROM zelda_itemset_bonus"))
++    {
++        do
++        {
++            Field* f = result->Fetch();
++            s_setBonuses.push_back({ f[0].GetUInt32(), f[1].GetUInt32(), f[2].GetUInt32(), f[3].GetFloat() });
++        }
++        while (result->NextRow());
++    }
++    sLog.outString(">> Zelda: loaded %u armor set pieces and %u set bonuses", uint32(s_setOfItem.size()), uint32(s_setBonuses.size()));
 +}
 +
 +uint8 ZeldaStatClass(Player const* player)
@@ -1773,13 +1963,16 @@ index 0000000..d6c1c62
 +
 +    // The spin costs 50 rage; without it there is no spin.
 +    bool const usesRage = player->GetPowerType() == POWER_RAGE;
-+    if (usesRage && player->GetPower(POWER_RAGE) < SPIN_RAGE_COST)
++    // armor sets can make it cheaper
++    uint32 const discount = std::min<uint32>(SPIN_RAGE_COST, uint32(SetBonusOf(player, SET_BONUS_SPIN_RAGE)) * 10);
++    uint32 const spinCost = SPIN_RAGE_COST - discount;
++    if (usesRage && player->GetPower(POWER_RAGE) < spinCost)
 +    {
-+        player->GetSession()->SendNotification("Not enough rage for a Spin Attack (50 needed)");
++        player->GetSession()->SendNotification("Not enough rage for a Spin Attack (%u needed)", spinCost / 10);
 +        return true;
 +    }
 +    if (usesRage)
-+        player->ModifyPower(POWER_RAGE, -int32(SPIN_RAGE_COST));
++        player->ModifyPower(POWER_RAGE, -int32(spinCost));
 +
 +    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
 +    state.comboCount = 0;
@@ -2190,10 +2383,10 @@ index 0000000..d6c1c62
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..4553672
+index 0000000..2853c65
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,112 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -2221,7 +2414,14 @@ index 0000000..4553672
 +
 +// Zelda of Warcraft: extra factor on the melee hit being calculated right now (3 during a Spin
 +// Attack, otherwise 1).
-+float ZeldaMeleeMultiplier();
++float ZeldaMeleeMultiplier(Unit const* attacker);
++// Zelda of Warcraft armor sets: crit damage factor, and what a landed melee hit may do next
++// (push the enemy back, swing again), and the health a kill gives back.
++float ZeldaCritDamageFactor(Unit const* attacker);
++void ZeldaAfterMeleeHit(Unit* attacker, Unit* victim, bool hit);
++void ZeldaOnKill(Player* killer, Creature* victim);
++// Loads zelda_itemset_item / zelda_itemset_bonus.
++void ZeldaLoadItemSets();
 +
 +// Zelda of Warcraft: Linken's Boomerang (15712) thrown by a hero. The damage is one roll of the
 +// weapon in hand; the stun/disarm trigger effects are replaced by one of the two, 50/50. Returns
@@ -2324,7 +2524,7 @@ index 0656744..40ccbe6 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb..efe8235 100644
+index a10fdbb..8bb5d02 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -2344,7 +2544,7 @@ index a10fdbb..efe8235 100644
  
  // apply implementation of the singletons
  #include "Policies/Singleton.h"
-@@ -1086,6 +1089,13 @@ void Creature::PrepareBodyLootState(Unit* killer)
+@@ -1086,6 +1089,14 @@ void Creature::PrepareBodyLootState(Unit* killer)
  
          if (looter || GetSettings().HasFlag(CreatureStaticFlags::CAN_WIELD_LOOT))
              m_loot = new Loot(looter, this, LOOT_CORPSE);
@@ -2353,12 +2553,13 @@ index a10fdbb..efe8235 100644
 +        if (m_loot && looter && m_loot->GetLootType() == LOOT_CORPSE)
 +        {
 +            ZeldaHeartPieceDrop(looter, this, m_loot);
++            ZeldaOnKill(looter, this);
 +            ZeldaAutoLoot(looter, m_loot);
 +        }
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1272,42 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1273,42 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -2401,7 +2602,7 @@ index a10fdbb..efe8235 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1351,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1352,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -2410,7 +2611,7 @@ index a10fdbb..efe8235 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1460,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1461,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -2419,7 +2620,7 @@ index a10fdbb..efe8235 100644
      if (health < 1)
          health = 1;
  
-@@ -2125,6 +2171,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -2125,6 +2172,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
@@ -2660,7 +2861,7 @@ index 70b4e7d..45ee880 100644
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af..d9b2276 100644
+index 00986af..55aa839 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -2688,11 +2889,11 @@ index 00986af..d9b2276 100644
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
 +        // Zelda of Warcraft: the Spin Attack's strike
 +        if (GetTypeId() == TYPEID_PLAYER)
-+            subDamage->damage = uint32(subDamage->damage * ZeldaMeleeMultiplier());
++            subDamage->damage = uint32(subDamage->damage * ZeldaMeleeMultiplier(this));
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2656,6 +2664,10 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2664,20 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -2703,7 +2904,27 @@ index 00986af..d9b2276 100644
      SendAttackStateUpdate(&meleeDamageInfo);
      DealMeleeDamage(&meleeDamageInfo, true);
      ProcDamageAndSpell(ProcSystemArguments(this, meleeDamageInfo.target, meleeDamageInfo.procAttacker, meleeDamageInfo.procVictim, meleeDamageInfo.procEx, meleeDamageInfo.totalDamage, meleeDamageInfo.absorb, meleeDamageInfo.attackType));
-@@ -4976,6 +4988,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+ 
++    // Zelda of Warcraft: armor set effects of a landed hit (push back, another swing)
++    if (GetTypeId() == TYPEID_PLAYER)
++        ZeldaAfterMeleeHit(this, pVictim, meleeDamageInfo.totalDamage > 0 && (meleeDamageInfo.hitOutCome == MELEE_HIT_NORMAL ||
++                           meleeDamageInfo.hitOutCome == MELEE_HIT_CRIT || meleeDamageInfo.hitOutCome == MELEE_HIT_CRUSHING ||
++                           meleeDamageInfo.hitOutCome == MELEE_HIT_GLANCING || meleeDamageInfo.hitOutCome == MELEE_HIT_BLOCK));
++
+     uint32 totalAbsorb = 0;
+     uint32 totalResist = 0;
+ 
+@@ -3628,7 +3646,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+         SubDamageInfo& subDamage = meleeInfo->subDamage[i];
+         const uint32 amount = subDamage.damage;
+         const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
+-        const float multiplier = GetCritMultiplier(schoolMask, creatureTypeMask);
++        // Zelda of Warcraft: armor sets can make critical strikes hit harder
++        const float multiplier = GetCritMultiplier(schoolMask, creatureTypeMask) * (IsPlayer() ? ZeldaCritDamageFactor(this) : 1.0f);
+         const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
+         const uint32 outgoing = uint32(amount * multiplier);
+         // Crit amount can't be less than normal hit
+@@ -4976,6 +4995,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -2715,7 +2936,7 @@ index 00986af..d9b2276 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -7050,7 +7067,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7074,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -2724,7 +2945,7 @@ index 00986af..d9b2276 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -8404,6 +8421,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8428,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
@@ -2771,6 +2992,47 @@ index 79b2664..8201621 100644
  
                      SetGroupLootRight(player);
                      FillLoot(lootid, LootTemplates_Gameobject, player, false);
+diff --git a/src/game/MotionGenerators/MotionMaster.cpp b/src/game/MotionGenerators/MotionMaster.cpp
+index 68dc674..d91ad2b 100644
+--- a/src/game/MotionGenerators/MotionMaster.cpp
++++ b/src/game/MotionGenerators/MotionMaster.cpp
+@@ -572,6 +572,23 @@ void MotionMaster::MoveCharge(Unit& target, float speed, uint32 id/* = EVENT_CHA
+     Mutate(new EffectMovementGenerator(init, id, false));
+ }
+ 
++void MotionMaster::MovePushedBack(Unit const& from, float dist, float speed)
++{
++    if (m_owner->hasUnitState(UNIT_STAT_NO_FREE_MOVE) || !m_owner->IsInWorld())
++        return;
++
++    Position pos;
++    m_owner->GetFirstCollisionPosition(pos, dist, from.GetAngle(m_owner));
++
++    Movement::MoveSplineInit init(*m_owner);
++    init.SetWalk(false);
++    init.SetVelocity(speed);
++    init.MoveTo(pos.x, pos.y, pos.z, true);
++    init.SetFacing(&from);
++
++    Mutate(new EffectMovementGenerator(init, 0x5E7DA));
++}
++
+ bool MotionMaster::MoveFall(ObjectGuid guid/* = ObjectGuid()*/, uint32 relayId/* = 0*/)
+ {
+     const float x = m_owner->GetPositionX(), y = m_owner->GetPositionY(), z = m_owner->GetPositionZ();
+diff --git a/src/game/MotionGenerators/MotionMaster.h b/src/game/MotionGenerators/MotionMaster.h
+index 09b927f..065c305 100644
+--- a/src/game/MotionGenerators/MotionMaster.h
++++ b/src/game/MotionGenerators/MotionMaster.h
+@@ -159,6 +159,8 @@ class MotionMaster : private std::stack<MovementGenerator*>
+         void MoveCharge(float x, float y, float z, float speed, uint32 id = EVENT_CHARGE);
+         void MoveCharge(Unit& target, float speed, uint32 id = EVENT_CHARGE);
+         bool MoveFall(ObjectGuid guid = ObjectGuid(), uint32 relayId = 0);
++        // Zelda of Warcraft: a quick slide away from a hit, still facing whoever struck
++        void MovePushedBack(Unit const& from, float dist, float speed);
+ 
+         MovementGeneratorType GetCurrentMovementGeneratorType() const;
+ 
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
 index bf5c5c5..a950e6d 100644
 --- a/src/game/Spells/Spell.cpp
@@ -2874,7 +3136,7 @@ index 330ad8f..3916c50 100644
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
 diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
-index e344c52..a9ce0af 100644
+index e344c52..977bb36 100644
 --- a/src/game/World/World.cpp
 +++ b/src/game/World/World.cpp
 @@ -21,6 +21,7 @@
@@ -2895,12 +3157,13 @@ index e344c52..a9ce0af 100644
      ///- Loading strings. Getting no records means core load has to be canceled because no error message can be output.
      sLog.outString("Loading MaNGOS strings...");
      if (!sObjectMgr.LoadMangosStrings())
-@@ -1100,6 +1104,9 @@ void World::SetInitialWorldSettings()
+@@ -1100,6 +1104,10 @@ void World::SetInitialWorldSettings()
      sLog.outString("Loading Quests...");
      sObjectMgr.LoadQuests();                                // must be loaded after DBCs, creature_template, item_template, gameobject tables
  
 +    sLog.outString("Loading Zelda companion stages...");
 +    ZeldaLoadStages();
++    ZeldaLoadItemSets();
 +
      sLog.outString("Loading Quests Relations...");
      sObjectMgr.LoadQuestRelations();                        // must be after quest load

@@ -170,7 +170,7 @@ def main():
             prev[b] = a
     for q in Q:
         qid, level = q['id'], q['level']
-        row = dict(entry=qid, Method=2, ZoneOrSort=q['zone'], MinLevel=q['min'], MaxLevel=0, QuestLevel=level,
+        row = dict(entry=qid, Method=2, ZoneOrSort=q['zone'], MinLevel=q['min'], MaxLevel=255, QuestLevel=level,
                    Type=QUEST_TYPE[q['kind']], RequiredRaces=0, RequiredClasses=0, SuggestedPlayers=0,
                    QuestFlags=0, SpecialFlags=0, PrevQuestId=prev.get(qid, 0), NextQuestId=0,
                    NextQuestInChain=qid + 1 if (qid + 1) in by_id and by_id[qid + 1]['giver'] == q['ender'] else 0,
