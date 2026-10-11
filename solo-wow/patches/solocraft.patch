@@ -39,10 +39,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..29712b1
+index 0000000..e79bcb5
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,782 @@
+@@ -0,0 +1,816 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -105,6 +105,7 @@ index 0000000..29712b1
 +        uint32 bowReadyAt = 0;
 +        bool shield = false;
 +        uint32 shoutCheckIn = 0;
++        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
 +    };
 +
 +    // Commands run on the session's thread and damage on map threads, so the table is locked.
@@ -251,13 +252,46 @@ index 0000000..29712b1
 +    PlaySpellVisual(player, RED_TRAIL_SPELL, hits);
 +}
 +
++float ZeldaSpeedFactor(Player* player, uint32 moveType)
++{
++    if (moveType != MOVE_RUN || !player)
++        return 1.0f;
++    if (StateFor(player).shield)
++        return 0.45f;                           // shield up: a careful walk, whatever the run speed
++    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 2.0f));
++    return runRate;
++}
++
++bool ZeldaQuestItemsAlwaysDrop()
++{
++    static bool const always = sConfig.GetBoolDefault("Zelda.QuestItemsAlwaysDrop", true);
++    return always;
++}
++
++float ZeldaRangedDamageMultiplier()
++{
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.RangedDamageRate", 2.0f));
++    return rate;
++}
++
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
-+    static bool const passiveShout = sConfig.GetBoolDefault("Zelda.PassiveBattleShout", true);
-+    if (!passiveShout || !player)
++    if (!player)
 +        return;
 +
 +    ZeldaState& state = StateFor(player);
++
++    // the faster run speed takes hold once per login
++    if (state.speedAppliedFor != player && player->IsInWorld())
++    {
++        state.speedAppliedFor = player;
++        player->UpdateSpeed(MOVE_RUN, true);
++    }
++
++    static bool const passiveShout = sConfig.GetBoolDefault("Zelda.PassiveBattleShout", true);
++    if (!passiveShout)
++        return;
++
 +    if (state.shoutCheckIn > diff)
 +    {
 +        state.shoutCheckIn -= diff;
@@ -523,7 +557,7 @@ index 0000000..29712b1
 +        return true;
 +
 +    state.shield = on;
-+    player->SetSpeedRate(MOVE_RUN, on ? 0.45f : 1.0f, true);
++    player->UpdateSpeed(MOVE_RUN, true);       // ZeldaSpeedFactor slows a raised shield
 +    if (on)
 +        player->HandleEmoteCommand(EMOTE_ONESHOT_PARRYSHIELD);
 +    return true;
@@ -827,10 +861,10 @@ index 0000000..29712b1
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..1fb21db
+index 0000000..c3e29e0
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,83 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -901,6 +935,17 @@ index 0000000..1fb21db
 +// Zelda of Warcraft: how many times the normal price a vendor pays for an item (Zelda.SellPriceRate,
 +// 5). The tooltip's sell price and the buyback price follow it.
 +uint32 ZeldaSellMultiplier();
++
++// Zelda of Warcraft: extra factor on the hero's speed for a movement type: running is
++// Zelda.RunSpeedRate (2) times faster, and a raised shield slows to 0.45.
++float ZeldaSpeedFactor(Player* player, uint32 moveType);
++
++// Zelda of Warcraft: quest items drop every time for whoever is on the quest
++// (Zelda.QuestItemsAlwaysDrop = 1).
++bool ZeldaQuestItemsAlwaysDrop();
++
++// Zelda of Warcraft: damage factor for the hero's ranged weapon shots (Zelda.RangedDamageRate, 2).
++float ZeldaRangedDamageMultiplier();
 +
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
@@ -1227,7 +1272,7 @@ index 70b4e7d..45ee880 100644
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af..eaa4eff 100644
+index 00986af..d9b2276 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -1291,8 +1336,18 @@ index 00986af..eaa4eff 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
+@@ -8404,6 +8421,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+     // for player case, we look for some custom rates
+     if (GetTypeId() == TYPEID_PLAYER)
+     {
++        // Zelda of Warcraft: the hero runs faster, and slows right down behind a raised shield
++        speed *= ZeldaSpeedFactor(static_cast<Player*>(this), uint32(mtype));
++
+         if (GetDeathState() == CORPSE)
+             speed *= sWorld.getConfig(((Player*)this)->InBattleGround() ? CONFIG_FLOAT_GHOST_RUN_SPEED_BG : CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD);
+     }
 diff --git a/src/game/Loot/LootMgr.cpp b/src/game/Loot/LootMgr.cpp
-index 79b2664..8d676c4 100644
+index 79b2664..8201621 100644
 --- a/src/game/Loot/LootMgr.cpp
 +++ b/src/game/Loot/LootMgr.cpp
 @@ -17,6 +17,7 @@
@@ -1303,7 +1358,20 @@ index 79b2664..8d676c4 100644
  #include "Log/Log.h"
  #include "Util/ProgressBar.h"
  #include "World/World.h"
-@@ -1844,7 +1845,11 @@ Loot::Loot(Player* player, GameObject* gameObject, LootType type) :
+@@ -380,7 +381,12 @@ bool LootStoreItem::Roll(bool rate) const
+         return roll_chance_f(chance * (rate ? sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_REFERENCED) : 1.0f));
+ 
+     if (needs_quest)
++    {
++        // Zelda of Warcraft: quest items always drop (for whoever needs them)
++        if (ZeldaQuestItemsAlwaysDrop())
++            return true;
+         return roll_chance_f(chance * (rate ? sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_QUEST) : 1.0f));
++    }
+ 
+     ItemPrototype const* pProto = ObjectMgr::GetItemPrototype(itemid);
+ 
+@@ -1844,7 +1850,11 @@ Loot::Loot(Player* player, GameObject* gameObject, LootType type) :
                  if (uint32 lootid = gameObject->GetGOInfo()->GetLootId())
                  {
                      if (gameObject->GetGOInfo()->type == GAMEOBJECT_TYPE_CHEST)
@@ -1339,7 +1407,7 @@ index bf5c5c5..a950e6d 100644
  
      OnCast();
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
-index a9fb230..c852bff 100644
+index a9fb230..622b4fb 100644
 --- a/src/game/Spells/SpellEffects.cpp
 +++ b/src/game/Spells/SpellEffects.cpp
 @@ -17,6 +17,7 @@
@@ -1373,6 +1441,17 @@ index a9fb230..c852bff 100644
      // special cases
      switch (triggered_spell_id)
      {
+@@ -3555,6 +3565,10 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
+     }
+ 
+     // total damage
++    // Zelda of Warcraft: the hero's bow, gun, crossbow and thrown shots hit harder
++    if (m_attackType == RANGED_ATTACK && m_caster->IsPlayer())
++        totalDamagePercentMod *= ZeldaRangedDamageMultiplier();
++
+     bonus = int32(bonus * totalDamagePercentMod);
+ 
+     // prevent negative damage
 diff --git a/src/game/Spells/SpellStacking.cpp b/src/game/Spells/SpellStacking.cpp
 index 330ad8f..3916c50 100644
 --- a/src/game/Spells/SpellStacking.cpp

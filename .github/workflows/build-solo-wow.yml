@@ -247,10 +247,13 @@ jobs:
           $c += '#   PassiveBattleShout  Battle Shout is always on: no rage, no casting, never runs out'
           $c += '#   FishingSkillGain    fishing skill points for every fish caught (0 = normal fishing skill-ups)'
           $c += '#   SellPriceRate       vendors pay this many times the normal price for your items'
+          $c += '#   QuestItemsAlwaysDrop  quest items drop every time while you need them'
+          $c += '#   RangedDamageRate    damage factor for bow, gun, crossbow and thrown shots'
+          $c += '#   RunSpeedRate        running speed factor'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
-          $c += 'Zelda.PassiveTalentsOnly = 1'
+          $c += 'Zelda.PassiveTalentsOnly = 0'
           $c += 'Zelda.NoPotionCooldown = 1'
           $c += 'Zelda.AutoLoot = 1'
           $c += 'Zelda.OneHandOnBack = 1'
@@ -260,6 +263,9 @@ jobs:
           $c += 'Zelda.PassiveBattleShout = 1'
           $c += 'Zelda.FishingSkillGain = 10'
           $c += 'Zelda.SellPriceRate = 5'
+          $c += 'Zelda.QuestItemsAlwaysDrop = 1'
+          $c += 'Zelda.RangedDamageRate = 2'
+          $c += 'Zelda.RunSpeedRate = 2'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1
