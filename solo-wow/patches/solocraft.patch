@@ -65,10 +65,10 @@ index 20bcff2..a6c8243 100644
  }
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 0000000..5f02ac0
+index 0000000..cdde6b8
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,849 @@
+@@ -0,0 +1,873 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -89,7 +89,9 @@ index 0000000..5f02ac0
 +#include "AI/ScriptDevAI/include/sc_common.h"
 +#include "Chat/ZeldaCommands.h"
 +#include "World/WorldState.h"
++#include "Globals/ObjectMgr.h"
 +
++#include <cmath>
 +#include <vector>
 +
 +namespace
@@ -513,6 +515,11 @@ index 0000000..5f02ac0
 +            return;
 +        }
 +
++        // keep pace with the hero's run, sprint or mount
++        float const rate = owner->GetSpeedRate(MOVE_RUN) * 1.1f;
++        if (!m_creature->IsInCombat() && std::fabs(m_creature->GetSpeedRate(MOVE_RUN) - rate) > 0.01f)
++            m_creature->SetSpeedRate(MOVE_RUN, rate);
++
 +        m_tick += diff;
 +        if (m_tick >= 5000)
 +        {
@@ -714,6 +721,7 @@ index 0000000..5f02ac0
 +    uint32 const NAVI_QUEST_LIGHT = 90501;
 +    uint32 const NAVI_QUEST_HEART = 90502;
 +    uint32 const NAVI_QUEST_HERO  = 90503;
++    uint32 const NAVI_QUEST_LAST  = 90515;     // her errands at levels 15 to 42 are 90504-90515
 +    uint32 const NAVI_TEXT_GREETING = 900601;
 +    uint32 const NAVI_TEXT_ABOUT    = 900610;
 +
@@ -785,8 +793,15 @@ index 0000000..5f02ac0
 +        if (owner->GetLevel() >= 45 && owner->GetQuestStatus(NAVI_QUEST_HERO) == QUEST_STATUS_NONE &&
 +            owner->GetQuestRewardStatus(NAVI_QUEST_HEART) && urand(0, 1))
 +            return "Hey! Listen! I feel something far to the south... a heartbeat I know. Talk to me!";
-+        if (owner->GetLevel() >= 12 && owner->GetQuestStatus(NAVI_QUEST_HEART) == QUEST_STATUS_NONE && urand(0, 1))
-+            return "Hey! Listen! I've got something to ask you! Talk to me!";
++        // any errand of hers the hero is ready for (each waits for its own level)
++        for (uint32 questId = NAVI_QUEST_HEART; questId <= NAVI_QUEST_LAST; ++questId)
++        {
++            if (questId == NAVI_QUEST_HERO || owner->GetQuestStatus(questId) != QUEST_STATUS_NONE)
++                continue;
++            Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
++            if (quest && owner->CanTakeQuest(quest, false) && urand(0, 1))
++                return "Hey! Listen! I've got something to ask you! Talk to me!";
++        }
 +        return PickLine(NAVI_CHATTER);
 +    }
 +
@@ -803,7 +818,7 @@ index 0000000..5f02ac0
 +            m_creature->GetMotionMaster()->Clear();
 +            m_creature->GetMotionMaster()->MoveFollow(owner, 1.2f, M_PI_F * 0.3f);
 +        }
-+        if (!m_creature->IsWithinDistInMap(owner, 40.0f) && !owner->IsTaxiFlying())
++        if (!m_creature->IsWithinDistInMap(owner, 25.0f) && !owner->IsTaxiFlying())
 +        {
 +            float x, y, z;
 +            owner->GetNearPoint(owner, x, y, z, 0.0f, 1.2f, owner->GetOrientation() + M_PI_F * 0.3f);
@@ -813,6 +828,15 @@ index 0000000..5f02ac0
 +        }
 +        if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
 +            m_following = false;
++
++        // as fast as the hero (running, sprinting or riding), a little faster to catch up
++        float const rate = owner->GetSpeedRate(MOVE_RUN) * 1.15f;
++        if (std::fabs(m_creature->GetSpeedRate(MOVE_RUN) - rate) > 0.01f)
++        {
++            m_creature->SetSpeedRate(MOVE_RUN, rate);
++            m_creature->SetSpeedRate(MOVE_WALK, rate);
++            m_creature->SetSpeedRate(MOVE_SWIM, owner->GetSpeedRate(MOVE_SWIM) * 1.15f);
++        }
 +
 +        if (m_warnTimer > diff) m_warnTimer -= diff; else m_warnTimer = 0;
 +        if (!m_warnTimer && owner->IsAlive() && owner->IsInCombat() && owner->GetHealthPercent() < 30.0f)
@@ -979,10 +1003,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..23b0c15
+index 0000000..1cfc711
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1398 @@
+@@ -0,0 +1,1402 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1059,6 +1083,7 @@ index 0000000..23b0c15
 +        ObjectGuid followerGuid[5];
 +        uint32 followerBackAt[5] = { 0, 0, 0, 0, 0 };   // after she falls, she rejoins at this time
 +        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
++        uint32 naviHealReadyAt = 0;                     // and heal again after this (ms)
 +        // running: after Zelda.SprintAfterSeconds of running without stopping the hero sprints
 +        uint32 runningSince = 0;
 +        bool sprinting = false;
@@ -1218,7 +1243,7 @@ index 0000000..23b0c15
 +        return 1.0f;
 +    if (StateFor(player).shield)
 +        return 0.45f;                           // shield up: a careful walk, whatever the run speed
-+    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 1.5f));
++    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 1.3f));
 +    static float const sprintRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.SprintSpeedRate", 2.0f));
 +    return StateFor(player).sprinting ? sprintRate : runRate;
 +}
@@ -1303,7 +1328,6 @@ index 0000000..23b0c15
 +    uint32 const NAVI_ENTRY = 190601;
 +    uint32 const NAVI_TRINKET = 190601;
 +    uint32 const NAVI_HEAL_VISUAL = 2061;          // Flash Heal's golden glow on the hero
-+    uint32 const NAVI_REVIVE_COOLDOWN = 30 * 60;   // seconds
 +    uint32 const HEART_PIECE = 190602;
 +    uint32 const HEART_PIECE_QUEST = 90502;
 +
@@ -1552,10 +1576,13 @@ index 0000000..23b0c15
 +
 +    KeepCompanionsClose(player, state);
 +
-+    // Navi's Light: 5% of the hero's health every 2 seconds while fighting
-+    if (player->IsInCombat() && player->GetHealth() < player->GetMaxHealth() && WearsNavisLight(player))
++    // Navi's Light: 25% of the hero's health every 10 seconds while fighting
++    static uint32 const healEvery = uint32(std::max(1, sConfig.GetIntDefault("Zelda.NaviHealSeconds", 10))) * 1000;
++    if (player->IsInCombat() && player->GetHealth() < player->GetMaxHealth() && WearsNavisLight(player) && (!state.naviHealReadyAt ||
++        int32(WorldTimer::getMSTime() - state.naviHealReadyAt) >= 0))
 +    {
-+        static uint32 const healPct = sConfig.GetIntDefault("Zelda.NaviHealPercent", 5);
++        state.naviHealReadyAt = WorldTimer::getMSTime() + healEvery;
++        static uint32 const healPct = sConfig.GetIntDefault("Zelda.NaviHealPercent", 25);
 +        uint32 const amount = std::max<uint32>(1, player->GetMaxHealth() * healPct / 100);
 +        if (SpellEntry const* healInfo = sSpellTemplate.LookupEntry<SpellEntry>(NAVI_HEAL_VISUAL))
 +            player->DealHeal(player, amount, healInfo);
@@ -1612,7 +1639,8 @@ index 0000000..23b0c15
 +            navi->MonsterSay("Hey! Get... up...! I can't - I'm too tired! Not yet! Somebody help!", LANG_UNIVERSAL, player);
 +        return 0;
 +    }
-+    state.naviReviveReadyAt = now + NAVI_REVIVE_COOLDOWN;
++    static uint32 const reviveMinutes = uint32(std::max(0, sConfig.GetIntDefault("Zelda.NaviReviveMinutes", 5)));
++    state.naviReviveReadyAt = now + time_t(reviveMinutes) * 60;
 +    if (navi)
 +        navi->MonsterSay("NO! Hey! LISTEN! You don't get to stop here! Take my light - get up!", LANG_UNIVERSAL, player);
 +

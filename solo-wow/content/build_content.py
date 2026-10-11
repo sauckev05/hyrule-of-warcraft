@@ -172,8 +172,8 @@ def main():
         qid, level = q['id'], q['level']
         row = dict(entry=qid, Method=2, ZoneOrSort=q['zone'], MinLevel=q['min'], MaxLevel=255, QuestLevel=level,
                    Type=QUEST_TYPE[q['kind']], RequiredRaces=0, RequiredClasses=0, SuggestedPlayers=0,
-                   QuestFlags=0, SpecialFlags=0, PrevQuestId=prev.get(qid, 0), NextQuestId=0,
-                   NextQuestInChain=qid + 1 if (qid + 1) in by_id and by_id[qid + 1]['giver'] == q['ender'] else 0,
+                   QuestFlags=0, SpecialFlags=0, PrevQuestId=q.get('prev', prev.get(qid, 0)), NextQuestId=0,
+                   NextQuestInChain=q['next'] if 'next' in q else (qid + 1 if (qid + 1) in by_id and by_id[qid + 1]['giver'] == q['ender'] else 0),
                    SrcItemId=q.get('start_item', 0), SrcItemCount=1 if q.get('start_item') else 0,
                    Title=q['title'], Details=q['details'], Objectives=q['objectives'],
                    OfferRewardText=q['reward'], RequestItemsText=q['request'] or '', EndText='',

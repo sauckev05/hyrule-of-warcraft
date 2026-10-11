@@ -569,8 +569,8 @@ NAVI = dict(
 
 NAVI_ITEMS = [
     dict(entry=190601, name="Navi's Light", display=24730, quality=5, inventory=12, cls=4, subclass=0,
-         description="Equip: Navi follows you. In combat she heals you for 5% of your health every 2 sec. "
-                     "If you die, she can bring you back (once every 30 min). Hey! Listen!"),
+         description="Equip: Navi follows you. In combat she heals you for 25% of your health every 10 sec. "
+                     "If you die, she can bring you back (once every 5 min). Hey! Listen!"),
     dict(entry=190602, name='Piece of Heart', display=6614, quality=1, inventory=0, cls=12, subclass=0,
          description='A quarter of something that wants to be whole.'),
 ]
@@ -586,9 +586,9 @@ quest(id=90501, level=1, min=1, kind='', zone=0, giver=190601, ender=190601,
       request=None,
       reward="Yay! Partners! Put my light on - a trinket slot is fine, I'm small.$B$BAnd if you ever hear "
              "'Hey! Listen!' in a dungeon... it's important. Probably.",
-      kills=[], items=[], reward_item=190601, rep=(0, 0))
+      kills=[], items=[], reward_item=190601, rep=(0, 0), next=0)
 
-quest(id=90502, level=18, min=12, kind='', zone=0, giver=190601, ender=190601,
+quest(id=90502, level=18, min=18, kind='', zone=0, giver=190601, ender=190601,
       title='Pieces of Heart',
       details="Hey! Listen! Every now and then when you defeat something strong, I can feel a little Piece of "
               "Heart fall out of the world. Courage that got scattered around.$B$BBring me four of them! When "
@@ -598,9 +598,9 @@ quest(id=90502, level=18, min=12, kind='', zone=0, giver=190601, ender=190601,
       request="Did you find any? They sparkle a little.",
       reward="Four pieces! Look, look - they're fitting together!$B$B*Navi spins in a happy circle.*$B$BThat's a "
              "whole heart! Take something nice from my stash. Heroes need gear!",
-      kills=[], items=[(190602, 4)], rep=(0, 0))
+      kills=[], items=[(190602, 4)], rep=(0, 0), next=0)
 
-quest(id=90503, level=47, min=45, kind='', zone=490, giver=190601, ender=8737,
+quest(id=90503, level=47, min=47, kind='', zone=490, giver=190601, ender=8737,
       title='The Hero of Time',
       details="Hey! LISTEN! I felt it! Something far, far south, in a crater full of dinosaurs and steam - a "
               "heartbeat I know!$B$BIt's him. It's Linken! He's been lost in Un'Goro Crater all this time!$B$B"
@@ -613,6 +613,80 @@ quest(id=90503, level=47, min=45, kind='', zone=490, giver=190601, ender=8737,
              "is a gnome in Winterspring, Donova Snowden, who studies the strange fruit of this crater. She says "
              "an elixir made from it could show me who I was. Will you help me find my way back, friend?",
       kills=[], items=[], rep=(0, 0))
+
+# Navi's errands along the way: one for every few levels, offered only once you are that level.
+NAVI_ERRANDS = [
+    # (id, level, zone, creature, count, title, details, objectives text, request, reward)
+    (90504, 15, 44, 442, 10, "Gohma's Children",
+     "Hey! Listen! The spiders in Redridge Mountains - see the eyes? Those are Gohma eyes. Well, Gohma-ISH. "
+     "One big eye would be worse, but lots of little eyes is still bad!$B$BClear out the Tarantulas before they "
+     "grow up into something with a boss health bar.",
+     "Slay 10 Tarantulas in Redridge Mountains.", "Are they gone yet? I can still feel them looking at me.",
+     "No more eyes! Well... fewer eyes. You're getting good at this!"),
+    (90505, 17, 44, 441, 10, "Volvagia's Little Cousins",
+     "Hey! LISTEN! There are baby dragons in Redridge! Black ones! Don't let the cute fool you - I knew a dragon "
+     "named Volvagia who was a cute baby once, and then he tried to eat a whole mountain.$B$BThin the Black Dragon "
+     "Whelps out before they get any bigger.",
+     "Slay 10 Black Dragon Whelps in Redridge Mountains.", "Careful, they bite! And they breathe fire! At the same time!",
+     "Whew! You smell like smoke. Heroes always smell like smoke. It's fine!"),
+    (90506, 20, 11, 1007, 12, "Moblin Raiders",
+     "Hey! Listen! The gnolls in the Wetlands are SO much like the Moblins back home - big ears, big spears, "
+     "zero manners.$B$BThe Mosshide Gnolls keep raiding the roads. A hero would stop them. You're a hero. So!",
+     "Slay 12 Mosshide Gnolls in the Wetlands.", "Moblins - I mean gnolls - still on the road?",
+     "The roads are safe again! I'm putting this on your list of good deeds. It's a long list. I keep it in my head."),
+    (90507, 23, 10, 202, 10, "Stalfos!",
+     "Hey... listen... do you hear rattling? That's Stalfos. Skeletons that get back UP. In Duskwood they call "
+     "them Skeletal Horrors, which is honestly a better name.$B$BBreak 10 of them. And then don't turn your back on "
+     "the pieces.",
+     "Destroy 10 Skeletal Horrors in Duskwood.", "Did they stay down? They never stay down.",
+     "They stayed down! ...I think. Let's not go back to check."),
+    (90508, 25, 11, 1034, 12, "The Shadow's Army",
+     "Hey! Listen! The Dragonmaw orcs in the Wetlands march like an army. Armies need a dark lord. I don't like "
+     "that one bit - the last army like that was Ganon's.$B$BBreak their raiding parties: 12 Dragonmaw Raiders.",
+     "Slay 12 Dragonmaw Raiders in the Wetlands.", "Any sign of who leads them? A big guy? Red hair? Evil laugh?",
+     "No dark lord. Good. GOOD. Just orcs. Orcs are fine. Orcs are manageable."),
+    (90509, 28, 267, 2374, 10, "Not the Zora",
+     "Hey! Listen! Those Torn Fin murlocs on the Hillsbrad coast are NOT Zora. The Zora are graceful and polite and "
+     "have a princess. These have... mud.$B$BSend 10 Torn Fin Muckdwellers back into the sea.",
+     "Slay 10 Torn Fin Muckdwellers in Hillsbrad Foothills.", "Mrglglgl? ...Sorry. They're catchy.",
+     "Ahh, the coast smells like the coast again instead of like murloc. Thank you!"),
+    (90510, 30, 45, 2559, 10, "Cucco Revenge",
+     "Hey! Listen! Rule number one in Hyrule: never, EVER hit a Cucco. They come back with friends.$B$BThe Highland "
+     "Striders in Arathi are just very big Cuccos. Someone hit one. Now there are a lot of angry big birds. Calm "
+     "10 of them down. Permanently. Sorry, birds!",
+     "Slay 10 Highland Striders in the Arathi Highlands.", "Are they flocking? Please tell me they're not flocking.",
+     "No flock! We survived the Cuccos! That's more than most heroes can say."),
+    (90511, 32, 45, 2562, 10, "Moblin Brutes",
+     "Hey! Listen! You know how the gnolls were like Moblins? The Boulderfist ogres in Arathi are like BIG Moblins. "
+     "Like, Moblins who ate other Moblins.$B$BKnock 10 of them down. Use the Spin Attack. I love the Spin Attack.",
+     "Slay 10 Boulderfist Ogres in the Arathi Highlands.", "Did you spin? Tell me you spun.",
+     "You spun! I saw it! Okay I didn't see it, I was behind you, but I FELT it."),
+    (90512, 35, 33, 686, 10, "Lizalfos of the Jungle",
+     "Hey! Listen! In Stranglethorn there are Lashtail Raptors. Fast, clever, they jump at you from the side - "
+     "just like Lizalfos! Watch their tails, block with your shield, then strike!$B$BDefeat 10 of them.",
+     "Slay 10 Lashtail Raptors in Stranglethorn Vale.", "Shield up! Shield UP!",
+     "Look at you! Block, dodge, strike! You fight like a real Hylian now."),
+    (90513, 38, 15, 4412, 10, "Skulltulas in the Marsh",
+     "Hey! LISTEN! Skulltulas! In Dustwallow Marsh! The Darkfang Creepers drop down from the trees when you're not "
+     "looking - that is exactly what Skulltulas do!$B$BClear out 10 of them. And look UP.",
+     "Slay 10 Darkfang Creepers in Dustwallow Marsh.", "Did you look up? Always look up.",
+     "That's ten! Somewhere a family is cured of a curse because of this. Probably!"),
+    (90514, 40, 3, 92, 10, "The Armos Awaken",
+     "Hey! Listen! In the Badlands the stones walk around by themselves. Back home we had statues like that - the "
+     "Armos. You'd walk past and THUNK, they'd wake up.$B$BPut 10 Rock Elementals back to sleep.",
+     "Destroy 10 Rock Elementals in the Badlands.", "Are they still walking? Stones shouldn't walk.",
+     "Statues are statues again! My wings feel lighter already."),
+    (90515, 42, 440, 5617, 8, "Thieves of the Desert",
+     "Hey! Listen! The Wastewander bandits in Tanaris remind me of the Gerudo - sand, blades, and a fortress full of "
+     "stolen treasure. Except the Gerudo had honor, and these just have knives.$B$BTheir Shadow Mages lead them. "
+     "Defeat 8 Wastewander Shadow Mages.",
+     "Slay 8 Wastewander Shadow Mages in Tanaris.", "Watch for the ones casting - they're the leaders!",
+     "The desert is a little safer now. And you... you're almost ready. I can feel it. Linken's heartbeat is getting closer."),
+]
+for (_id, _lvl, _zone, _mob, _n, _title, _details, _obj, _req, _rew) in NAVI_ERRANDS:
+    quest(id=_id, level=_lvl, min=_lvl, kind='', zone=_zone, giver=190601, ender=190601, title=_title,
+          details=_details, objectives=_obj, request=_req, reward=_rew, kills=[(_mob, _n, None)], items=[],
+          rep=(0, 0), prev=90501, next=0)
 
 # Linken's Sword of Mastery becomes a legendary blade and It's Dangerous to Go Alone gives only it.
 LINKEN_SWORD = dict(entry=11902, quality=5, dmg_min=120, dmg_max=160, delay=2600, item_level=70,

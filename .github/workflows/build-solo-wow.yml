@@ -290,11 +290,13 @@ jobs:
           $c += 'Zelda.SellPriceRate = 5'
           $c += 'Zelda.QuestItemsAlwaysDrop = 1'
           $c += 'Zelda.RangedDamageRate = 2'
-          $c += 'Zelda.RunSpeedRate = 1.5'
+          $c += 'Zelda.RunSpeedRate = 1.3'
           $c += 'Zelda.SprintSpeedRate = 2'
           $c += 'Zelda.SprintAfterSeconds = 15'
           $c += 'Zelda.CrossFaction = 1'
-          $c += 'Zelda.NaviHealPercent = 5'
+          $c += 'Zelda.NaviHealPercent = 25'
+          $c += 'Zelda.NaviHealSeconds = 10'
+          $c += 'Zelda.NaviReviveMinutes = 5'
           $c += 'Zelda.HeartPieceChance = 15'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
