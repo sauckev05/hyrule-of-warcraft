@@ -1003,10 +1003,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..1cfc711
+index 0000000..e048ed8
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1402 @@
+@@ -0,0 +1,1416 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1054,6 +1054,7 @@ index 0000000..1cfc711
 +#include <cctype>
 +#include <filesystem>
 +#include <fstream>
++#include <map>
 +#include <set>
 +#include <sstream>
 +#include <string>
@@ -1267,10 +1268,15 @@ index 0000000..1cfc711
 +    // is forced friendly for the hero, so Alliance and Horde can walk, talk and trade together.
 +    std::set<uint32> const& OppositeFactions(Team team)
 +    {
++        // Factions of the other side. A faction counts only when every template of it belongs to that
++        // side, or it is a real reputation faction (Orgrimmar has a neutral template too). Faction 7,
++        // "Creature", also has one Horde template, and must never be included: it is every neutral boar,
++        // wolf and crab in the world.
 +        static std::set<uint32> horde, alliance;
 +        static std::once_flag once;
 +        std::call_once(once, []()
 +        {
++            std::map<uint32, uint32> sides;     // faction -> bit 1 horde, 2 alliance, 4 neither
 +            for (uint32 i = 0; i < sFactionTemplateStore.GetNumRows(); ++i)
 +            {
 +                FactionTemplateEntry const* t = sFactionTemplateStore.LookupEntry(i);
@@ -1280,10 +1286,18 @@ index 0000000..1cfc711
 +                    ((t->friendGroupMask & FACTION_GROUP_MASK_HORDE) && (t->enemyGroupMask & FACTION_GROUP_MASK_ALLIANCE));
 +                bool const isAlliance = (t->factionGroupMask & FACTION_GROUP_MASK_ALLIANCE) ||
 +                    ((t->friendGroupMask & FACTION_GROUP_MASK_ALLIANCE) && (t->enemyGroupMask & FACTION_GROUP_MASK_HORDE));
-+                if (isHorde && !isAlliance)
-+                    horde.insert(t->faction);
-+                else if (isAlliance && !isHorde)
-+                    alliance.insert(t->faction);
++                sides[t->faction] |= (isHorde && !isAlliance) ? 1 : (isAlliance && !isHorde) ? 2 : 4;
++            }
++            for (auto const& [faction, bits] : sides)
++            {
++                FactionEntry const* entry = sFactionStore.LookupEntry(faction);
++                bool const reputation = entry && entry->HasReputation();
++                if ((bits & 4) && !reputation)
++                    continue;
++                if (bits == 1 || bits == (1 | 4))
++                    horde.insert(faction);
++                else if (bits == 2 || bits == (2 | 4))
++                    alliance.insert(faction);
 +            }
 +        });
 +        return team == ALLIANCE ? horde : alliance;
