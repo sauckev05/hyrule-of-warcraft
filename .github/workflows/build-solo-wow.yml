@@ -144,6 +144,15 @@ jobs:
           EOF
           sed -i 's/^ *//' InstallFullDB.config
           bash ./InstallFullDB.sh -InstallAll root root DeleteAll
+      - name: Checkout story content
+        uses: actions/checkout@v7
+        with:
+          path: repo
+      - name: Load and check the Zelda story content
+        run: |
+          # stops at the first bad statement, so a broken quest file fails the build
+          mysql -h127.0.0.1 -uroot -proot classicmangos < repo/solo-wow/content/zelda-sql/001_companions.sql
+          mysql -h127.0.0.1 -uroot -proot classicmangos -e "SELECT COUNT(*) AS zelda_quests FROM quest_template WHERE entry BETWEEN 90100 AND 90499; SELECT COUNT(*) AS zelda_creatures FROM creature WHERE id BETWEEN 190000 AND 190999; SELECT COUNT(*) AS stages FROM zelda_stage;"
       - name: Customize realm for single player
         run: |
           mysql -h127.0.0.1 -uroot -proot classicrealmd -e "UPDATE realmlist SET name='Azeroth Solo', icon=0, address='127.0.0.1' WHERE id=1;"
@@ -221,6 +230,9 @@ jobs:
           $c = $c -replace '^Rate\.Drop\.Money\s*=.*', 'Rate.Drop.Money = 5'
           # two talent points per level
           $c = $c -replace '^Rate\.Talent\s*=.*', 'Rate.Talent = 2'
+          # raids and raid quests can be done alone
+          $c = $c -replace '^Instance\.IgnoreRaid\s*=.*', 'Instance.IgnoreRaid = 1'
+          $c = $c -replace '^Quests\.IgnoreRaid\s*=.*', 'Quests.IgnoreRaid = 1'
           $c += ''
           $c += '###################################################################################################'
           $c += '# SOLOCRAFT - dungeon & raid scaling so one player can clear everything'
@@ -250,6 +262,7 @@ jobs:
           $c += '#   QuestItemsAlwaysDrop  quest items drop every time while you need them'
           $c += '#   RangedDamageRate    damage factor for bow, gun, crossbow and thrown shots'
           $c += '#   RunSpeedRate        running speed factor'
+          $c += '#   CrossFaction        Alliance and Horde towns, guards and vendors are friendly to everyone'
           $c += '###################################################################################################'
           $c += 'Zelda.WarriorOnly = 1'
           $c += 'Zelda.WarriorScaling = 1'
@@ -266,6 +279,7 @@ jobs:
           $c += 'Zelda.QuestItemsAlwaysDrop = 1'
           $c += 'Zelda.RangedDamageRate = 2'
           $c += 'Zelda.RunSpeedRate = 2'
+          $c += 'Zelda.CrossFaction = 1'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
           $acd = Get-ChildItem -Recurse $s -Filter "anticheat.conf.dist" | Select-Object -First 1
@@ -284,6 +298,9 @@ jobs:
             Set-Content $pb.FullName $p
           } else { Write-Host "::warning::aiplayerbot.conf not found" }
           Copy-Item -Recurse -Force repo/solo-wow/package/* SoloWoW/
+          # story content the server loads into the world database at startup
+          New-Item -ItemType Directory -Force SoloWoW/server/zelda-sql | Out-Null
+          Copy-Item -Force repo/solo-wow/content/zelda-sql/*.sql SoloWoW/server/zelda-sql/
           Get-ChildItem SoloWoW | Format-Table Name
       - name: Upload package
         uses: actions/upload-artifact@v7

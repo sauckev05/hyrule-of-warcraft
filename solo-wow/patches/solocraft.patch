@@ -1,3 +1,738 @@
+diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/stormwind_city.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/stormwind_city.cpp
+index 20bcff2..a6c8243 100644
+--- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/stormwind_city.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/stormwind_city.cpp
+@@ -459,6 +459,24 @@ enum
+     GOSSIP_ITEM_KAT_4 = -3000123,
+ };
+ 
++// Zelda of Warcraft: Lady Prestor speaks with heroes, and Lyra's story (quests 90103-90110) runs
++// straight through her court.
++enum
++{
++    ZELDA_QUEST_LEDGER        = 90103,   // Lyra sends you to ask about the black seal
++    ZELDA_QUEST_FAVOR         = 90104,   // Katrana's "favor": a sealed letter
++    ZELDA_QUEST_SCARLET       = 90106,
++    ZELDA_QUEST_CHAMPION      = 90108,
++    ZELDA_QUEST_UNMASK        = 90109,   // confront her
++    ZELDA_TEXT_KAT_COURT      = 900500,  // npc_text: her courtly small talk, by chapter
++    ZELDA_TEXT_KAT_FAVOR      = 900501,
++    ZELDA_TEXT_KAT_SUSPICIOUS = 900502,
++    ZELDA_TEXT_KAT_COLD       = 900503,
++    ZELDA_TEXT_KAT_UNMASKED   = 900504,
++    ZELDA_ACTION_KAT_TALK     = GOSSIP_ACTION_INFO_DEF + 10,
++    ZELDA_ACTION_KAT_UNMASK   = GOSSIP_ACTION_INFO_DEF + 11,
++};
++
+ bool GossipHello_npc_lady_katrana_prestor(Player* player, Creature* creature)
+ {
+     if (creature->isQuestGiver())
+@@ -467,6 +485,10 @@ bool GossipHello_npc_lady_katrana_prestor(Player* player, Creature* creature)
+     if (player->GetQuestStatus(4185) == QUEST_STATUS_INCOMPLETE)
+         player->ADD_GOSSIP_ITEM_ID(GOSSIP_ICON_CHAT, GOSSIP_ITEM_KAT_1, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
+ 
++    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Lady Prestor, might I have a word?", GOSSIP_SENDER_MAIN, ZELDA_ACTION_KAT_TALK);
++    if (player->GetQuestStatus(ZELDA_QUEST_UNMASK) == QUEST_STATUS_INCOMPLETE)
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "I know what you are, \"Lady\" Prestor. Lyra knows too. The game is over, Onyxia.", GOSSIP_SENDER_MAIN, ZELDA_ACTION_KAT_UNMASK);
++
+     player->SEND_GOSSIP_MENU(2693, creature->GetObjectGuid());
+ 
+     return true;
+@@ -492,6 +514,24 @@ bool GossipSelect_npc_lady_katrana_prestor(Player* player, Creature* creature, u
+             player->CLOSE_GOSSIP_MENU();
+             player->AreaExploredOrEventHappens(4185);
+             break;
++        case ZELDA_ACTION_KAT_TALK:
++        {
++            uint32 text = ZELDA_TEXT_KAT_COURT;
++            if (player->GetQuestRewardStatus(ZELDA_QUEST_CHAMPION))
++                text = ZELDA_TEXT_KAT_COLD;
++            else if (player->GetQuestRewardStatus(ZELDA_QUEST_SCARLET))
++                text = ZELDA_TEXT_KAT_SUSPICIOUS;
++            else if (player->GetQuestStatus(ZELDA_QUEST_FAVOR) != QUEST_STATUS_NONE)
++                text = ZELDA_TEXT_KAT_FAVOR;
++            player->SEND_GOSSIP_MENU(text, creature->GetObjectGuid());
++            break;
++        }
++        case ZELDA_ACTION_KAT_UNMASK:
++            player->SEND_GOSSIP_MENU(ZELDA_TEXT_KAT_UNMASKED, creature->GetObjectGuid());
++            player->KilledMonsterCredit(creature->GetEntry(), creature->GetObjectGuid());
++            creature->MonsterWhisper("Clever little whelp. You and that trembling priestess have no idea what you have stumbled into. Come to my lair, then - if you are so eager to burn.", player);
++            creature->HandleEmoteCommand(EMOTE_ONESHOT_LAUGH);
++            break;
+     }
+     return true;
+ }
+diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
+new file mode 100644
+index 0000000..893a818
+--- /dev/null
++++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
+@@ -0,0 +1,644 @@
++/* Zelda of Warcraft - the four companions.
++ *
++ *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
++ *                                     Eastern Kingdoms to Lady Katrana Prestor, Onyxia and Nefarian
++ *   Faelin Swiftbreeze  night elf hunter  restless and high-energy; she follows whispers of the
++ *                                     Old Gods from Darkshore to the gates of Ahn'Qiraj
++ *   Durza Stormcaller   orc shaman        fierce, quick to anger and quick to cry; the angry fire
++ *                                     spirits lead her from Durotar to Ragnaros
++ *   Vesper Duskhollow   undead warlock    soft-spoken, dry and gothic; she hunts the Scourge from
++ *                                     the graves of Brill to Naxxramas
++ *
++ * Each girl has a spawn per chapter of her story (creature 1901xx-1904xx); zelda_stage decides which
++ * one a hero can see, so she seems to travel and level on her own. Ask her to travel with you and a
++ * copy of her follows you everywhere - into dungeons too - fighting and healing at your level, and
++ * she is friendly to Alliance and Horde alike. Quests live in the world database (zelda-sql).
++ */
++
++#include "AI/ScriptDevAI/include/sc_common.h"
++#include "Chat/ZeldaCommands.h"
++#include "World/WorldState.h"
++
++#include <vector>
++
++namespace
++{
++    enum Role { ROLE_PRIEST, ROLE_HUNTER, ROLE_SHAMAN, ROLE_WARLOCK };
++
++    struct Rank { uint32 level; uint32 spell; };
++
++    uint32 BestRank(std::vector<Rank> const& ranks, uint32 level)
++    {
++        uint32 best = 0;
++        for (Rank const& r : ranks)
++            if (r.level <= level)
++                best = r.spell;
++        return best;
++    }
++
++    // ---------------------------------------------------------------- spells by rank (learn level)
++    std::vector<Rank> const SMITE      = { {1, 585}, {6, 591}, {14, 598}, {22, 984}, {30, 1004}, {38, 6060}, {46, 10933}, {54, 10934} };
++    std::vector<Rank> const SW_PAIN    = { {4, 589}, {10, 594}, {18, 970}, {26, 992}, {34, 2767}, {42, 10892}, {50, 10893}, {58, 10894} };
++    std::vector<Rank> const SMALL_HEAL = { {1, 2050}, {4, 2052}, {10, 2053}, {16, 2054}, {22, 2055}, {28, 6063}, {34, 6064} };
++    std::vector<Rank> const FLASH_HEAL = { {20, 2061}, {26, 9472}, {32, 9473}, {38, 9474}, {44, 10915}, {50, 10916}, {56, 10917} };
++    std::vector<Rank> const RENEW      = { {8, 139}, {14, 6074}, {20, 6075}, {26, 6076}, {32, 6077}, {38, 6078}, {44, 10927}, {50, 10928}, {56, 10929} };
++    std::vector<Rank> const PW_SHIELD  = { {6, 17}, {12, 592}, {18, 600}, {24, 3747}, {30, 6065}, {36, 6066}, {42, 10898}, {48, 10899}, {54, 10900}, {60, 10901} };
++    std::vector<Rank> const FORTITUDE  = { {1, 1243}, {12, 1244}, {24, 1245}, {36, 2791}, {48, 10937}, {60, 10938} };
++    uint32 const WEAKENED_SOUL = 6788;
++
++    uint32 const SHOOT = 6660;
++    std::vector<Rank> const ARCANE_SHOT    = { {6, 3044}, {12, 14281}, {20, 14282}, {28, 14283}, {36, 14284}, {44, 14285}, {52, 14286}, {60, 14287} };
++    std::vector<Rank> const SERPENT_STING  = { {4, 1978}, {10, 13549}, {18, 13550}, {26, 13551}, {34, 13552}, {42, 13553}, {50, 13554}, {58, 13555} };
++    uint32 const CONCUSSIVE_SHOT = 5116;
++
++    std::vector<Rank> const LIGHTNING_BOLT   = { {1, 403}, {8, 529}, {14, 548}, {20, 915}, {26, 943}, {32, 6041}, {38, 10391}, {44, 10392}, {50, 15207}, {56, 15208} };
++    std::vector<Rank> const EARTH_SHOCK      = { {4, 8042}, {8, 8044}, {14, 8045}, {24, 8046}, {36, 10412}, {48, 10413}, {60, 10414} };
++    std::vector<Rank> const FLAME_SHOCK      = { {10, 8050}, {18, 8052}, {28, 8053}, {40, 10447}, {52, 10448} };
++    std::vector<Rank> const HEALING_WAVE     = { {1, 331}, {6, 332}, {12, 547}, {18, 913}, {24, 939}, {32, 959}, {40, 8005}, {48, 10395}, {56, 10396} };
++    std::vector<Rank> const LIGHTNING_SHIELD = { {8, 324}, {16, 325}, {24, 905}, {32, 945}, {40, 8134}, {48, 10431}, {56, 10432} };
++
++    std::vector<Rank> const SHADOW_BOLT    = { {1, 686}, {6, 695}, {12, 705}, {20, 1088}, {28, 1106}, {36, 7641}, {44, 11659}, {52, 11660}, {60, 11661} };
++    std::vector<Rank> const CORRUPTION     = { {4, 172}, {14, 6222}, {24, 6223}, {34, 7648}, {44, 11671}, {54, 11672} };
++    std::vector<Rank> const IMMOLATE       = { {1, 348}, {10, 707}, {20, 1094}, {30, 2941}, {40, 11665}, {50, 11667}, {60, 11668} };
++    std::vector<Rank> const CURSE_OF_AGONY = { {8, 980}, {18, 1014}, {28, 6217}, {38, 11711}, {48, 11712}, {58, 11713} };
++    std::vector<Rank> const DEMON_ARMOR    = { {1, 687}, {10, 696}, {20, 706}, {30, 1086}, {40, 11733}, {50, 11734}, {60, 11735} };
++
++    // ---------------------------------------------------------------- who they are
++    struct Companion
++    {
++        char const* name;
++        Role role;
++        float castRange;
++        uint32 textAbout;                      // npc_text: "Tell me about yourself"
++        std::vector<char const*> idle;         // said now and then when a hero is near
++        std::vector<char const*> join;         // when she starts travelling with you
++        std::vector<char const*> leave;        // when she heads back to her haunt
++        std::vector<char const*> aggro;
++        std::vector<char const*> kill;
++        std::vector<char const*> hurt;         // the hero is badly hurt
++        std::vector<char const*> died;
++    };
++
++    std::vector<Companion> const COMPANIONS =
++    {
++        {   // 0: Lyra Ashford - human priest, shy but curious
++            "Lyra", ROLE_PRIEST, 20.0f, 900110,
++            {
++                "Oh! I didn't see you there... sorry. I was just, um, reading the inscriptions.",
++                "Did you know every chapel in Stormwind was built facing the sunrise? I counted. Twice.",
++                "*fidgets with the hem of her robe* ...Do you think the Light listens even when you whisper?",
++                "I keep wondering who carved these stones. Somebody's hands made all of this...",
++                "S-sorry, I talk to myself when I'm nervous. And when I'm not nervous. Sorry.",
++                "There's a book in the Cathedral library about the old dragon wars. Nobody ever checks it out but me.",
++            },
++            {
++                "Y-you want me to come with you? I'll... I'll do my best. I promise.",
++                "Okay. Okay! I'll stay close. Please don't walk too fast.",
++            },
++            {
++                "I'll wait where I always do. You... you'll come back, won't you?",
++                "Thank you for letting me tag along. It was... nice. Really nice.",
++            },
++            { "Light, give me courage...", "Stay behind me! No, wait - I'll stay behind you!", "I-I can do this!" },
++            { "Is it... is it over? Oh, thank the Light.", "Light forgive me. They didn't leave us a choice." },
++            { "You're hurt! Hold still, please!", "Don't you dare fall - I'm right here!" },
++            { "I... I'm sorry... I wasn't brave enough..." },
++        },
++        {   // 1: Faelin Swiftbreeze - night elf hunter, adventurous and high-energy
++            "Faelin", ROLE_HUNTER, 15.0f, 900210,
++            {
++                "Ten thousand years of sitting under trees and NOBODY thought to climb the big ones? Unbelievable.",
++                "Look at these tracks! Something with way too many legs went that way. Wanna find out what?",
++                "*bounces on her heels* I'm not restless. YOU'RE restless.",
++                "Race you to the next hill! ...Okay fine, but I'm counting this as a win.",
++                "The Sentinels say I'm 'reckless'. I say I'm efficient at finding trouble.",
++                "Shh! Hear that? Water, birds, wind... and something whispering under all of it.",
++            },
++            {
++                "YES! Finally, an adventure partner who doesn't nap! Let's go!",
++                "Lead the way - or don't, I'll probably run ahead anyway.",
++            },
++            {
++                "Okay, okay, I'll head back. But you'd better come find me for the next one!",
++                "That was amazing. Same time next adventure?",
++            },
++            { "Ooh, this one's mine!", "Arrows up! Let's dance!", "You picked the wrong elf to annoy!" },
++            { "Ha! Did you see that shot?!", "Next!", "Too easy. Find me a bigger one." },
++            { "Hey! Hey, stay on your feet! I'm not carrying you home!", "Back off from my friend!" },
++            { "Ugh... tell the trees... I almost had it..." },
++        },
++        {   // 2: Durza Stormcaller - orc shaman, aggressive but emotional
++            "Durza", ROLE_SHAMAN, 18.0f, 900310,
++            {
++                "What are you staring at? ...Sorry. I'm not angry at you. I'm angry at EVERYTHING.",
++                "The fire here won't listen to me. It used to. It used to sing.",
++                "My mother could calm a firestorm with one word. I can't even calm myself.",
++                "*cracks her knuckles* If one more elemental talks back to me, I swear on my ancestors...",
++                "Lok'tar. Or hello. Whatever you people say.",
++                "...Don't tell anyone you saw me cry. I had dust in my eyes. A lot of dust.",
++            },
++            {
++                "Fine. You fight beside me - and if you fall behind, I'm NOT waiting. ...I'll wait a little.",
++                "Good. I hit things harder when someone's watching my back.",
++            },
++            {
++                "Go on then. I'll be where I always am. ...Come back in one piece, you hear me?",
++                "You fought well. Don't let it go to your head.",
++            },
++            { "FOR THE ANCESTORS!", "You'll burn before I do!", "Spirits, give me your fury!" },
++            { "Stay down!", "That's what you get!", "Ha! The elements are with me today." },
++            { "NO! Not you too - Spirits, mend them!", "Get up! I'm not losing anyone else!" },
++            { "Mother... I tried..." },
++        },
++        {   // 3: Vesper Duskhollow - undead warlock, mysterious and gothic
++            "Vesper", ROLE_WARLOCK, 22.0f, 900410,
++            {
++                "The dead are such good listeners. You living types interrupt.",
++                "Lovely evening. Overcast, a little damp, the faint smell of rot. Perfect.",
++                "*traces a sigil in the air; it fades into violet smoke* Don't mind me. Old habits.",
++                "I used to be afraid of the dark. Then I became the reason others are.",
++                "Do you hear the bells? No? Good. That means they are only ringing for me.",
++                "Black isn't a color. It's a promise.",
++            },
++            {
++                "How sweet. You want company of the unliving kind. Very well.",
++                "I will walk with you. Try not to die - I would hate to have to bring you back.",
++            },
++            {
++                "The graves are calling me home. Do visit. Bring something dead.",
++                "Until the next night falls, then.",
++            },
++            { "Your soul looks... delicious.", "Shadows, take them.", "Scream if you like. It helps me focus." },
++            { "Another one for the dark.", "Rest. Or don't. I'm not the one to ask.", "Hm. Brittle." },
++            { "Stay with me. Death is MY hobby, not yours.", "Do not die. I mean it." },
++            { "How... dull. I'll be back. I always come back." },
++        },
++    };
++
++    // creature entries: 1901xx Lyra, 1902xx Faelin, 1903xx Durza, 1904xx Vesper; 190101 is Lyra captive
++    uint32 const LYRA_CAPTIVE = 190101;
++    uint32 const QUEST_LYRA_RESCUE = 90102;
++    uint32 const QUEST_FAELIN_SILITHUS = 90205;
++    uint32 const QUEST_LYRA_ONYXIA = 90110;
++
++    int32 CompanionIndex(uint32 entry)
++    {
++        if (entry < 190100 || entry >= 190500)
++            return -1;
++        return int32((entry - 190000) / 100) - 1;
++    }
++
++    char const* Pick(std::vector<char const*> const& lines)
++    {
++        return lines.empty() ? nullptr : lines[urand(0, uint32(lines.size()) - 1)];
++    }
++
++    enum GossipActions
++    {
++        ACTION_ABOUT    = GOSSIP_ACTION_INFO_DEF + 1,
++        ACTION_FOLLOW   = GOSSIP_ACTION_INFO_DEF + 2,
++        ACTION_DISMISS  = GOSSIP_ACTION_INFO_DEF + 3,
++        ACTION_RESCUE   = GOSSIP_ACTION_INFO_DEF + 4,
++    };
++
++    float const FOLLOW_DIST = 2.5f;
++    float const FOLLOW_ANGLES[4] = { M_PI_F * 0.75f, M_PI_F * 1.25f, M_PI_F * 0.5f, M_PI_F * 1.5f };
++}
++
++struct npc_zelda_companionAI : public ScriptedAI
++{
++    npc_zelda_companionAI(Creature* creature) : ScriptedAI(creature),
++        m_index(CompanionIndex(creature->GetEntry())), m_follower(creature->IsTemporarySummon())
++    {
++        Companion const& c = Data();
++        SetRangedMode(true, c.castRange, TYPE_FULL_CASTER);
++        if (m_follower)
++            m_ownerGuid = creature->GetSpawnerGuid();
++        Reset();
++    }
++
++    int32 m_index;
++    bool m_follower;
++    ObjectGuid m_ownerGuid;
++    uint32 m_tick = 0;
++    uint32 m_globalCooldown = 0;
++    uint32 m_shockTimer = 0;
++    uint32 m_buffTimer = 0;
++    uint32 m_idleLineTimer = 0;
++    uint32 m_hurtLineTimer = 0;
++    bool m_boundToOwner = false;
++
++    Companion const& Data() const { return COMPANIONS[m_index < 0 ? 0 : m_index]; }
++    uint32 Level() const { return m_creature->GetLevel(); }
++
++    void Reset() override
++    {
++        m_globalCooldown = 0;
++        m_shockTimer = 0;
++        m_buffTimer = 2000;
++        m_idleLineTimer = urand(20000, 60000);
++        m_hurtLineTimer = 0;
++        if (m_creature->GetEntry() == LYRA_CAPTIVE)
++            m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
++    }
++
++    Player* Owner() const
++    {
++        if (!m_follower || !m_ownerGuid)
++            return nullptr;
++        return m_creature->GetMap()->GetPlayer(m_ownerGuid);
++    }
++
++    void Say(char const* text, Unit const* target = nullptr)
++    {
++        if (text)
++            m_creature->MonsterSay(text, LANG_UNIVERSAL, target);
++    }
++
++    // a follower fights as one of the hero's own: same side, same reactions, the hero's kills
++    void BindToOwner(Player* owner)
++    {
++        if (m_boundToOwner)
++            return;
++        m_boundToOwner = true;
++        m_creature->SetOwnerGuid(owner->GetObjectGuid());
++        m_creature->setFaction(owner->getFaction());
++        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
++        m_creature->SelectLevel(owner->GetLevel());
++        m_creature->GetMotionMaster()->Clear();
++        m_creature->GetMotionMaster()->MoveFollow(owner, FOLLOW_DIST, FOLLOW_ANGLES[m_index & 3]);
++    }
++
++    void JustDied(Unit* /*killer*/) override
++    {
++        Say(Pick(Data().died));
++        if (Player* owner = Owner())
++            ZeldaFollowerDied(owner, uint32(m_index));
++    }
++
++    void Aggro(Unit* /*who*/) override
++    {
++        if (urand(0, 2) == 0)
++            Say(Pick(Data().aggro));
++    }
++
++    void KilledUnit(Unit* /*victim*/) override
++    {
++        if (urand(0, 3) == 0)
++            Say(Pick(Data().kill));
++    }
++
++    void EnterEvadeMode() override
++    {
++        if (!m_follower)
++        {
++            ScriptedAI::EnterEvadeMode();
++            return;
++        }
++        m_creature->RemoveAllAurasOnEvade();
++        m_creature->CombatStop(true);
++        m_creature->SetLootRecipient(nullptr);
++        if (Player* owner = Owner())
++        {
++            m_creature->GetMotionMaster()->Clear();
++            m_creature->GetMotionMaster()->MoveFollow(owner, FOLLOW_DIST, FOLLOW_ANGLES[m_index & 3]);
++        }
++    }
++
++    bool Cast(Unit* target, uint32 spellId, uint32 flags = 0)
++    {
++        if (!spellId || !target)
++            return false;
++        if (DoCastSpellIfCan(target, spellId, flags) == CAST_OK)
++        {
++            m_globalCooldown = 1500;
++            return true;
++        }
++        return false;
++    }
++
++    // healing and buffs for the hero (and herself); true when a spell went out
++    bool Support(Player* owner)
++    {
++        uint32 const lvl = Level();
++        Unit* patient = nullptr;
++        if (owner && owner->IsAlive() && owner->GetHealthPercent() < 55.0f && m_creature->IsWithinDistInMap(owner, 35.0f))
++            patient = owner;
++        else if (m_creature->GetHealthPercent() < 40.0f)
++            patient = m_creature;
++
++        if (patient && patient == owner && m_hurtLineTimer == 0 && owner->GetHealthPercent() < 30.0f)
++        {
++            Say(Pick(Data().hurt));
++            m_hurtLineTimer = 20000;
++        }
++
++        switch (Data().role)
++        {
++            case ROLE_PRIEST:
++                if (patient)
++                {
++                    if (patient == owner && !owner->HasAura(WEAKENED_SOUL) && Cast(owner, BestRank(PW_SHIELD, lvl)))
++                        return true;
++                    uint32 heal = lvl >= 20 ? BestRank(FLASH_HEAL, lvl) : BestRank(SMALL_HEAL, lvl);
++                    if (Cast(patient, heal))
++                        return true;
++                }
++                if (owner && owner->IsAlive() && owner->GetHealthPercent() < 85.0f && Cast(owner, BestRank(RENEW, lvl), CAST_AURA_NOT_PRESENT))
++                    return true;
++                break;
++            case ROLE_SHAMAN:
++                if (patient && Cast(patient, BestRank(HEALING_WAVE, lvl)))
++                    return true;
++                break;
++            case ROLE_WARLOCK:
++            case ROLE_HUNTER:
++                break;
++        }
++        return false;
++    }
++
++    void Buffs(Player* owner)
++    {
++        uint32 const lvl = Level();
++        switch (Data().role)
++        {
++            case ROLE_PRIEST:
++                if (owner && owner->IsAlive() && m_creature->IsWithinDistInMap(owner, 30.0f))
++                    Cast(owner, BestRank(FORTITUDE, lvl), CAST_AURA_NOT_PRESENT);
++                break;
++            case ROLE_SHAMAN:
++                Cast(m_creature, BestRank(LIGHTNING_SHIELD, lvl), CAST_AURA_NOT_PRESENT);
++                break;
++            case ROLE_WARLOCK:
++                Cast(m_creature, BestRank(DEMON_ARMOR, lvl), CAST_AURA_NOT_PRESENT);
++                break;
++            case ROLE_HUNTER:
++                break;
++        }
++    }
++
++    void Attack(Unit* target)
++    {
++        uint32 const lvl = Level();
++        switch (Data().role)
++        {
++            case ROLE_PRIEST:
++                if (Cast(target, BestRank(SW_PAIN, lvl), CAST_AURA_NOT_PRESENT))
++                    return;
++                Cast(target, BestRank(SMITE, lvl));
++                break;
++            case ROLE_HUNTER:
++                if (Cast(target, BestRank(SERPENT_STING, lvl), CAST_AURA_NOT_PRESENT))
++                    return;
++                if (m_shockTimer == 0 && Cast(target, BestRank(ARCANE_SHOT, lvl)))
++                {
++                    m_shockTimer = 6000;
++                    return;
++                }
++                if (lvl >= 8 && target->GetHealthPercent() < 30.0f && Cast(target, CONCUSSIVE_SHOT, CAST_AURA_NOT_PRESENT))
++                    return;
++                Cast(target, SHOOT);
++                break;
++            case ROLE_SHAMAN:
++                if (lvl >= 10 && Cast(target, BestRank(FLAME_SHOCK, lvl), CAST_AURA_NOT_PRESENT))
++                    return;
++                if (m_shockTimer == 0 && Cast(target, BestRank(EARTH_SHOCK, lvl)))
++                {
++                    m_shockTimer = 6000;
++                    return;
++                }
++                Cast(target, BestRank(LIGHTNING_BOLT, lvl));
++                break;
++            case ROLE_WARLOCK:
++                if (Cast(target, BestRank(CORRUPTION, lvl), CAST_AURA_NOT_PRESENT))
++                    return;
++                if (Cast(target, BestRank(CURSE_OF_AGONY, lvl), CAST_AURA_NOT_PRESENT))
++                    return;
++                if (Cast(target, BestRank(IMMOLATE, lvl), CAST_AURA_NOT_PRESENT))
++                    return;
++                Cast(target, BestRank(SHADOW_BOLT, lvl));
++                break;
++        }
++    }
++
++    void UpdateFollower(uint32 diff, Player* owner)
++    {
++        if (!owner)
++        {
++            // the hero logged out or went elsewhere: this copy of her goes home
++            m_creature->ForcedDespawn();
++            return;
++        }
++        BindToOwner(owner);
++
++        // keep up with the hero: a long way behind, she catches up at once
++        if (!m_creature->IsWithinDistInMap(owner, 60.0f) && !owner->IsTaxiFlying())
++        {
++            float x, y, z;
++            owner->GetNearPoint(owner, x, y, z, 0.0f, 2.0f, owner->GetOrientation() + M_PI_F);
++            m_creature->NearTeleportTo(x, y, z, owner->GetOrientation());
++            EnterEvadeMode();
++            return;
++        }
++
++        m_tick += diff;
++        if (m_tick >= 5000)
++        {
++            m_tick = 0;
++            if (m_creature->GetLevel() != owner->GetLevel())
++                m_creature->SelectLevel(owner->GetLevel());
++        }
++
++        // fight what the hero fights
++        if (!m_creature->IsInCombat() && owner->IsInCombat())
++        {
++            Unit* target = owner->GetVictim();
++            if (!target || !target->IsAlive() || !m_creature->CanAttack(target))
++                target = owner->getAttackerForHelper();
++            if (target && target->IsAlive() && m_creature->CanAttack(target))
++                AttackStart(target);
++        }
++
++        if (!m_creature->IsInCombat() && m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
++            m_creature->GetMotionMaster()->MoveFollow(owner, FOLLOW_DIST, FOLLOW_ANGLES[m_index & 3]);
++    }
++
++    void UpdateIdle(uint32 diff)
++    {
++        if (m_creature->GetEntry() == LYRA_CAPTIVE)
++            return;
++        if (m_idleLineTimer > diff)
++        {
++            m_idleLineTimer -= diff;
++            return;
++        }
++        m_idleLineTimer = urand(60000, 120000);
++
++        // only talks when someone who can see her is around to hear it
++        Map::PlayerList const& players = m_creature->GetMap()->GetPlayers();
++        for (auto const& ref : players)
++        {
++            Player* player = ref.getSource();
++            if (player && player->IsAlive() && m_creature->IsWithinDistInMap(player, 15.0f) && !ZeldaStageHidden(m_creature, player))
++            {
++                Say(Pick(Data().idle), player);
++                break;
++            }
++        }
++    }
++
++    void UpdateAI(const uint32 diff) override
++    {
++        if (m_globalCooldown > diff) m_globalCooldown -= diff; else m_globalCooldown = 0;
++        if (m_shockTimer > diff) m_shockTimer -= diff; else m_shockTimer = 0;
++        if (m_hurtLineTimer > diff) m_hurtLineTimer -= diff; else m_hurtLineTimer = 0;
++
++        Player* owner = Owner();
++        if (m_follower)
++            UpdateFollower(diff, owner);
++        else if (!m_creature->IsInCombat())
++            UpdateIdle(diff);
++
++        if (!m_creature->IsAlive())
++            return;
++
++        if (m_globalCooldown == 0 && !m_creature->IsNonMeleeSpellCasted(false))
++        {
++            if (Support(owner))
++                return;
++
++            if (m_creature->IsInCombat() && m_creature->GetVictim())
++            {
++                Attack(m_creature->GetVictim());
++            }
++            else
++            {
++                if (m_buffTimer > diff)
++                    m_buffTimer -= diff;
++                else
++                {
++                    m_buffTimer = 5000;
++                    Buffs(owner);
++                }
++            }
++        }
++
++        if (m_creature->IsInCombat() && m_creature->GetVictim())
++            DoMeleeAttackIfReady();
++    }
++};
++
++UnitAI* GetAI_npc_zelda_companion(Creature* creature)
++{
++    return new npc_zelda_companionAI(creature);
++}
++
++bool GossipHello_npc_zelda_companion(Player* player, Creature* creature)
++{
++    int32 index = CompanionIndex(creature->GetEntry());
++    if (index < 0)
++        return false;
++
++    // Lyra in the Deadmines: only the rescue
++    if (creature->GetEntry() == LYRA_CAPTIVE)
++    {
++        if (player->GetQuestStatus(QUEST_LYRA_RESCUE) == QUEST_STATUS_INCOMPLETE)
++            player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Lyra? Lyra Ashford? I'm here to get you out.", GOSSIP_SENDER_MAIN, ACTION_RESCUE);
++        player->SEND_GOSSIP_MENU(900100, creature->GetObjectGuid());
++        return true;
++    }
++
++    // she grows with you
++    if (!creature->IsTemporarySummon() && creature->GetLevel() != player->GetLevel() && !creature->IsInCombat())
++        creature->SelectLevel(player->GetLevel());
++
++    if (creature->isQuestGiver())
++        player->PrepareQuestMenu(creature->GetObjectGuid());
++
++    Companion const& c = COMPANIONS[index];
++    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Tell me about yourself.", GOSSIP_SENDER_MAIN, ACTION_ABOUT);
++    if (creature->IsTemporarySummon())
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Go on back to your usual spot - I'll find you later.", GOSSIP_SENDER_MAIN, ACTION_DISMISS);
++    else
++    {
++        std::string ask = std::string("Travel with me for a while, ") + c.name + "?";
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, ask.c_str(), GOSSIP_SENDER_MAIN, ACTION_FOLLOW);
++    }
++    player->SEND_GOSSIP_MENU(c.textAbout - 9, creature->GetObjectGuid()); // greeting text sits 9 below "about"
++    return true;
++}
++
++bool GossipSelect_npc_zelda_companion(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
++{
++    int32 index = CompanionIndex(creature->GetEntry());
++    if (index < 0)
++        return false;
++    Companion const& c = COMPANIONS[index];
++
++    switch (action)
++    {
++        case ACTION_ABOUT:
++            player->SEND_GOSSIP_MENU(c.textAbout, creature->GetObjectGuid());
++            return true;
++        case ACTION_RESCUE:
++            player->CLOSE_GOSSIP_MENU();
++            player->KilledMonsterCredit(LYRA_CAPTIVE, creature->GetObjectGuid());
++            creature->SetStandState(UNIT_STAND_STATE_STAND);
++            creature->MonsterSay("Y-you came for me? Thank the Light... thank YOU! The Defias kept talking about a 'lady in the Keep'... I'll tell the Bishop everything. Go, I know the way out!", LANG_UNIVERSAL, player);
++            creature->HandleEmoteCommand(EMOTE_ONESHOT_CRY);
++            return true;
++        case ACTION_FOLLOW:
++        {
++            player->CLOSE_GOSSIP_MENU();
++            float x, y, z;
++            player->GetNearPoint(player, x, y, z, 0.0f, 2.0f, player->GetOrientation() + M_PI_F);
++            if (Creature* follower = player->SummonCreature(creature->GetEntry(), x, y, z, player->GetOrientation(), TEMPSPAWN_CORPSE_TIMED_DESPAWN, 10000))
++            {
++                ZeldaFollowerSet(player, uint32(index), follower->GetEntry(), follower->GetObjectGuid());
++                follower->MonsterSay(Pick(c.join), LANG_UNIVERSAL, player);
++                // she has left her haunt for now
++                creature->SetRespawnDelay(600, true);
++                creature->ForcedDespawn(500);
++            }
++            return true;
++        }
++        case ACTION_DISMISS:
++            player->CLOSE_GOSSIP_MENU();
++            creature->MonsterSay(Pick(c.leave), LANG_UNIVERSAL, player);
++            ZeldaFollowerClear(player, uint32(index));
++            creature->ForcedDespawn(2000);
++            return true;
++    }
++    return false;
++}
++
++bool QuestRewarded_npc_zelda_companion(Player* player, Creature* creature, Quest const* quest)
++{
++    switch (quest->GetQuestId())
++    {
++        case QUEST_FAELIN_SILITHUS:
++            // the Scarab Wall has waited long enough: the gates of Ahn'Qiraj stand open from now on
++            if (sWorldState.GetAqPhase() < PHASE_5_DONE)
++                sWorldState.HandleWarEffortPhaseTransition(PHASE_5_DONE);
++            creature->MonsterSay("Did you feel that?! The ground just SHOOK. The Scarab Wall... it's open. Oh, we are SO going in there.", LANG_UNIVERSAL, player);
++            break;
++        case QUEST_LYRA_ONYXIA:
++            creature->MonsterSay("She's gone. She was in the King's own court all this time... I was so scared. But I'm not anymore. Not with you here.", LANG_UNIVERSAL, player);
++            break;
++        default:
++            break;
++    }
++    return false;
++}
++
++void AddSC_zelda_companions()
++{
++    Script* pNewScript = new Script;
++    pNewScript->Name = "npc_zelda_companion";
++    pNewScript->GetAI = &GetAI_npc_zelda_companion;
++    pNewScript->pGossipHello = &GossipHello_npc_zelda_companion;
++    pNewScript->pGossipSelect = &GossipSelect_npc_zelda_companion;
++    pNewScript->pQuestRewardedNPC = &QuestRewarded_npc_zelda_companion;
++    pNewScript->RegisterSelf();
++}
+diff --git a/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp b/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp
+index d4e7525..5bbe70c 100644
+--- a/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp
++++ b/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp
+@@ -26,6 +26,7 @@ extern void AddSC_npc_professions();
+ extern void AddSC_npcs_special();
+ extern void AddSC_spell_scripts();
+ extern void AddSC_world_map_scripts();
++extern void AddSC_zelda_companions();
+ extern void AddSC_war_effort();
+ extern void AddSC_scourge_invasion();
+ extern void AddSC_lunar_festival();
+@@ -231,6 +232,7 @@ void AddScripts()
+     AddSC_npcs_special();
+     AddSC_spell_scripts();
+     AddSC_world_map_scripts();
++    AddSC_zelda_companions();
+     AddSC_war_effort();
+     AddSC_scourge_invasion();
+     AddSC_lunar_festival();
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
 index ffa25ba..ea8cbc6 100644
 --- a/src/game/Chat/Chat.cpp
@@ -39,10 +774,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..e79bcb5
+index 0000000..e6586ae
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,816 @@
+@@ -0,0 +1,1116 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -82,8 +817,16 @@ index 0000000..e79bcb5
 +#include "Entities/GameObject.h"
 +#include "Server/DBCStores.h"
 +#include "Server/SQLStorages.h"
++#include "Reputation/ReputationMgr.h"
++#include "Database/DatabaseEnv.h"
++#include "Globals/ObjectMgr.h"
++#include "Log/Log.h"
 +#include <array>
 +#include <cctype>
++#include <filesystem>
++#include <fstream>
++#include <set>
++#include <sstream>
 +#include <string>
 +
 +#include <algorithm>
@@ -106,6 +849,10 @@ index 0000000..e79bcb5
 +        bool shield = false;
 +        uint32 shoutCheckIn = 0;
 +        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
++        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper)
++        uint32 followerEntry[4] = { 0, 0, 0, 0 };
++        ObjectGuid followerGuid[4];
++        uint32 followerBackAt[4] = { 0, 0, 0, 0 };   // after she falls, she rejoins at this time
 +    };
 +
 +    // Commands run on the session's thread and damage on map threads, so the table is locked.
@@ -274,6 +1021,159 @@ index 0000000..e79bcb5
 +    return rate;
 +}
 +
++namespace
++{
++    // ------------------------------------------------------------------ cross-faction friendship
++    // Every faction that stands with the other side (its cities, guards, vendors, flight masters)
++    // is forced friendly for the hero, so Alliance and Horde can walk, talk and trade together.
++    std::set<uint32> const& OppositeFactions(Team team)
++    {
++        static std::set<uint32> horde, alliance;
++        static std::once_flag once;
++        std::call_once(once, []()
++        {
++            for (uint32 i = 0; i < sFactionTemplateStore.GetNumRows(); ++i)
++            {
++                FactionTemplateEntry const* t = sFactionTemplateStore.LookupEntry(i);
++                if (!t || !t->faction)
++                    continue;
++                bool const isHorde = (t->factionGroupMask & FACTION_GROUP_MASK_HORDE) ||
++                    ((t->friendGroupMask & FACTION_GROUP_MASK_HORDE) && (t->enemyGroupMask & FACTION_GROUP_MASK_ALLIANCE));
++                bool const isAlliance = (t->factionGroupMask & FACTION_GROUP_MASK_ALLIANCE) ||
++                    ((t->friendGroupMask & FACTION_GROUP_MASK_ALLIANCE) && (t->enemyGroupMask & FACTION_GROUP_MASK_HORDE));
++                if (isHorde && !isAlliance)
++                    horde.insert(t->faction);
++                else if (isAlliance && !isHorde)
++                    alliance.insert(t->faction);
++            }
++        });
++        return team == ALLIANCE ? horde : alliance;
++    }
++
++    void ApplyCrossFaction(Player* player)
++    {
++        static bool const crossFaction = sConfig.GetBoolDefault("Zelda.CrossFaction", true);
++        if (!crossFaction)
++            return;
++        ReputationMgr& rep = player->GetReputationMgr();
++        for (uint32 faction : OppositeFactions(player->GetTeam()))
++            rep.ApplyForceReaction(faction, REP_FRIENDLY, true);
++        rep.SendForceReactions();
++    }
++
++    // ------------------------------------------------------------------ the companions' chapters
++    // zelda_stage: which spawn of a companion a hero can see, by quest progress. A state of 0 means
++    // "taken (or done)", 1 means "rewarded".
++    struct StageRule
++    {
++        uint32 showQuest = 0;
++        uint8 showState = 1;
++        uint32 hideQuest = 0;
++        uint8 hideState = 1;
++    };
++    std::unordered_map<uint32, StageRule> s_stages;
++
++    bool QuestReached(Player const* player, uint32 quest, uint8 state)
++    {
++        if (player->GetQuestRewardStatus(quest))
++            return true;
++        if (state == 0)
++            return player->GetQuestStatus(quest) != QUEST_STATUS_NONE;
++        return false;
++    }
++
++    uint32 const COMPANION_COUNT = 4;
++}
++
++void ZeldaLoadStages()
++{
++    s_stages.clear();
++    auto result = WorldDatabase.Query("SELECT entry, show_quest, show_state, hide_quest, hide_state FROM zelda_stage");
++    if (!result)
++    {
++        sLog.outString(">> Zelda: no companion stages loaded");
++        return;
++    }
++    do
++    {
++        Field* f = result->Fetch();
++        StageRule rule;
++        rule.showQuest = f[1].GetUInt32();
++        rule.showState = f[2].GetUInt8();
++        rule.hideQuest = f[3].GetUInt32();
++        rule.hideState = f[4].GetUInt8();
++        s_stages[f[0].GetUInt32()] = rule;
++    }
++    while (result->NextRow());
++    sLog.outString(">> Zelda: loaded %u companion stages", uint32(s_stages.size()));
++}
++
++bool ZeldaStageHidden(Creature const* creature, Player const* player)
++{
++    if (!creature || !player || creature->IsTemporarySummon())
++        return false;
++    auto itr = s_stages.find(creature->GetEntry());
++    if (itr == s_stages.end())
++        return false;
++    StageRule const& rule = itr->second;
++    if (rule.showQuest && !QuestReached(player, rule.showQuest, rule.showState))
++        return true;
++    if (rule.hideQuest && QuestReached(player, rule.hideQuest, rule.hideState))
++        return true;
++    return false;
++}
++
++void ZeldaFollowerSet(Player* player, uint32 index, uint32 entry, ObjectGuid guid)
++{
++    if (!player || index >= COMPANION_COUNT)
++        return;
++    ZeldaState& state = StateFor(player);
++    // a girl only travels with you once: the copy already at your side goes
++    if (state.followerGuid[index] && state.followerGuid[index] != guid)
++        if (Creature* old = player->GetMap()->GetCreature(state.followerGuid[index]))
++            old->ForcedDespawn();
++    state.followerEntry[index] = entry;
++    state.followerGuid[index] = guid;
++    state.followerBackAt[index] = 0;
++}
++
++void ZeldaFollowerClear(Player* player, uint32 index)
++{
++    if (!player || index >= COMPANION_COUNT)
++        return;
++    ZeldaState& state = StateFor(player);
++    state.followerEntry[index] = 0;
++    state.followerGuid[index] = ObjectGuid();
++}
++
++void ZeldaFollowerDied(Player* player, uint32 index)
++{
++    if (!player || index >= COMPANION_COUNT)
++        return;
++    StateFor(player).followerBackAt[index] = WorldTimer::getMSTime() + 30000;
++}
++
++static void KeepCompanionsClose(Player* player, ZeldaState& state)
++{
++    uint32 const now = WorldTimer::getMSTime();
++    for (uint32 i = 0; i < COMPANION_COUNT; ++i)
++    {
++        if (!state.followerEntry[i])
++            continue;
++        Creature* follower = state.followerGuid[i] ? player->GetMap()->GetCreature(state.followerGuid[i]) : nullptr;
++        if (follower && follower->IsInWorld())
++            continue;                               // with you (alive or fallen)
++        if (state.followerBackAt[i] && now < state.followerBackAt[i])
++            continue;                               // she'll catch up after she recovers
++        // new map, dungeon, or she fell: she rejoins at your side
++        float x, y, z;
++        player->GetNearPoint(player, x, y, z, 0.0f, 2.0f, player->GetOrientation() + M_PI_F);
++        if (Creature* summoned = player->SummonCreature(state.followerEntry[i], x, y, z, player->GetOrientation(), TEMPSPAWN_CORPSE_TIMED_DESPAWN, 10000))
++            state.followerGuid[i] = summoned->GetObjectGuid();
++        state.followerBackAt[i] = 0;
++    }
++}
++
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
 +    if (!player)
@@ -281,16 +1181,13 @@ index 0000000..e79bcb5
 +
 +    ZeldaState& state = StateFor(player);
 +
-+    // the faster run speed takes hold once per login
++    // once per login: the faster run speed, and friends on the other side
 +    if (state.speedAppliedFor != player && player->IsInWorld())
 +    {
 +        state.speedAppliedFor = player;
 +        player->UpdateSpeed(MOVE_RUN, true);
++        ApplyCrossFaction(player);
 +    }
-+
-+    static bool const passiveShout = sConfig.GetBoolDefault("Zelda.PassiveBattleShout", true);
-+    if (!passiveShout)
-+        return;
 +
 +    if (state.shoutCheckIn > diff)
 +    {
@@ -299,7 +1196,13 @@ index 0000000..e79bcb5
 +    }
 +    state.shoutCheckIn = 2000;
 +
-+    if (!player->IsAlive() || player->IsTaxiFlying() || player->IsBeingTeleported())
++    if (!player->IsAlive() || player->IsTaxiFlying() || player->IsBeingTeleported() || !player->IsInWorld())
++        return;
++
++    KeepCompanionsClose(player, state);
++
++    static bool const passiveShout = sConfig.GetBoolDefault("Zelda.PassiveBattleShout", true);
++    if (!passiveShout)
 +        return;
 +
 +    // the best Battle Shout the hero has learned, highest rank first
@@ -328,6 +1231,138 @@ index 0000000..e79bcb5
 +        holder->SetAuraMaxDuration(-1);
 +        holder->SetAuraDuration(-1);
 +        holder->UpdateAuraDuration();
++    }
++}
++
++bool ZeldaAlternateQuestDone(Player const* player, uint32 requiredQuest)
++{
++    // the companions' chapters open the raids the old attunements open
++    switch (requiredQuest)
++    {
++        case 7761: return player->GetQuestRewardStatus(90110);   // Blackwing Lair: Lyra and Onyxia
++        case 7848: return player->GetQuestRewardStatus(90305);   // Molten Core: Durza and Thaurissan
++        case 9378: return player->GetQuestRewardStatus(90405);   // Naxxramas: Vesper and Rivendare
++        default:   return false;
++    }
++}
++
++namespace
++{
++    // splits a .sql file into statements: ';' ends one unless inside a quoted string or comment
++    std::vector<std::string> SplitSql(std::string const& text)
++    {
++        std::vector<std::string> out;
++        std::string cur;
++        char quote = 0;
++        for (size_t i = 0; i < text.size(); ++i)
++        {
++            char c = text[i];
++            if (quote)
++            {
++                cur += c;
++                if (c == '\\' && i + 1 < text.size())
++                {
++                    cur += text[++i];
++                    continue;
++                }
++                if (c == quote)
++                {
++                    if (i + 1 < text.size() && text[i + 1] == quote)
++                    {
++                        cur += text[++i];
++                        continue;
++                    }
++                    quote = 0;
++                }
++                continue;
++            }
++            if (c == '-' && i + 1 < text.size() && text[i + 1] == '-')
++            {
++                while (i < text.size() && text[i] != '\n')
++                    ++i;
++                cur += '\n';
++                continue;
++            }
++            if (c == '\'' || c == '"' || c == '`')
++            {
++                quote = c;
++                cur += c;
++                continue;
++            }
++            if (c == ';')
++            {
++                if (cur.find_first_not_of(" \t\r\n") != std::string::npos)
++                    out.push_back(cur);
++                cur.clear();
++                continue;
++            }
++            cur += c;
++        }
++        if (cur.find_first_not_of(" \t\r\n") != std::string::npos)
++            out.push_back(cur);
++        return out;
++    }
++
++    std::string Fingerprint(std::string const& text)
++    {
++        uint64 h = 1469598103934665603ULL;          // FNV-1a
++        for (unsigned char c : text)
++        {
++            h ^= c;
++            h *= 1099511628211ULL;
++        }
++        std::ostringstream ss;
++        ss << std::hex << h;
++        return ss.str();
++    }
++}
++
++void ZeldaApplyContentSql()
++{
++    namespace fs = std::filesystem;
++    std::string const dir = sConfig.GetStringDefault("Zelda.ContentDir", "zelda-sql");
++    std::error_code ec;
++    if (!fs::is_directory(dir, ec))
++    {
++        sLog.outString(">> Zelda: no content folder '%s'", dir.c_str());
++        return;
++    }
++
++    WorldDatabase.DirectExecute("CREATE TABLE IF NOT EXISTS `zelda_applied` (`name` VARCHAR(190) NOT NULL PRIMARY KEY, `fingerprint` VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8");
++
++    std::vector<fs::path> files;
++    for (auto const& entry : fs::directory_iterator(dir, ec))
++        if (entry.is_regular_file() && entry.path().extension() == ".sql")
++            files.push_back(entry.path());
++    std::sort(files.begin(), files.end());
++
++    for (fs::path const& file : files)
++    {
++        std::ifstream in(file, std::ios::binary);
++        std::stringstream buffer;
++        buffer << in.rdbuf();
++        std::string const text = buffer.str();
++        std::string const name = file.filename().string();
++        std::string const print = Fingerprint(text);
++
++        std::string escapedName = name;
++        WorldDatabase.escape_string(escapedName);
++        if (auto result = WorldDatabase.PQuery("SELECT `fingerprint` FROM `zelda_applied` WHERE `name` = '%s'", escapedName.c_str()))
++            if (result->Fetch()[0].GetCppString() == print)
++                continue;                           // already in the database
++
++        uint32 ok = 0, failed = 0;
++        for (std::string const& statement : SplitSql(text))
++        {
++            if (WorldDatabase.DirectExecute(statement.c_str()))
++                ++ok;
++            else
++                ++failed;
++        }
++        WorldDatabase.DirectPExecute("REPLACE INTO `zelda_applied` (`name`, `fingerprint`) VALUES ('%s', '%s')", escapedName.c_str(), print.c_str());
++        sLog.outString(">> Zelda: applied %s (%u statements, %u failed)", name.c_str(), ok, failed);
++        if (failed)
++            sLog.outError("Zelda: %u statements in %s failed - see the database error log", failed, name.c_str());
 +    }
 +}
 +
@@ -861,10 +1896,10 @@ index 0000000..e79bcb5
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..c3e29e0
+index 0000000..777ba0b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,100 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -876,6 +1911,8 @@ index 0000000..c3e29e0
 +struct ItemPrototype;
 +class Loot;
 +class GameObject;
++class Creature;
++class ObjectGuid;
 +
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
@@ -947,6 +1984,21 @@ index 0000000..c3e29e0
 +// Zelda of Warcraft: damage factor for the hero's ranged weapon shots (Zelda.RangedDamageRate, 2).
 +float ZeldaRangedDamageMultiplier();
 +
++// Zelda of Warcraft - the companions (scripts/world/zelda_companions.cpp) and their story.
++// Applies every .sql file in Zelda.ContentDir (zelda-sql) the world database has not seen yet;
++// called at startup before the world tables load.
++void ZeldaApplyContentSql();
++// Loads zelda_stage: which spawn of a companion is visible at which point of her story.
++void ZeldaLoadStages();
++// True when this companion spawn belongs to a chapter of the story this hero is not at.
++bool ZeldaStageHidden(Creature const* creature, Player const* player);
++// The companions travelling with a hero (index 0 Lyra, 1 Faelin, 2 Durza, 3 Vesper).
++void ZeldaFollowerSet(Player* player, uint32 index, uint32 entry, ObjectGuid guid);
++void ZeldaFollowerClear(Player* player, uint32 index);
++void ZeldaFollowerDied(Player* player, uint32 index);
++// A raid attunement quest the hero may stand in for with a companion's chapter.
++bool ZeldaAlternateQuestDone(Player const* player, uint32 requiredQuest);
++
 +#endif
 diff --git a/src/game/Entities/CharacterHandler.cpp b/src/game/Entities/CharacterHandler.cpp
 index 0656744..40ccbe6 100644
@@ -973,7 +2025,7 @@ index 0656744..40ccbe6 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb..692272f 100644
+index a10fdbb..4a93ecb 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -1004,7 +2056,7 @@ index a10fdbb..692272f 100644
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1269,39 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1269,42 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -1029,6 +2081,9 @@ index a10fdbb..692272f 100644
 +    }
 +    if (!enabled || !creature || creature->IsPet())
 +        return 1.0f;
++    // Zelda of Warcraft: the companions and story characters keep their full strength in dungeons
++    if (creature->GetEntry() >= 190000 && creature->GetEntry() < 191000)
++        return 1.0f;
 +
 +    MapEntry const* mapEntry = sMapStore.LookupEntry(creature->GetMapId());
 +    if (!mapEntry || !mapEntry->IsDungeon())
@@ -1044,7 +2099,7 @@ index a10fdbb..692272f 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1345,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1348,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -1053,7 +2108,7 @@ index a10fdbb..692272f 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1454,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1457,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -1062,6 +2117,17 @@ index a10fdbb..692272f 100644
      if (health < 1)
          health = 1;
  
+@@ -2125,6 +2168,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+     if (IsInvisible())
+         return false;
+ 
++    // Zelda of Warcraft: a companion is only where her story has taken her for this hero
++    if (ZeldaStageHidden(this, pl))
++        return false;
++
+     // Live player (or with not release body see live creatures or death creatures with corpse disappearing time > 0
+     if (pl->IsAlive() || !pl->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+     {
 diff --git a/src/game/Entities/Creature.h b/src/game/Entities/Creature.h
 index a378c4e..f53dd65 100644
 --- a/src/game/Entities/Creature.h
@@ -1137,7 +2203,7 @@ index bf44698..1c413ca 100644
      for (auto i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
      {
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e916..6fc32b9 100644
+index 4d8e916..122593e 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -1230,6 +2296,15 @@ index 4d8e916..6fc32b9 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
+@@ -20032,7 +20064,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+     }
+ 
+     // Quest Requirements
+-    if (at->requiredQuest && !GetQuestRewardStatus(at->requiredQuest))
++    if (at->requiredQuest && !GetQuestRewardStatus(at->requiredQuest) && !ZeldaAlternateQuestDone(this, at->requiredQuest))
+     {
+         miscRequirement = at->requiredQuest;
+         return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
 @@ -20221,6 +20253,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
@@ -1467,3 +2542,35 @@ index 330ad8f..3916c50 100644
      // Special rule for food buffs - TODO: Remove one day
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
+diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
+index e344c52..a9ce0af 100644
+--- a/src/game/World/World.cpp
++++ b/src/game/World/World.cpp
+@@ -21,6 +21,7 @@
+ */
+ 
+ #include "World/World.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Database/DatabaseEnv.h"
+ #include "Config/Config.h"
+ #include "Platform/Define.h"
+@@ -870,6 +871,9 @@ void World::SetInitialWorldSettings()
+         exit(1);
+     }
+ 
++    ///- Zelda of Warcraft: new story content (zelda-sql/*.sql) goes into the world database first
++    ZeldaApplyContentSql();
++
+     ///- Loading strings. Getting no records means core load has to be canceled because no error message can be output.
+     sLog.outString("Loading MaNGOS strings...");
+     if (!sObjectMgr.LoadMangosStrings())
+@@ -1100,6 +1104,9 @@ void World::SetInitialWorldSettings()
+     sLog.outString("Loading Quests...");
+     sObjectMgr.LoadQuests();                                // must be loaded after DBCs, creature_template, item_template, gameobject tables
+ 
++    sLog.outString("Loading Zelda companion stages...");
++    ZeldaLoadStages();
++
+     sLog.outString("Loading Quests Relations...");
+     sObjectMgr.LoadQuestRelations();                        // must be after quest load
+     sLog.outString(">>> Quests Relations loaded");
