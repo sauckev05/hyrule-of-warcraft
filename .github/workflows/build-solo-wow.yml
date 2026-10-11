@@ -302,6 +302,8 @@ jobs:
           $c += 'Zelda.GatherLootRate = 5'
           $c += 'Zelda.MineOnce = 1'
           $c += 'Zelda.OwnProfessionReagentsOnly = 1'
+          $c += 'Zelda.AutoSellJunk = 1'
+          $c += 'Zelda.AutoSellWhiteGear = 1'
           $c += 'Zelda.HeartPieceChance = 15'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)

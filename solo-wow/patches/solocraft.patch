@@ -1016,10 +1016,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..261ae00
+index 0000000..c1e7a83
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1516 @@
+@@ -0,0 +1,1569 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2384,6 +2384,59 @@ index 0000000..261ae00
 +    }
 +}
 +
++void ZeldaAutoSellJunk(Player* player)
++{
++    static bool const junk = sConfig.GetBoolDefault("Zelda.AutoSellJunk", true);
++    static bool const whiteGear = sConfig.GetBoolDefault("Zelda.AutoSellWhiteGear", true);
++    if (!player || !junk)
++        return;
++
++    auto isJunk = [](ItemPrototype const* proto)
++    {
++        if (!proto || proto->SellPrice == 0 || proto->StartQuest || proto->Class == ITEM_CLASS_QUEST)
++            return false;
++        if (proto->Quality == ITEM_QUALITY_POOR)
++            return true;
++        // plain white weapons and armor (not shirts, tabards, bags or tools)
++        return whiteGear && proto->Quality == ITEM_QUALITY_NORMAL &&
++               (proto->Class == ITEM_CLASS_WEAPON || proto->Class == ITEM_CLASS_ARMOR) &&
++               proto->InventoryType != INVTYPE_BODY && proto->InventoryType != INVTYPE_TABARD &&
++               proto->InventoryType != INVTYPE_NON_EQUIP;
++    };
++
++    std::vector<Item*> sell;
++    for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
++        if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
++            if (isJunk(item->GetProto()))
++                sell.push_back(item);
++    for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
++        if (Bag* bag = dynamic_cast<Bag*>(player->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot)))
++            for (uint32 slot = 0; slot < bag->GetBagSize(); ++slot)
++                if (Item* item = bag->GetItemByPos(uint8(slot)))
++                    if (isJunk(item->GetProto()))
++                        sell.push_back(item);
++    if (sell.empty())
++        return;
++
++    uint32 total = 0, count = 0;
++    for (Item* item : sell)
++    {
++        if (player->GetLootGuid() == item->GetObjectGuid())
++            continue;
++        uint32 const money = item->GetProto()->SellPrice * item->GetCount() * ZeldaSellMultiplier();
++        player->ItemRemovedQuestCheck(item->GetEntry(), item->GetCount());
++        player->RemoveItem(item->GetBagSlot(), item->GetSlot(), true);
++        item->RemoveFromUpdateQueueOf(player);
++        player->AddItemToBuyBackSlot(item, money);
++        player->ModifyMoney(money);
++        total += money;
++        ++count;
++    }
++    if (count)
++        ChatHandler(player).PSendSysMessage("|cffffff00Sold %u junk item%s for %ug %us %uc.|r", count, count == 1 ? "" : "s",
++                                            total / 10000, (total % 10000) / 100, total % 100);
++}
++
 +uint32 ZeldaGatherMultiplier()
 +{
 +    static uint32 const rate = uint32(std::max(1, sConfig.GetIntDefault("Zelda.GatherLootRate", 5)));
@@ -2538,10 +2591,10 @@ index 0000000..261ae00
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..07c2109
+index 0000000..d21620b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,121 @@
+@@ -0,0 +1,124 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -2584,6 +2637,9 @@ index 0000000..07c2109
 +// Crafting: a reagent another profession provides is not needed (zelda_waived_reagent).
 +bool ZeldaReagentWaived(uint32 spellId, uint32 itemId);
 +void ZeldaLoadWaivedReagents();
++// Opening a vendor sells every grey item and every white weapon or armor piece in the bags
++// (Zelda.AutoSellJunk, Zelda.AutoSellWhiteGear); they stay in the buyback tab.
++void ZeldaAutoSellJunk(Player* player);
 +// Loads zelda_itemset_item / zelda_itemset_bonus.
 +void ZeldaLoadItemSets();
 +
@@ -2831,7 +2887,7 @@ index 043cad6..232434e 100644
                      // fish catch or fail and junk allowed (after 3.1.0)
                      if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
 diff --git a/src/game/Entities/ItemHandler.cpp b/src/game/Entities/ItemHandler.cpp
-index bf44698..1c413ca 100644
+index bf44698..ec16cd2 100644
 --- a/src/game/Entities/ItemHandler.cpp
 +++ b/src/game/Entities/ItemHandler.cpp
 @@ -17,6 +17,7 @@
@@ -2869,6 +2925,16 @@ index bf44698..1c413ca 100644
  
      for (auto i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
      {
+@@ -721,6 +722,9 @@ void WorldSession::SendListInventory(ObjectGuid vendorguid) const
+     if (uint32 pauseTimer = pCreature->GetInteractionPauseTimer())
+         pCreature->GetMotionMaster()->PauseWaypoints(pauseTimer);
+ 
++    // Zelda of Warcraft: the junk sells itself the moment a shop opens
++    ZeldaAutoSellJunk(_player);
++
+     VendorItemData const* vItems = pCreature->GetVendorItems();
+     VendorItemData const* tItems = pCreature->GetVendorTemplateItems();
+ 
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
 index 4d8e916..a48bb9c 100644
 --- a/src/game/Entities/Player.cpp
