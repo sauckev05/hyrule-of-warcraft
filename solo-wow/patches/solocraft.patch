@@ -65,10 +65,10 @@ index 20bcff2..a6c8243 100644
  }
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 0000000..cdde6b8
+index 0000000..9a6d0ff
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,873 @@
+@@ -0,0 +1,886 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -250,6 +250,7 @@ index 0000000..cdde6b8
 +
 +    // creature entries: 1901xx Lyra, 1902xx Faelin, 1903xx Durza, 1904xx Vesper; 190101 is Lyra captive
 +    uint32 const LYRA_CAPTIVE = 190101;
++    uint32 const LYRA_FREED   = 190102;      // her Cathedral self, who can travel with the hero
 +    uint32 const QUEST_LYRA_RESCUE = 90102;
 +    uint32 const QUEST_FAELIN_SILITHUS = 90205;
 +    uint32 const QUEST_LYRA_ONYXIA = 90110;
@@ -663,8 +664,20 @@ index 0000000..cdde6b8
 +            player->CLOSE_GOSSIP_MENU();
 +            player->KilledMonsterCredit(LYRA_CAPTIVE, creature->GetObjectGuid());
 +            creature->SetStandState(UNIT_STAND_STATE_STAND);
-+            creature->MonsterSay("Y-you came for me? Thank the Light... thank YOU! The Defias kept talking about a 'lady in the Keep'... I'll tell the Bishop everything. Go, I know the way out!", LANG_UNIVERSAL, player);
++            creature->MonsterSay("Y-you came for me? Thank the Light... thank YOU! The Defias kept talking about a 'lady in the Keep'...", LANG_UNIVERSAL, player);
 +            creature->HandleEmoteCommand(EMOTE_ONESHOT_CRY);
++            // she gets up and stays at the hero's side out of the mine (and after, until sent home)
++            {
++                float x, y, z;
++                player->GetNearPoint(player, x, y, z, 0.0f, 2.0f, player->GetOrientation() + M_PI_F);
++                if (Creature* follower = player->SummonCreature(LYRA_FREED, x, y, z, player->GetOrientation(), TEMPSPAWN_CORPSE_TIMED_DESPAWN, 10000))
++                {
++                    ZeldaFollowerSet(player, uint32(index), follower->GetEntry(), follower->GetObjectGuid());
++                    follower->MonsterSay("I-I'm staying close to you, if that's alright. Let's get out of here - and then the Bishop has to hear about this.", LANG_UNIVERSAL, player);
++                }
++                creature->SetRespawnDelay(600, true);
++                creature->ForcedDespawn(500);
++            }
 +            return true;
 +        case ACTION_FOLLOW:
 +        {

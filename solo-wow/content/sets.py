@@ -25,7 +25,7 @@ BONUS_TEXT = {
     'heal_on_kill': 'Defeating an enemy restores %g%% of your health.',
 }
 
-DROP_CHANCE = 25          # % per kill, every piece from its boss
+DROP_CHANCE = 100         # % per kill: every piece always drops from its boss
 
 # slot -> (InventoryType, stat budget factor)
 SLOTS = {
