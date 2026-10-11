@@ -1016,10 +1016,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..c1e7a83
+index 0000000..4b94bdb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1569 @@
+@@ -0,0 +1,1613 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1057,6 +1057,7 @@ index 0000000..c1e7a83
 +#include "Loot/LootMgr.h"
 +#include "Spells/SpellAuras.h"
 +#include "Entities/GameObject.h"
++#include "Entities/Pet.h"
 +#include "Server/DBCStores.h"
 +#include "Server/SQLStorages.h"
 +#include "Reputation/ReputationMgr.h"
@@ -1102,6 +1103,10 @@ index 0000000..c1e7a83
 +        uint32 runningSince = 0;
 +        bool sprinting = false;
 +        int32 swimStep = -1;                            // breath left, in tenths, the swim speed was set for
++        // where the hero walked into the current dungeon or raid instance
++        uint32 entryMap = 0;
++        uint32 entryInstance = 0;
++        float entryX = 0.0f, entryY = 0.0f, entryZ = 0.0f, entryO = 0.0f;
 +        // armor set bonuses worn right now, by bonus type, and the crit chance given to this login
 +        float setBonus[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 +        float appliedCrit = 0.0f;
@@ -1618,6 +1623,18 @@ index 0000000..c1e7a83
 +                    player->UpdateSpeed(MOVE_RUN, true);
 +            }
 +        }
++    }
++
++    // remember where the hero came into a dungeon or raid: releasing there brings them back to it
++    if (player->IsInWorld() && !player->IsBeingTeleported() && player->IsAlive() && player->GetMap()->IsDungeon() &&
++        (state.entryMap != player->GetMapId() || state.entryInstance != player->GetInstanceId()))
++    {
++        state.entryMap = player->GetMapId();
++        state.entryInstance = player->GetInstanceId();
++        state.entryX = player->GetPositionX();
++        state.entryY = player->GetPositionY();
++        state.entryZ = player->GetPositionZ();
++        state.entryO = player->GetOrientation();
 +    }
 +
 +    // swimming slows as the breath runs out
@@ -2384,6 +2401,33 @@ index 0000000..c1e7a83
 +    }
 +}
 +
++bool ZeldaDungeonRelease(Player* player)
++{
++    static bool const enabled = sConfig.GetBoolDefault("Zelda.DungeonReleaseAtEntrance", true);
++    static float const health = std::min(1.0f, std::max(0.01f, sConfig.GetFloatDefault("Zelda.DungeonReleaseHealth", 0.05f)));
++    if (!enabled || !player || player->IsAlive() || !player->IsInWorld() || !player->GetMap()->IsDungeon())
++        return false;
++
++    ZeldaState& state = StateFor(player);
++    float x, y, z, o;
++    if (state.entryMap == player->GetMapId() && state.entryInstance == player->GetInstanceId())
++    {
++        x = state.entryX; y = state.entryY; z = state.entryZ; o = state.entryO;
++    }
++    else if (AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(player->GetMapId()))
++    {
++        x = at->target_X; y = at->target_Y; z = at->target_Z; o = at->target_Orientation;
++    }
++    else
++        return false;
++
++    player->RemovePet(PET_SAVE_REAGENTS);
++    player->ResurrectPlayer(health);
++    player->NearTeleportTo(x, y, z, o);
++    ChatHandler(player).SendSysMessage("|cff33ff99You wake up at the entrance, battered but alive.|r");
++    return true;
++}
++
 +void ZeldaAutoSellJunk(Player* player)
 +{
 +    static bool const junk = sConfig.GetBoolDefault("Zelda.AutoSellJunk", true);
@@ -2591,10 +2635,10 @@ index 0000000..c1e7a83
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..d21620b
+index 0000000..67857ef
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,127 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -2637,6 +2681,9 @@ index 0000000..d21620b
 +// Crafting: a reagent another profession provides is not needed (zelda_waived_reagent).
 +bool ZeldaReagentWaived(uint32 spellId, uint32 itemId);
 +void ZeldaLoadWaivedReagents();
++// Releasing the spirit inside a dungeon or raid: the hero comes back alive (5% health) where they
++// entered it, instead of as a ghost at the graveyard outside (Zelda.DungeonReleaseAtEntrance).
++bool ZeldaDungeonRelease(Player* player);
 +// Opening a vendor sells every grey item and every white weapon or armor piece in the bags
 +// (Zelda.AutoSellJunk, Zelda.AutoSellWhiteGear); they stay in the buyback tab.
 +void ZeldaAutoSellJunk(Player* player);
@@ -2935,6 +2982,29 @@ index bf44698..ec16cd2 100644
      VendorItemData const* vItems = pCreature->GetVendorItems();
      VendorItemData const* tItems = pCreature->GetVendorTemplateItems();
  
+diff --git a/src/game/Entities/MiscHandler.cpp b/src/game/Entities/MiscHandler.cpp
+index 60cf414..c86aa00 100644
+--- a/src/game/Entities/MiscHandler.cpp
++++ b/src/game/Entities/MiscHandler.cpp
+@@ -16,6 +16,7 @@
+  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+  */
+ 
++#include "Chat/ZeldaCommands.h"
+ #include <zlib.h>
+ #include <utility>
+ 
+@@ -62,6 +63,10 @@ void WorldSession::HandleRepopRequestOpcode(WorldPacket& recv_data)
+         GetPlayer()->KillPlayer();
+     }
+ 
++    // Zelda of Warcraft: in a dungeon or raid the hero gets back up at its entrance instead
++    if (ZeldaDungeonRelease(GetPlayer()))
++        return;
++
+     // this is spirit release confirm?
+     GetPlayer()->RemovePet(PET_SAVE_REAGENTS);
+     GetPlayer()->BuildPlayerRepop();
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
 index 4d8e916..a48bb9c 100644
 --- a/src/game/Entities/Player.cpp
