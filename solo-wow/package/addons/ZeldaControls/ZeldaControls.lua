@@ -21,6 +21,69 @@ function ZeldaControls_Command(cmd)
 	SendChatMessage(cmd, "SAY")
 end
 
+-- The Spin Attack's charge bar: a cast bar (like Slam's) that fills while the sword key is held,
+-- and turns green when the spin is ready to be let go.
+local SPIN_BAR_DELAY = 0.15        -- a quick tap never shows the bar
+local spinBar = CreateFrame("StatusBar", "ZeldaSpinBar", UIParent)
+spinBar:SetWidth(195)
+spinBar:SetHeight(13)
+spinBar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 175)
+spinBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+spinBar:SetMinMaxValues(0, SPIN_HOLD)
+spinBar:SetValue(0)
+spinBar:Hide()
+local spinBg = spinBar:CreateTexture(nil, "BACKGROUND")
+spinBg:SetAllPoints(spinBar)
+spinBg:SetTexture(0, 0, 0, 0.5)
+local spinBorder = spinBar:CreateTexture(nil, "OVERLAY")
+spinBorder:SetTexture("Interface\\CastingBar\\UI-CastingBar-Border")
+spinBorder:SetWidth(256)
+spinBorder:SetHeight(64)
+spinBorder:SetPoint("TOP", spinBar, "TOP", 0, 28)
+local spinSpark = spinBar:CreateTexture(nil, "OVERLAY")
+spinSpark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+spinSpark:SetBlendMode("ADD")
+spinSpark:SetWidth(32)
+spinSpark:SetHeight(32)
+local spinText = spinBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+spinText:SetPoint("TOP", spinBar, "TOP", 0, 5)
+
+local function SpinRageShort()
+	return UnitPowerType("player") == 1 and UnitMana("player") < 50
+end
+
+spinBar:SetScript("OnUpdate", function()
+	if not attackDownAt then
+		this:Hide()
+		return
+	end
+	local held = GetTime() - attackDownAt
+	this:SetValue(math.min(held, SPIN_HOLD))
+	spinSpark:SetPoint("CENTER", this, "LEFT", 195 * math.min(held, SPIN_HOLD) / SPIN_HOLD, 0)
+	if held >= SPIN_HOLD then
+		if SpinRageShort() then
+			this:SetStatusBarColor(0.6, 0.6, 0.6)
+			spinText:SetText("Spin Attack - not enough rage")
+		else
+			this:SetStatusBarColor(0.0, 1.0, 0.0)
+			spinText:SetText("Spin Attack - release!")
+		end
+		spinSpark:Hide()
+	else
+		this:SetStatusBarColor(1.0, 0.7, 0.0)
+		spinText:SetText("Spin Attack")
+		spinSpark:Show()
+	end
+end)
+
+-- shows the bar once the key has been held a moment
+local spinWatch = CreateFrame("Frame", "ZeldaSpinWatch", UIParent)
+spinWatch:SetScript("OnUpdate", function()
+	if attackDownAt and not spinBar:IsVisible() and GetTime() - attackDownAt >= SPIN_BAR_DELAY then
+		spinBar:Show()
+	end
+end)
+
 function ZeldaControls_Attack(state)
 	if state == "down" then
 		attackDownAt = GetTime()
@@ -30,6 +93,7 @@ function ZeldaControls_Attack(state)
 			ZeldaControls_Command(".zspin")
 		end
 		attackDownAt = nil
+		spinBar:Hide()
 	end
 end
 

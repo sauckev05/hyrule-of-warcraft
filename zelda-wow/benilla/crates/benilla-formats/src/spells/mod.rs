@@ -22,6 +22,7 @@ mod radius;
 mod ranges;
 mod soft_float;
 mod tokens;
+mod zelda_waived;
 
 pub use cast_times::{load_spell_cast_times, SpellCastTime, SpellCastTimeCatalog};
 pub use dispel_types::{load_spell_dispel_types, SpellDispelTypes};
@@ -577,10 +578,12 @@ pub fn load_spell_catalog(chain: &mut Chain) -> Result<SpellCatalog> {
                 target_aura_state: u32_at(r, COL_TARGET_AURA_STATE).unwrap_or(0),
                 totems: std::array::from_fn(|i| u32_at(r, COL_TOTEM_1 + i).unwrap_or(0)),
                 reagents: std::array::from_fn(|i| {
-                    (
-                        u32_at(r, COL_REAGENT_1 + i).unwrap_or(0),
-                        u32_at(r, COL_REAGENT_COUNT_1 + i).unwrap_or(0),
-                    )
+                    let item = u32_at(r, COL_REAGENT_1 + i).unwrap_or(0);
+                    // Zelda of Warcraft: another profession's material is not needed.
+                    if zelda_waived::is_waived(id, item) {
+                        return (0, 0);
+                    }
+                    (item, u32_at(r, COL_REAGENT_COUNT_1 + i).unwrap_or(0))
                 }),
                 equipped_item_class: u32_at(r, COL_EQUIPPED_ITEM_CLASS).unwrap_or(0) as i32,
                 equipped_item_subclass_mask: u32_at(r, COL_EQUIPPED_ITEM_SUBCLASS_MASK)

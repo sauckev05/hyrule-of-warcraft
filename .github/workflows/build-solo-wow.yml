@@ -297,6 +297,11 @@ jobs:
           $c += 'Zelda.NaviHealPercent = 25'
           $c += 'Zelda.NaviHealSeconds = 10'
           $c += 'Zelda.NaviReviveMinutes = 5'
+          $c += 'Zelda.SwimSpeedRate = 2'
+          $c += 'Zelda.SwimSpeedOutOfBreath = 0.6'
+          $c += 'Zelda.GatherLootRate = 5'
+          $c += 'Zelda.MineOnce = 1'
+          $c += 'Zelda.OwnProfessionReagentsOnly = 1'
           $c += 'Zelda.HeartPieceChance = 15'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)

@@ -1003,10 +1003,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..e048ed8
+index 0000000..261ae00
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1416 @@
+@@ -0,0 +1,1516 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1088,6 +1088,7 @@ index 0000000..e048ed8
 +        // running: after Zelda.SprintAfterSeconds of running without stopping the hero sprints
 +        uint32 runningSince = 0;
 +        bool sprinting = false;
++        int32 swimStep = -1;                            // breath left, in tenths, the swim speed was set for
 +        // armor set bonuses worn right now, by bonus type, and the crit chance given to this login
 +        float setBonus[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 +        float appliedCrit = 0.0f;
@@ -1238,9 +1239,31 @@ index 0000000..e048ed8
 +    PlaySpellVisual(player, RED_TRAIL_SPELL, hits);
 +}
 +
++namespace
++{
++    // tenths of breath left while holding it underwater (10 = full / breathing air)
++    int32 BreathStep(Player const* player)
++    {
++        MirrorTimer const& breath = player->GetMirrorTimer(MirrorTimer::BREATH);
++        if (!breath.IsActive() || breath.IsRegenerating() || !breath.GetDuration())
++            return 10;
++        return int32(std::ceil(10.0f * float(breath.GetRemaining()) / float(breath.GetDuration())));
++    }
++}
++
 +float ZeldaSpeedFactor(Player* player, uint32 moveType)
 +{
-+    if (moveType != MOVE_RUN || !player)
++    if (!player)
++        return 1.0f;
++    if (moveType == MOVE_SWIM)
++    {
++        // a fast swimmer, who slows down as the breath runs out
++        static float const swimRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.SwimSpeedRate", 2.0f));
++        static float const swimMin = std::max(0.1f, sConfig.GetFloatDefault("Zelda.SwimSpeedOutOfBreath", 0.6f));
++        float const breath = std::min(10, std::max(0, BreathStep(player))) / 10.0f;
++        return swimMin + (swimRate - swimMin) * breath;
++    }
++    if (moveType != MOVE_RUN)
 +        return 1.0f;
 +    if (StateFor(player).shield)
 +        return 0.45f;                           // shield up: a careful walk, whatever the run speed
@@ -1520,7 +1543,16 @@ index 0000000..e048ed8
 +            continue;
 +        Creature* follower = state.followerGuid[i] ? player->GetMap()->GetCreature(state.followerGuid[i]) : nullptr;
 +        if (follower && follower->IsInWorld())
++        {
++            // left far behind (her part of the world went to sleep): she catches up at once
++            if (follower->IsAlive() && !follower->IsInCombat() && !follower->IsWithinDistInMap(player, 50.0f))
++            {
++                float x, y, z;
++                player->GetNearPoint(player, x, y, z, 0.0f, 2.0f, player->GetOrientation() + M_PI_F);
++                follower->NearTeleportTo(x, y, z, player->GetOrientation());
++            }
 +            continue;                               // with you (alive or fallen)
++        }
 +        if (state.followerBackAt[i] && now < state.followerBackAt[i])
 +            continue;                               // she'll catch up after she recovers
 +        // new map, dungeon, or she fell: she rejoins at your side
@@ -1572,6 +1604,31 @@ index 0000000..e048ed8
 +                if (player->IsInWorld())
 +                    player->UpdateSpeed(MOVE_RUN, true);
 +            }
++        }
++    }
++
++    // swimming slows as the breath runs out
++    if (player->IsInWorld())
++    {
++        int32 const step = BreathStep(player);
++        if (step != state.swimStep)
++        {
++            state.swimStep = step;
++            player->UpdateSpeed(MOVE_SWIM, true);
++        }
++    }
++
++    // a flight path: the companions and Navi wait at the other end (they come back on landing)
++    if (player->IsTaxiFlying() && player->IsInWorld())
++    {
++        for (uint32 i = 0; i < COMPANION_COUNT; ++i)
++        {
++            if (!state.followerGuid[i])
++                continue;
++            if (Creature* follower = player->GetMap()->GetCreature(state.followerGuid[i]))
++                follower->ForcedDespawn();
++            state.followerGuid[i] = ObjectGuid();
++            state.followerBackAt[i] = 0;
 +        }
 +    }
 +
@@ -2314,6 +2371,49 @@ index 0000000..e048ed8
 +    }
 +}
 +
++uint32 ZeldaGatherMultiplier()
++{
++    static uint32 const rate = uint32(std::max(1, sConfig.GetIntDefault("Zelda.GatherLootRate", 5)));
++    return rate;
++}
++
++bool ZeldaMineOnce()
++{
++    static bool const once = sConfig.GetBoolDefault("Zelda.MineOnce", true);
++    return once;
++}
++
++bool ZeldaIsGatheringNode(GameObjectInfo const* info)
++{
++    return info && info->type == GAMEOBJECT_TYPE_CHEST && IsGatheringNode(info);
++}
++
++namespace
++{
++    std::set<std::pair<uint32, uint32>> s_waivedReagents;
++}
++
++bool ZeldaReagentWaived(uint32 spellId, uint32 itemId)
++{
++    static bool const enabled = sConfig.GetBoolDefault("Zelda.OwnProfessionReagentsOnly", true);
++    return enabled && !s_waivedReagents.empty() && s_waivedReagents.count({ spellId, itemId }) != 0;
++}
++
++void ZeldaLoadWaivedReagents()
++{
++    s_waivedReagents.clear();
++    if (auto result = WorldDatabase.Query("SELECT spell, item FROM zelda_waived_reagent"))
++    {
++        do
++        {
++            Field* f = result->Fetch();
++            s_waivedReagents.insert({ f[0].GetUInt32(), f[1].GetUInt32() });
++        }
++        while (result->NextRow());
++    }
++    sLog.outString(">> Zelda: %u crafting reagents from other professions waived", uint32(s_waivedReagents.size()));
++}
++
 +void ZeldaChestBonus(Loot* loot, GameObject* chest, Player* opener)
 +{
 +    static int32 const chance = sConfig.GetIntDefault("Zelda.ChestBoEChance", 50);
@@ -2425,10 +2525,10 @@ index 0000000..e048ed8
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..2853c65
+index 0000000..07c2109
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,121 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -2440,6 +2540,7 @@ index 0000000..2853c65
 +struct ItemPrototype;
 +class Loot;
 +class GameObject;
++struct GameObjectInfo;
 +class Creature;
 +class ObjectGuid;
 +
@@ -2462,6 +2563,14 @@ index 0000000..2853c65
 +float ZeldaCritDamageFactor(Unit const* attacker);
 +void ZeldaAfterMeleeHit(Unit* attacker, Unit* victim, bool hit);
 +void ZeldaOnKill(Player* killer, Creature* victim);
++// Gathering: how many times the normal herbs, ore, leather, fish and enchanting materials
++// (Zelda.GatherLootRate, 5); a mining vein gives one load and is gone (Zelda.MineOnce).
++uint32 ZeldaGatherMultiplier();
++bool ZeldaMineOnce();
++bool ZeldaIsGatheringNode(GameObjectInfo const* info);
++// Crafting: a reagent another profession provides is not needed (zelda_waived_reagent).
++bool ZeldaReagentWaived(uint32 spellId, uint32 itemId);
++void ZeldaLoadWaivedReagents();
 +// Loads zelda_itemset_item / zelda_itemset_bonus.
 +void ZeldaLoadItemSets();
 +
@@ -2872,6 +2981,18 @@ index 4d8e916..a48bb9c 100644
      bool haveToSendEvent = false;
      bool wasPermanent = false;
      uint32 oldItemId = 0;
+diff --git a/src/game/Entities/Player.h b/src/game/Entities/Player.h
+index 010b003..9c00f68 100644
+--- a/src/game/Entities/Player.h
++++ b/src/game/Entities/Player.h
+@@ -2004,6 +2004,7 @@ class Player : public Unit
+         void SetWaterBreathingIntervalMultiplier(float multiplier);
+ 
+         void SendMirrorTimers(bool forced = false);
++        MirrorTimer const& GetMirrorTimer(MirrorTimer::Type type) const { return m_mirrorTimers[type]; }
+ 
+         uint32 EnvironmentalDamage(EnvironmentalDamageType type, uint32 damage);
+ 
 diff --git a/src/game/Entities/StatSystem.cpp b/src/game/Entities/StatSystem.cpp
 index 70b4e7d..45ee880 100644
 --- a/src/game/Entities/StatSystem.cpp
@@ -2998,7 +3119,7 @@ index 00986af..55aa839 100644
              speed *= sWorld.getConfig(((Player*)this)->InBattleGround() ? CONFIG_FLOAT_GHOST_RUN_SPEED_BG : CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD);
      }
 diff --git a/src/game/Loot/LootMgr.cpp b/src/game/Loot/LootMgr.cpp
-index 79b2664..8201621 100644
+index 79b2664..29de7bb 100644
 --- a/src/game/Loot/LootMgr.cpp
 +++ b/src/game/Loot/LootMgr.cpp
 @@ -17,6 +17,7 @@
@@ -3022,7 +3143,62 @@ index 79b2664..8201621 100644
  
      ItemPrototype const* pProto = ObjectMgr::GetItemPrototype(itemid);
  
-@@ -1844,7 +1850,11 @@ Loot::Loot(Player* player, GameObject* gameObject, LootType type) :
+@@ -1274,8 +1280,8 @@ void Loot::Release(Player* player)
+                     uint32 go_max = go->GetGOInfo()->chest.maxSuccessOpens;
+                     bool refill = false;
+ 
+-                    // only vein pass this check
+-                    if (go_min != 0 && go_max > go_min)
++                    // only vein pass this check (Zelda of Warcraft: a vein is mined once, then gone)
++                    if (go_min != 0 && go_max > go_min && !ZeldaMineOnce())
+                     {
+                         float amount_rate = sWorld.getConfig(CONFIG_FLOAT_RATE_MINING_AMOUNT);
+                         float min_amount = go_min * amount_rate;
+@@ -1670,6 +1676,19 @@ void Loot::SetGroupLootRight(Player* player)
+     m_lootMethod = NOT_GROUP_TYPE_LOOT;
+ }
+ 
++void Loot::ZeldaMultiplyCounts(uint32 factor)
++{
++    if (factor <= 1)
++        return;
++    for (LootItem* item : m_lootItems)
++    {
++        if (!item || !item->itemProto || item->itemProto->GetMaxStackSize() <= 1)
++            continue;
++        uint32 const maxStack = std::min<uint32>(255, item->itemProto->GetMaxStackSize());
++        item->count = uint8(std::min<uint32>(maxStack, uint32(item->count) * factor));
++    }
++}
++
+ Loot::Loot(Player* player, Creature* creature, LootType type) :
+     m_lootTarget(nullptr), m_itemTarget(nullptr), m_gold(0), m_maxSlot(0), m_lootType(type),
+     m_clientLootType(CLIENT_LOOT_CORPSE), m_lootMethod(NOT_GROUP_TYPE_LOOT), m_threshold(ITEM_QUALITY_UNCOMMON), m_maxEnchantSkill(0), m_haveItemOverThreshold(false),
+@@ -1766,6 +1785,7 @@ Loot::Loot(Player* player, Creature* creature, LootType type) :
+                 sLog.outError("Loot::CreateLoot> cannot create skinning loot, FillLoot failed with loot id(%u)!", creatureInfo->SkinningLootId);
+                 return;
+             }
++            ZeldaMultiplyCounts(ZeldaGatherMultiplier());   // Zelda of Warcraft: more leather
+             break;
+         }
+         default:
+@@ -1822,6 +1842,7 @@ Loot::Loot(Player* player, GameObject* gameObject, LootType type) :
+                 // Entry 0 in fishing loot template used for store junk fish loot at fishing fail it junk allowed by config option
+                 // this is overwrite fishinghole loot for example
+                 FillLoot(0, LootTemplates_Fishing, player, true);
++                ZeldaMultiplyCounts(ZeldaGatherMultiplier());
+                 break;
+             }
+             case LOOT_FISHING:
+@@ -1837,6 +1858,7 @@ Loot::Loot(Player* player, GameObject* gameObject, LootType type) :
+                 if (!FillLoot(subzone, LootTemplates_Fishing, player, true, (subzone != zone)) && subzone != zone)
+                     // else use zone loot (if zone diff. from subzone, must exist in like case)
+                     FillLoot(zone, LootTemplates_Fishing, player, true);
++                ZeldaMultiplyCounts(ZeldaGatherMultiplier());   // Zelda of Warcraft: more fish
+                 break;
+             }
+             default:
+@@ -1844,10 +1866,17 @@ Loot::Loot(Player* player, GameObject* gameObject, LootType type) :
                  if (uint32 lootid = gameObject->GetGOInfo()->GetLootId())
                  {
                      if (gameObject->GetGOInfo()->type == GAMEOBJECT_TYPE_CHEST)
@@ -3034,6 +3210,34 @@ index 79b2664..8201621 100644
  
                      SetGroupLootRight(player);
                      FillLoot(lootid, LootTemplates_Gameobject, player, false);
++                    // Zelda of Warcraft: herbs, ore and fishing pools give several times as much
++                    if (ZeldaIsGatheringNode(gameObject->GetGOInfo()) || m_lootType == LOOT_FISHINGHOLE)
++                        ZeldaMultiplyCounts(ZeldaGatherMultiplier());
+                     GenerateMoneyLoot(gameObject->GetGOInfo()->MinMoneyLoot, gameObject->GetGOInfo()->MaxMoneyLoot);
+ 
+                     if (m_lootType == LOOT_FISHINGHOLE)
+@@ -1940,6 +1969,7 @@ Loot::Loot(Player* player, Item* item, LootType type) :
+     {
+         case LOOT_DISENCHANTING:
+             FillLoot(item->GetProto()->DisenchantID, LootTemplates_Disenchant, player, true);
++            ZeldaMultiplyCounts(ZeldaGatherMultiplier());   // Zelda of Warcraft: more dust and essences
+             item->SetLootState(ITEM_LOOT_TEMPORARY);
+             break;
+         default:
+diff --git a/src/game/Loot/LootMgr.h b/src/game/Loot/LootMgr.h
+index 2375fd9..917034e 100644
+--- a/src/game/Loot/LootMgr.h
++++ b/src/game/Loot/LootMgr.h
+@@ -403,6 +403,9 @@ class Loot
+         {}
+         void Clear();
+         bool IsLootedForAll() const;
++        // Zelda of Warcraft: gathering, fishing and disenchanting give several times as much
++        // (stackable items only, up to a full stack).
++        void ZeldaMultiplyCounts(uint32 factor);
+         void SendReleaseFor(ObjectGuid const& guid);
+         void SendReleaseFor(Player* plr);
+         void SendReleaseForAll();
 diff --git a/src/game/MotionGenerators/MotionMaster.cpp b/src/game/MotionGenerators/MotionMaster.cpp
 index 68dc674..d91ad2b 100644
 --- a/src/game/MotionGenerators/MotionMaster.cpp
@@ -3076,7 +3280,7 @@ index 09b927f..065c305 100644
          MovementGeneratorType GetCurrentMovementGeneratorType() const;
  
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c5..a950e6d 100644
+index bf5c5c5..15f0fe9 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -3098,6 +3302,26 @@ index bf5c5c5..a950e6d 100644
      InitializeDamageMultipliers();
  
      OnCast();
+@@ -4450,6 +4455,9 @@ void Spell::TakeReagents()
+     {
+         if (m_spellInfo->Reagent[x] <= 0)
+             continue;
++        // Zelda of Warcraft: a craft only takes its own profession's materials
++        if (ZeldaReagentWaived(m_spellInfo->Id, uint32(m_spellInfo->Reagent[x])))
++            continue;
+ 
+         uint32 itemid = m_spellInfo->Reagent[x];
+         uint32 itemcount = m_spellInfo->ReagentCount[x];
+@@ -6565,6 +6573,9 @@ SpellCastResult Spell::CheckItems()
+             {
+                 if (m_spellInfo->Reagent[i] <= 0)
+                     continue;
++                // Zelda of Warcraft: a craft only needs its own profession's materials
++                if (ZeldaReagentWaived(m_spellInfo->Id, uint32(m_spellInfo->Reagent[i])))
++                    continue;
+ 
+                 uint32 itemid    = m_spellInfo->Reagent[i];
+                 uint32 itemcount = m_spellInfo->ReagentCount[i];
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
 index a9fb230..e130970 100644
 --- a/src/game/Spells/SpellEffects.cpp
@@ -3178,7 +3402,7 @@ index 330ad8f..3916c50 100644
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
 diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
-index e344c52..977bb36 100644
+index e344c52..26b0de7 100644
 --- a/src/game/World/World.cpp
 +++ b/src/game/World/World.cpp
 @@ -21,6 +21,7 @@
@@ -3199,13 +3423,14 @@ index e344c52..977bb36 100644
      ///- Loading strings. Getting no records means core load has to be canceled because no error message can be output.
      sLog.outString("Loading MaNGOS strings...");
      if (!sObjectMgr.LoadMangosStrings())
-@@ -1100,6 +1104,10 @@ void World::SetInitialWorldSettings()
+@@ -1100,6 +1104,11 @@ void World::SetInitialWorldSettings()
      sLog.outString("Loading Quests...");
      sObjectMgr.LoadQuests();                                // must be loaded after DBCs, creature_template, item_template, gameobject tables
  
 +    sLog.outString("Loading Zelda companion stages...");
 +    ZeldaLoadStages();
 +    ZeldaLoadItemSets();
++    ZeldaLoadWaivedReagents();
 +
      sLog.outString("Loading Quests Relations...");
      sObjectMgr.LoadQuestRelations();                        // must be after quest load
