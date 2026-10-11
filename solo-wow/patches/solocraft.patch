@@ -1016,10 +1016,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..4b94bdb
+index 0000000..27ba2de
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1613 @@
+@@ -0,0 +1,1639 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1103,6 +1103,9 @@ index 0000000..4b94bdb
 +        uint32 runningSince = 0;
 +        bool sprinting = false;
 +        int32 swimStep = -1;                            // breath left, in tenths, the swim speed was set for
++        // the five-player dungeon the hero is in (0 outside); leaving it resets it
++        uint32 inDungeonMap = 0;
++        bool pendingDungeonReset = false;
 +        // where the hero walked into the current dungeon or raid instance
 +        uint32 entryMap = 0;
 +        uint32 entryInstance = 0;
@@ -1623,6 +1626,16 @@ index 0000000..4b94bdb
 +                    player->UpdateSpeed(MOVE_RUN, true);
 +            }
 +        }
++    }
++
++    // leaving a five-player dungeon resets it (raids keep their weekly lockout)
++    if (player->IsInWorld() && !player->IsBeingTeleported())
++    {
++        MapEntry const* entry = sMapStore.LookupEntry(player->GetMapId());
++        uint32 const dungeon = (entry && entry->map_type == MAP_INSTANCE) ? player->GetMapId() : 0;
++        if (state.inDungeonMap && state.inDungeonMap != dungeon)
++            state.pendingDungeonReset = true;
++        state.inDungeonMap = dungeon;
 +    }
 +
 +    // remember where the hero came into a dungeon or raid: releasing there brings them back to it
@@ -2401,6 +2414,19 @@ index 0000000..4b94bdb
 +    }
 +}
 +
++void ZeldaWorldThreadUpdate(Player* player)
++{
++    static bool const resetOnLeave = sConfig.GetBoolDefault("Zelda.ResetDungeonsOnLeave", true);
++    if (!player || !player->IsInWorld() || player->IsBeingTeleported())
++        return;
++    ZeldaState& state = StateFor(player);
++    if (!state.pendingDungeonReset)
++        return;
++    state.pendingDungeonReset = false;
++    if (resetOnLeave && !state.inDungeonMap && !player->GetMap()->IsDungeon() && !player->GetGroup())
++        player->ResetInstances(INSTANCE_RESET_ALL);
++}
++
 +bool ZeldaDungeonRelease(Player* player)
 +{
 +    static bool const enabled = sConfig.GetBoolDefault("Zelda.DungeonReleaseAtEntrance", true);
@@ -2635,10 +2661,10 @@ index 0000000..4b94bdb
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..67857ef
+index 0000000..a614a6d
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,130 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -2681,6 +2707,9 @@ index 0000000..67857ef
 +// Crafting: a reagent another profession provides is not needed (zelda_waived_reagent).
 +bool ZeldaReagentWaived(uint32 spellId, uint32 itemId);
 +void ZeldaLoadWaivedReagents();
++// Called from the world thread (no map is updating): a hero who just left a five-player dungeon
++// gets it reset, so it is fresh the next time (Zelda.ResetDungeonsOnLeave).
++void ZeldaWorldThreadUpdate(Player* player);
 +// Releasing the spirit inside a dungeon or raid: the hero comes back alive (5% health) where they
 +// entered it, instead of as a ghost at the graveyard outside (Zelda.DungeonReleaseAtEntrance).
 +bool ZeldaDungeonRelease(Player* player);
@@ -3551,7 +3580,7 @@ index 330ad8f..3916c50 100644
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
 diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
-index e344c52..26b0de7 100644
+index e344c52..80c4897 100644
 --- a/src/game/World/World.cpp
 +++ b/src/game/World/World.cpp
 @@ -21,6 +21,7 @@
@@ -3584,3 +3613,16 @@ index e344c52..26b0de7 100644
      sLog.outString("Loading Quests Relations...");
      sObjectMgr.LoadQuestRelations();                        // must be after quest load
      sLog.outString(">>> Quests Relations loaded");
+@@ -2173,7 +2182,12 @@ void World::UpdateSessions(uint32 diff)
+             delete pSession;
+         }
+         else
++        {
++            // Zelda of Warcraft: work that touches other maps, done while no map is updating
++            if (Player* player = pSession->GetPlayer())
++                ZeldaWorldThreadUpdate(player);
+             ++itr;
++        }
+     }
+ }
+ 
