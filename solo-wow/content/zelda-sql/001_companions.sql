@@ -11,11 +11,11 @@ CREATE TABLE IF NOT EXISTS `zelda_stage` (
 
 DELETE FROM `zelda_stage`;
 
-DELETE FROM `creature` WHERE `id` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190701,190601);
+DELETE FROM `creature` WHERE `id` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190601,190701);
 
-DELETE FROM `creature_template` WHERE `Entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190701,190601);
+DELETE FROM `creature_template` WHERE `Entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190601,190701);
 
-DELETE FROM `creature_template_addon` WHERE `entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190701,190601);
+DELETE FROM `creature_template_addon` WHERE `entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190601,190701);
 
 DELETE FROM `creature_questrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90106,90107,90108,90109,90110,90111,90201,90202,90203,90204,90205,90206,90207,90301,90302,90303,90304,90305,90306,90401,90402,90403,90404,90405,90406,90501,90502,90503,90504,90505,90506,90507,90508,90509,90510,90511,90512,90513,90514,90515);
 
@@ -52,7 +52,6 @@ INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,
 (190402,'Vesper Duskhollow','Forsaken Warlock',38,38,10550,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
 (190403,'Vesper Duskhollow','Forsaken Warlock',56,56,10550,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
 (190404,'Vesper Duskhollow','Forsaken Warlock',60,60,10550,100,35,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,11055,0,'','npc_zelda_companion'),
-(190701,'Elara Starfall','Wandering Mage',25,25,3292,100,250,1.0,7,3,3,3,0,1.0,1.14286,8,0,1.5,2.0,1.0,1.0,0,2000,2000,5497,0,'','npc_zelda_companion'),
 (190601,'Navi','Fairy of the Lost Woods',10,10,10045,100,35,0.6,7,4,3,3,2,1.0,1.14286,8,0,1.0,1.0,1.0,1.0,0,2000,2000,0,0,'','npc_zelda_navi');
 
 INSERT INTO `creature` (`guid`,`id`,`map`,`spawnMask`,`position_x`,`position_y`,`position_z`,`orientation`,`spawntimesecsmin`,`spawntimesecsmax`,`spawndist`,`MovementType`) VALUES
@@ -76,13 +75,12 @@ INSERT INTO `creature` (`guid`,`id`,`map`,`spawnMask`,`position_x`,`position_y`,
 (9100018,190402,0,1,548.0,1590.5,130.1,0.8,60,60,2,1),
 (9100019,190403,0,1,1764.5,-726.5,60.0,2.5,60,60,2,1),
 (9100020,190404,0,1,2307.5,-5352.5,91.7,2.4,60,60,2,1),
-(9100021,190701,0,1,-9460.0,62.0,56.6,1.5,60,60,0,0),
-(9100022,190601,0,1,-8930.5,-133.0,83.4,4.0,60,60,2,1),
-(9100023,190601,0,1,-6211.5,331.5,383.7,4.0,60,60,2,1),
-(9100024,190601,1,1,10325.5,829.5,1326.5,5.5,60,60,2,1),
-(9100025,190601,1,1,-603.5,-4248.0,38.9,3.3,60,60,2,1),
-(9100026,190601,1,1,-2909.0,-254.0,53.0,3.5,60,60,2,1),
-(9100027,190601,0,1,1682.5,1671.0,135.8,3.8,60,60,2,1);
+(9100021,190601,0,1,-8930.5,-133.0,83.4,4.0,60,60,2,1),
+(9100022,190601,0,1,-6211.5,331.5,383.7,4.0,60,60,2,1),
+(9100023,190601,1,1,10325.5,829.5,1326.5,5.5,60,60,2,1),
+(9100024,190601,1,1,-603.5,-4248.0,38.9,3.3,60,60,2,1),
+(9100025,190601,1,1,-2909.0,-254.0,53.0,3.5,60,60,2,1),
+(9100026,190601,0,1,1682.5,1671.0,135.8,3.8,60,60,2,1);
 
 INSERT INTO `creature_template_addon` (`entry`,`mount`,`stand_state`,`sheath_state`,`emote`,`moveflags`,`auras`) VALUES
 (190101,0,8,0,0,0,NULL);
@@ -101,8 +99,6 @@ INSERT INTO `npc_text` (`ID`,`text0_0`,`text0_1`,`lang0`,`prob0`,`em0_0`,`em0_1`
 (900310,'I''m Durza. My mother was the finest fire-speaker in Durotar. A fire spirit went mad and took her, and the elders said ''the elements are in balance''. BALANCE.$B$BNow the fire won''t listen to me, the earth groans in Desolace and something under Blackrock Mountain is screaming. Everyone says I''m too angry.$B$B...Maybe. But someone has to find out who is making the elements suffer. And hit them.','I''m Durza. My mother was the finest fire-speaker in Durotar. A fire spirit went mad and took her, and the elders said ''the elements are in balance''. BALANCE.$B$BNow the fire won''t listen to me, the earth groans in Desolace and something under Blackrock Mountain is screaming. Everyone says I''m too angry.$B$B...Maybe. But someone has to find out who is making the elements suffer. And hit them.',0,1,0,1),
 (900401,'Hello, living thing. Or not-quite-living thing. I don''t judge. Much.','Hello, living thing. Or not-quite-living thing. I don''t judge. Much.',0,1,0,1),
 (900410,'Vesper. I died in Lordaeron when the plague came, and I woke up in a field of corpses, which I found... clarifying.$B$BThe Scourge took everything. My family, my name, my favorite cloak. I study the shadows because they are the only thing the Lich King cannot command.$B$BOne day I will stand in his floating necropolis and tell his lieutenant exactly what I think of him. It will be a long speech.','Vesper. I died in Lordaeron when the plague came, and I woke up in a field of corpses, which I found... clarifying.$B$BThe Scourge took everything. My family, my name, my favorite cloak. I study the shadows because they are the only thing the Lich King cannot command.$B$BOne day I will stand in his floating necropolis and tell his lieutenant exactly what I think of him. It will be a long speech.',0,1,0,1),
-(900701,'Oh, hello! Elara Starfall, mage, adventurer, and occasional accidental arsonist. Lovely to meet you!','Oh, hello! Elara Starfall, mage, adventurer, and occasional accidental arsonist. Lovely to meet you!',0,1,0,1),
-(900710,'I''m a mage of the Stormwind Mage Quarter - well, technically I''m ''on sabbatical'', which is what the Kirin Tor call it when you set fire to a library. A small library. A very flammable one.$B$BSo now I walk! Goldshire, the Tower of Azora, Lakeshire, Darkshire, Sentinel Hill... I keep notes on everything: the rocks, the birds, the gnolls, the pie. Especially the pie.$B$BIf you ever want company on the road, just ask. I''m very good with fire. And with talking. Mostly with talking.','I''m a mage of the Stormwind Mage Quarter - well, technically I''m ''on sabbatical'', which is what the Kirin Tor call it when you set fire to a library. A small library. A very flammable one.$B$BSo now I walk! Goldshire, the Tower of Azora, Lakeshire, Darkshire, Sentinel Hill... I keep notes on everything: the rocks, the birds, the gnolls, the pie. Especially the pie.$B$BIf you ever want company on the road, just ask. I''m very good with fire. And with talking. Mostly with talking.',0,1,0,1),
 (900601,'Hey! Listen! ...Oh! You can hear me? Nobody ever hears me!','Hey! Listen! ...Oh! You can hear me? Nobody ever hears me!',0,1,0,1),
 (900610,'I''m Navi! A long, long time ago I was a priestess of Elune. Now I''m a wisp. It''s a long story. Okay, it''s a short story, but it''s sad, so I don''t tell it.$B$BI''m looking for a hero. He wore green, he carried a sword that sang, and he got LOST. Very, very lost. His name was Linken.$B$BUntil I find him... I''ll look after you instead! Hey! Listen! That''s my job now!','I''m Navi! A long, long time ago I was a priestess of Elune. Now I''m a wisp. It''s a long story. Okay, it''s a short story, but it''s sad, so I don''t tell it.$B$BI''m looking for a hero. He wore green, he carried a sword that sang, and he got LOST. Very, very lost. His name was Linken.$B$BUntil I find him... I''ll look after you instead! Hey! Listen! That''s my job now!',0,1,0,1),
 (900100,'*A young woman in torn acolyte robes is huddled against the hull, wrists bound with rope.*$B$BP-please... are you with the Defias? You don''t look like the Defias. You look... kind.','*A young woman in torn acolyte robes is huddled against the hull, wrists bound with rope.*$B$BP-please... are you with the Defias? You don''t look like the Defias. You look... kind.',0,1,0,1),
@@ -135,7 +131,6 @@ INSERT INTO `zelda_stage` (`entry`,`show_quest`,`show_state`,`hide_quest`,`hide_
 (190402,90403,0,90404,0),
 (190403,90404,0,90405,0),
 (190404,90405,0,0,1),
-(190701,0,1,0,1),
 (190601,0,1,90501,1),
 (1749,0,1,90110,1);
 

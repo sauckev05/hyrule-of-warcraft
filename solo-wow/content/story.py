@@ -81,21 +81,11 @@ COMPANIONS = {
             (190403, 'The Bulwark', 56, (0, 1764.5, -726.5, 60.0, 2.5), 2, (90404, 0), (90405, 0)),
             (190404, "Light's Hope Chapel", 60, (0, 2307.5, -5352.5, 91.7, 2.4), 2, (90405, 0), (0, 1)),
         ]),
-    'elara': dict(
-        name='Elara Starfall', subname='Wandering Mage', display=3292, equipment=5497, unit_class=8,
-        faction=250, text_base=900700,     # friendly to every hero, at war with monsters
-        greeting="Oh, hello! Elara Starfall, mage, adventurer, and occasional accidental arsonist. Lovely to meet you!",
-        about="I'm a mage of the Stormwind Mage Quarter - well, technically I'm 'on sabbatical', which is what "
-              "the Kirin Tor call it when you set fire to a library. A small library. A very flammable one.$B$B"
-              "So now I walk! Goldshire, the Tower of Azora, Lakeshire, Darkshire, Sentinel Hill... I keep notes on "
-              "everything: the rocks, the birds, the gnolls, the pie. Especially the pie.$B$BIf you ever want "
-              "company on the road, just ask. I'm very good with fire. And with talking. Mostly with talking.",
-        stages=[
-            # she does not stay here: she roams between Goldshire, the Mage Quarter, the Tower of Azora,
-            # Lakeshire, Darkshire and Sentinel Hill on her own (zelda_companions.cpp)
-            (190701, 'Wandering', 25, (0, -9460.0, 62.0, 56.6, 1.5), 0, (0, 1), (0, 1)),
-        ]),
 }
+
+# Creatures that are no longer in the world: Elara Starfall (190701) is now a real character the
+# playerbots AI plays (ZeldaEnsureElaraBot, llm_character_card.txt), not a creature.
+RETIRED_ENTRIES = [190701]
 
 # ------------------------------------------------------------------------------------ items
 # Quest items: (entry, name, display, description, dropped by creature)

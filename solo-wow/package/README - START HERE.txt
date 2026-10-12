@@ -35,6 +35,18 @@ PLAYERBOT COMPANIONS (optional)
      /invite <CharacterName>         (invite it to your party)
   Bots follow you, fight and heal. Whisper "help" to a bot for its commands.
 
+ELARA STARFALL (an AI-played character who talks back)
+  Elara is a real level 25 human mage played by the bot AI. She travels, fights, quests and
+  levels up on her own. To let her talk with her own personality she needs a local AI model:
+    1. Install Ollama from https://ollama.com
+    2. In a command window run:   ollama pull llama3.2:3b
+       (a stronger PC can use llama3.1:8b; then change "llama3.2:3b" in the LLMApiJson line
+        of server\aiplayerbot.conf to match)
+  Talk to her with /say when she is near, or whisper /w Elara anywhere. /invite Elara to travel
+  together. She remembers your conversations, even after the server restarts.
+  Her personality is in server\llm_character_card.txt (one line: Name::description).
+  To remove her: Zelda.ElaraPlayerBot = 0 in mangosd.conf and AiPlayerbot.MinRandomBots = 0, MaxRandomBots = 0 in aiplayerbot.conf.
+
 ACCOUNTS
   PLAYER / PLAYER (normal)  -  ADMINISTRATOR / ADMINISTRATOR (game master)
   New account: in the world-server console window type   account create NAME PASSWORD

@@ -1,0 +1,158 @@
+diff --git a/playerbot/PlayerbotAI.cpp b/playerbot/PlayerbotAI.cpp
+index f5cba54..779ae1b 100644
+--- a/playerbot/PlayerbotAI.cpp
++++ b/playerbot/PlayerbotAI.cpp
+@@ -4,6 +4,7 @@
+ #include <iomanip>
+ 
+ #include "playerbot/AiFactory.h"
++#include "playerbot/ZeldaMemory.h"
+ 
+ #include "MotionGenerators/MovementGenerator.h"
+ #include "Grids/GridNotifiers.h"
+@@ -2117,9 +2118,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
+ 
+                 AiObjectContext* context = aiObjectContext;
+                 std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
++                if (llmContext.empty())
++                    llmContext = zelda_memory::Load(bot->GetGUIDLow(), llmChannel);
+                 llmContext = llmContext + " " + bot->GetName() + ":" + message;
+                 PlayerbotLLMInterface::LimitContext(llmContext, llmContext.size());
+                 SET_AI_VALUE(std::string, "manual string::llmcontext" + llmChannel, llmContext);
++                zelda_memory::Save(bot->GetGUIDLow(), llmChannel, llmContext);
+             }
+         }
+ 
+diff --git a/playerbot/ZeldaMemory.h b/playerbot/ZeldaMemory.h
+new file mode 100644
+index 0000000..35df34c
+--- /dev/null
++++ b/playerbot/ZeldaMemory.h
+@@ -0,0 +1,89 @@
++#pragma once
++
++// Zelda of Warcraft: an AI chat bot keeps what was said to her between server restarts, and a random
++// bot gets her personality from the LLM character card too (the module only loads the card for bots
++// that belong to a player). The conversation is kept in ai_playerbot_db_store under the preset
++// 'zelda', one row per chat channel, so the module's own saving and loading never touch it.
++
++#include "Database/DatabaseEnv.h"
++#include <fstream>
++#include <map>
++#include <mutex>
++#include <string>
++
++namespace zelda_memory
++{
++    inline std::string Key(std::string const& channel)
++    {
++        std::string key = "mem" + channel;
++        if (key.size() > 32)
++            key.resize(32);
++        CharacterDatabase.escape_string(key);
++        return key;
++    }
++
++    inline std::string Load(uint32 guid, std::string const& channel)
++    {
++        std::string const key = Key(channel);
++        auto result = CharacterDatabase.PQuery("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s' LIMIT 1", guid, key.c_str());
++        if (!result)
++            return "";
++        return result->Fetch()[0].GetCppString();
++    }
++
++    inline void Save(uint32 guid, std::string const& channel, std::string text)
++    {
++        if (text.size() > 3900)
++            text = text.substr(text.size() - 3900);
++        std::string const key = Key(channel);
++        CharacterDatabase.escape_string(text);
++        CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'", guid, key.c_str());
++        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '%s')", guid, key.c_str(), text.c_str());
++    }
++
++    // the bot's line in the character card ("Name::personality"), read straight from the file so it
++    // works on the very first start too, before the card has been copied into the database
++    inline std::string PersonalityFromCard(std::string const& botName)
++    {
++        static std::mutex lock;
++        static std::map<std::string, std::string> cards;
++        static bool loaded = false;
++        std::lock_guard<std::mutex> guard(lock);
++        if (!loaded)
++        {
++            loaded = true;
++            for (char const* fileName : { "llm_character_card.txt", "llm_character_card" })
++            {
++                std::ifstream file(fileName);
++                if (!file.is_open())
++                    continue;
++                std::string line;
++                while (std::getline(file, line))
++                {
++                    while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
++                        line.pop_back();
++                    size_t const delim = line.find("::");
++                    if (line.empty() || line[0] == '#' || delim == std::string::npos || delim == 0)
++                        continue;
++                    cards[line.substr(0, delim)] = line.substr(delim + 2);
++                }
++                break;
++            }
++        }
++        auto found = cards.find(botName);
++        return found != cards.end() ? found->second : "";
++    }
++
++    inline std::string Personality(uint32 guid, std::string const& botName)
++    {
++        std::string card = PersonalityFromCard(botName);
++        if (!card.empty())
++            return card;
++        static std::string const prefix = "manual saved string::llmdefaultprompt>";
++        auto result = CharacterDatabase.PQuery("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `key` = 'value' AND `value` LIKE 'manual saved string::llmdefaultprompt>%%' LIMIT 1", guid);
++        if (!result)
++            return "";
++        std::string value = result->Fetch()[0].GetCppString();
++        return value.size() > prefix.size() ? value.substr(prefix.size()) : "";
++    }
++}
+diff --git a/playerbot/strategy/actions/SayAction.cpp b/playerbot/strategy/actions/SayAction.cpp
+index 0f98780..607a92b 100644
+--- a/playerbot/strategy/actions/SayAction.cpp
++++ b/playerbot/strategy/actions/SayAction.cpp
+@@ -8,6 +8,7 @@
+ #include <regex>
+ #include <boost/algorithm/string.hpp>
+ #include "playerbot/PlayerbotLLMInterface.h"
++#include "playerbot/ZeldaMemory.h"
+ 
+ using namespace ai;
+ 
+@@ -526,6 +527,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+             llmChannel = ((chatChannelSource == ChatChannelSource::SRC_WHISPER) ? name : std::to_string(chatChannelSource));
+ 
+         std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
++        if (llmContext.empty())
++            llmContext = zelda_memory::Load(bot->GetGUIDLow(), llmChannel);
+ 
+         if (player)
+         {
+@@ -562,6 +565,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+                 placeholders["<initial message>"] = msg;
+ 
+                 std::string llmPromptCustom = AI_VALUE(std::string, "manual saved string::llmdefaultprompt");
++                if (llmPromptCustom.empty())
++                    llmPromptCustom = zelda_memory::Personality(bot->GetGUIDLow(), bot->GetName());
+ 
+                 std::map<std::string, std::string> jsonFill;
+                 jsonFill["<pre prompt>"] = sPlayerbotAIConfig.llmPrePrompt + " " + llmPromptCustom;
+@@ -663,6 +668,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+                 PlayerbotLLMInterface::LimitContext(llmContext, llmContext.size());
+             }
+             SET_AI_VALUE(std::string, "manual string::llmcontext" + llmChannel, llmContext);
++            zelda_memory::Save(bot->GetGUIDLow(), llmChannel, llmContext);
+ 
+             return;
+         }
