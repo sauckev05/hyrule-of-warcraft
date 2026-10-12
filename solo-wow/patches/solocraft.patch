@@ -65,7 +65,7 @@ index 20bcff2..a6c8243 100644
  }
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 0000000..d55b4e8
+index 0000000..f88a63b
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 @@ -0,0 +1,1150 @@
@@ -677,11 +677,11 @@ index 0000000..d55b4e8
 +
 +    void SayAbout(char const* format, char const* place)
 +    {
-+        if (Player* near = PlayerNear(30.0f))
++        if (Player* listener = PlayerNear(30.0f))      // ("near" is a Windows macro)
 +        {
 +            char text[256];
 +            snprintf(text, sizeof(text), format, place);
-+            m_creature->MonsterSay(text, LANG_UNIVERSAL, near);
++            m_creature->MonsterSay(text, LANG_UNIVERSAL, listener);
 +        }
 +    }
 +
