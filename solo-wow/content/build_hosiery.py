@@ -312,7 +312,7 @@ def build_sql():
     for entry, name, inv, display, tex, icon in items:
         legs = inv == 7
         row = {'entry': entry, 'class': 4, 'subclass': 1, 'name': name, 'displayid': display, 'Quality': 2,
-               'Flags': 0, 'BuyCount': 1, 'BuyPrice': 20000 if legs else 10000, 'SellPrice': 4000 if legs else 2000,
+               'Flags': 0, 'BuyCount': 1, 'BuyPrice': 1, 'SellPrice': 0,
                'InventoryType': inv, 'AllowableClass': -1, 'AllowableRace': -1, 'ItemLevel': 30,
                'RequiredLevel': 1, 'maxcount': 0, 'stackable': 1, 'bonding': 0,
                'description': 'Silk & Lace Boutique. For ladies only.', 'Material': 7, 'sheath': 0,

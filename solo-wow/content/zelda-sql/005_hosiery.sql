@@ -5,21 +5,21 @@ DELETE FROM `npc_vendor` WHERE `entry` = 190660;
 DELETE FROM `creature` WHERE `id` = 190660;
 DELETE FROM `creature_template` WHERE `Entry` = 190660;
 INSERT INTO `item_template` (`entry`,`class`,`subclass`,`name`,`displayid`,`Quality`,`Flags`,`BuyCount`,`BuyPrice`,`SellPrice`,`InventoryType`,`AllowableClass`,`AllowableRace`,`ItemLevel`,`RequiredLevel`,`maxcount`,`stackable`,`bonding`,`description`,`Material`,`sheath`,`armor`,`block`,`MaxDurability`,`itemset`,`DisenchantID`,`stat_type1`,`stat_value1`,`stat_type2`,`stat_value2`,`stat_type3`,`stat_value3`,`stat_type4`,`stat_value4`,`stat_type5`,`stat_value5`,`stat_type6`,`stat_value6`,`stat_type7`,`stat_value7`,`stat_type8`,`stat_value8`,`stat_type9`,`stat_value9`,`stat_type10`,`stat_value10`) VALUES
-(190900,4,1,'Sheer Pantyhose (Black)',60001,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190901,4,1,'Lace-Top Stockings & Garter Belt (Black)',60002,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190902,4,1,'Sheer Hosiery Feet (Black)',60003,2,0,1,10000,2000,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190903,4,1,'Sheer Pantyhose (Light Black, Back Seam)',60004,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190904,4,1,'Lace-Top Stockings & Garter Belt (Light Black, Back Seam)',60005,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190905,4,1,'Sheer Hosiery Feet (Light Black, Back Seam)',60006,2,0,1,10000,2000,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190906,4,1,'Sheer Pantyhose (White)',60007,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190907,4,1,'Lace-Top Stockings & Garter Belt (White)',60008,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190908,4,1,'Sheer Hosiery Feet (White)',60009,2,0,1,10000,2000,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190909,4,1,'Sheer Pantyhose (Red)',60010,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190910,4,1,'Lace-Top Stockings & Garter Belt (Red)',60011,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190911,4,1,'Sheer Hosiery Feet (Red)',60012,2,0,1,10000,2000,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190912,4,1,'Sheer Pantyhose (Blue)',60013,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190913,4,1,'Lace-Top Stockings & Garter Belt (Blue)',60014,2,0,1,20000,4000,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
-(190914,4,1,'Sheer Hosiery Feet (Blue)',60015,2,0,1,10000,2000,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+(190900,4,1,'Sheer Pantyhose (Black)',60001,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190901,4,1,'Lace-Top Stockings & Garter Belt (Black)',60002,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190902,4,1,'Sheer Hosiery Feet (Black)',60003,2,0,1,1,0,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190903,4,1,'Sheer Pantyhose (Light Black, Back Seam)',60004,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190904,4,1,'Lace-Top Stockings & Garter Belt (Light Black, Back Seam)',60005,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190905,4,1,'Sheer Hosiery Feet (Light Black, Back Seam)',60006,2,0,1,1,0,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190906,4,1,'Sheer Pantyhose (White)',60007,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190907,4,1,'Lace-Top Stockings & Garter Belt (White)',60008,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190908,4,1,'Sheer Hosiery Feet (White)',60009,2,0,1,1,0,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190909,4,1,'Sheer Pantyhose (Red)',60010,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190910,4,1,'Lace-Top Stockings & Garter Belt (Red)',60011,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190911,4,1,'Sheer Hosiery Feet (Red)',60012,2,0,1,1,0,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190912,4,1,'Sheer Pantyhose (Blue)',60013,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190913,4,1,'Lace-Top Stockings & Garter Belt (Blue)',60014,2,0,1,1,0,7,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,40,0,45,0,0,3,4,6,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+(190914,4,1,'Sheer Hosiery Feet (Blue)',60015,2,0,1,1,0,8,-1,-1,30,1,0,1,0,'Silk & Lace Boutique. For ladies only.',7,0,28,0,30,0,0,3,2,6,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 
 INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,`DisplayId1`,`DisplayIdProbability1`,`Faction`,`Scale`,`CreatureType`,`InhabitType`,`RegenerateStats`,`NpcFlags`,`UnitFlags`,`SpeedWalk`,`SpeedRun`,`UnitClass`,`Rank`,`HealthMultiplier`,`PowerMultiplier`,`DamageMultiplier`,`ArmorMultiplier`,`ExperienceMultiplier`,`MeleeBaseAttackTime`,`RangedBaseAttackTime`,`EquipmentTemplateId`,`GossipMenuId`,`AIName`,`ScriptName`) VALUES
 (190660,'Celestine Silkwhisper','Silk & Lace Boutique',45,45,5444,100,35,1.0,7,3,3,4,768,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,0,0,'','');
