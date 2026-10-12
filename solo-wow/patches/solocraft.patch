@@ -1280,10 +1280,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..2f5b9d0
+index 0000000..5f3f34f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1751 @@
+@@ -0,0 +1,1755 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2956,16 +2956,17 @@ index 0000000..2f5b9d0
 +        bool placed;            // false: wherever her race starts (the bot AI sends her on her way)
 +        uint32 map;
 +        float x, y, z, o;
++        uint32 zone;
 +    };
 +
 +    ZeldaAiBot const ZELDA_AI_BOTS[] =
 +    {
 +        // Elara Starfall: a human mage with auburn hair
-+        { "Zelda.ElaraPlayerBot", "RNDBOT0", "Elara", RACE_HUMAN, CLASS_MAGE, GENDER_FEMALE, 1, 3, 5, 3, false, 0, 0, 0, 0, 0 },
++        { "Zelda.ElaraPlayerBot", "RNDBOT0", "Elara", RACE_HUMAN, CLASS_MAGE, GENDER_FEMALE, 1, 3, 5, 3, false, 0, 0, 0, 0, 0, 0 },
 +        // Sylwen: a night elf hunter, at the Darnassus inn
-+        { "Zelda.DarnassusBots", "RNDBOT1", "Sylwen", RACE_NIGHTELF, CLASS_HUNTER, GENDER_FEMALE, 2, 2, 3, 1, true, 1, 10124.6f, 2228.9f, 1328.81f, 5.4f },
++        { "Zelda.DarnassusBots", "RNDBOT1", "Sylwen", RACE_NIGHTELF, CLASS_HUNTER, GENDER_FEMALE, 2, 2, 3, 1, true, 1, 10124.6f, 2228.9f, 1328.81f, 5.4f, 1657 },
 +        // Zagra: an orc shaman, at the Darnassus inn
-+        { "Zelda.DarnassusBots", "RNDBOT2", "Zagra", RACE_ORC, CLASS_SHAMAN, GENDER_FEMALE, 1, 2, 4, 2, true, 1, 10131.2f, 2227.6f, 1328.81f, 3.9f },
++        { "Zelda.DarnassusBots", "RNDBOT2", "Zagra", RACE_ORC, CLASS_SHAMAN, GENDER_FEMALE, 1, 2, 4, 2, true, 1, 10131.2f, 2227.6f, 1328.81f, 3.9f, 1657 },
 +    };
 +
 +    void EnsureAiBot(ZeldaAiBot const& def)
@@ -2998,6 +2999,10 @@ index 0000000..2f5b9d0
 +            // party she is in still gives her the follow strategies when she logs in
 +            uint32 const guid = result->Fetch()[0].GetUInt32();
 +            CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = '' AND `key` IN ('co', 'nc', 'dead', 'react')", guid);
++            // never logged in yet: make sure she starts where she belongs
++            if (def.placed)
++                CharacterDatabase.PExecute("UPDATE `characters` SET `map` = '%u', `position_x` = '%f', `position_y` = '%f', `position_z` = '%f', `orientation` = '%f', `zone` = '%u' WHERE `guid` = '%u' AND `totaltime` = 0",
++                                           def.map, def.x, def.y, def.z, def.o, def.zone, guid);
 +            return;
 +        }
 +
@@ -3011,17 +3016,16 @@ index 0000000..2f5b9d0
 +            delete session;
 +            return;
 +        }
-+        if (def.placed)
-+        {
-+            bot->SetLocationMapId(def.map);
-+            bot->Relocate(def.x, def.y, def.z, def.o);
-+        }
 +        bot->setCinematic(1);
 +        bot->SetAtLoginFlag(AT_LOGIN_NONE);
 +        bot->SaveToDB();
 +        uint32 const guid = bot->GetGUIDLow();
 +        delete bot;
 +        delete session;
++        // where she first logs in (queued after the save above, on the same database queue)
++        if (def.placed)
++            CharacterDatabase.PExecute("UPDATE `characters` SET `map` = '%u', `position_x` = '%f', `position_y` = '%f', `position_z` = '%f', `orientation` = '%f', `zone` = '%u' WHERE `guid` = '%u'",
++                                       def.map, def.x, def.y, def.z, def.o, def.zone, guid);
 +
 +        LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid = '%u' AND realmid = '%u'", accountId, realmID);
 +        LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (1, %u, %u)", accountId, realmID);
