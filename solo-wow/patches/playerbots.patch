@@ -1,5 +1,5 @@
 diff --git a/playerbot/PlayerbotAI.cpp b/playerbot/PlayerbotAI.cpp
-index f5cba54..476d468 100644
+index f5cba54..b6efc09 100644
 --- a/playerbot/PlayerbotAI.cpp
 +++ b/playerbot/PlayerbotAI.cpp
 @@ -4,6 +4,7 @@
@@ -10,32 +10,70 @@ index f5cba54..476d468 100644
  
  #include "MotionGenerators/MovementGenerator.h"
  #include "Grids/GridNotifiers.h"
-@@ -274,8 +275,51 @@ PlayerbotAI::~PlayerbotAI()
+@@ -274,8 +275,104 @@ PlayerbotAI::~PlayerbotAI()
          delete aiObjectContext;
  }
  
++// Zelda of Warcraft: takes an AI chat bot out of any party (or pending invitation) that does not
++// have keepWith in it
++static void ZeldaLeaveParty(Player* bot, Player* keepWith)
++{
++    if (bot->GetGroupInvite())
++        bot->UninviteFromGroup();
++    Group* group = bot->GetGroup();
++    if (group && (!keepWith || !group->IsMember(keepWith->GetObjectGuid())))
++        Player::RemoveFromGroup(group, bot->GetObjectGuid());
++}
++
++// a party left over from before (no real player's character in it) is let go of at login
++static void ZeldaDropStaleParty(Player* bot)
++{
++    if (bot->GetGroupInvite())
++        bot->UninviteFromGroup();
++    Group* group = bot->GetGroup();
++    if (!group)
++        return;
++    uint32 const botAccount = bot->GetSession()->GetAccountId();
++    for (auto const& slot : group->GetMemberSlots())
++    {
++        if (slot.guid != bot->GetObjectGuid() && sObjectMgr.GetPlayerAccountIdByGUID(slot.guid) != botAccount &&
++            !sPlayerbotAIConfig.IsInRandomAccountList(sObjectMgr.GetPlayerAccountIdByGUID(slot.guid)))
++            return;
++    }
++    Player::RemoveFromGroup(group, bot->GetObjectGuid());
++}
++
 +// Zelda of Warcraft: carries out what an AI chat bot said she would do (zelda_ai in ZeldaMemory.h)
 +static void ZeldaRunAction(PlayerbotAI* ai, Player* bot, zelda_ai::Pending const& pending)
 +{
++    if (pending.action == "remember")
++    {
++        zelda_memory::AddFact(bot->GetGUIDLow(), pending.arg);
++        return;
++    }
++
 +    Player* requester = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, pending.requester));
 +    if (!requester || !requester->IsInWorld())
 +        return;
++    Group* group = bot->GetGroup();
++    bool const together = group && group->IsMember(requester->GetObjectGuid());
 +
 +    if (pending.action == "go" || pending.action == "travel")
 +    {
 +        if (pending.arg.empty())
 +            return;
-+        if (bot->GetGroup() && bot->GetGroup() == requester->GetGroup())
++        if (together)
 +            ai->DoSpecificAction("free chat shortcut", Event("zelda", "", requester), true);
 +        ai->DoSpecificAction("go", Event("zelda", "travel " + pending.arg, requester), true);
 +    }
 +    else if (pending.action == "follow")
 +    {
-+        if (bot->GetGroup() && bot->GetGroup() == requester->GetGroup())
++        if (together)
 +        {
 +            ai->DoSpecificAction("follow chat shortcut", Event("zelda", "", requester), true);
 +            return;
 +        }
++        ZeldaLeaveParty(bot, requester);
 +        if (bot->GetGroup() || (requester->GetGroup() && requester->GetGroup()->IsFull()))
 +            return;
 +        // she asks to come along: the hero invites her, and she accepts like any invited bot
@@ -49,20 +87,35 @@ index f5cba54..476d468 100644
 +        ai->DoSpecificAction("free chat shortcut", Event("zelda", "", requester), true);
 +    else if (pending.action == "leave")
 +    {
-+        if (bot->GetGroup())
-+            ai->DoSpecificAction("leave", Event("zelda", "", requester), true);
++        ZeldaLeaveParty(bot, nullptr);
++        if (ai->GetMaster() == requester)
++        {
++            ai->SetMaster(nullptr);
++            ai->ResetStrategies();
++        }
 +    }
 +}
 +
  void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
  {
++    {
++        static std::mutex zeldaLock;
++        static std::set<uint32> zeldaChecked;
++        bool first;
++        {
++            std::lock_guard<std::mutex> guard(zeldaLock);
++            first = zeldaChecked.insert(bot->GetGUIDLow()).second;
++        }
++        if (first && bot->IsInWorld() && sRandomPlayerbotMgr.IsRandomBot(bot))
++            ZeldaDropStaleParty(bot);
++    }
 +    for (zelda_ai::Pending const& pending : zelda_ai::Take(bot->GetGUIDLow()))
 +        ZeldaRunAction(this, bot, pending);
 +
      AiObjectContext* context = aiObjectContext;
      std::string mapString = WorldPosition(bot).isInstance() ? "I" : std::to_string(bot->GetMapId());
      auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAI " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
-@@ -2117,9 +2161,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
+@@ -2117,9 +2214,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
  
                  AiObjectContext* context = aiObjectContext;
                  std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
@@ -77,10 +130,10 @@ index f5cba54..476d468 100644
  
 diff --git a/playerbot/ZeldaMemory.h b/playerbot/ZeldaMemory.h
 new file mode 100644
-index 0000000..932b07d
+index 0000000..9433039
 --- /dev/null
 +++ b/playerbot/ZeldaMemory.h
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,256 @@
 +#pragma once
 +
 +// Zelda of Warcraft: an AI chat bot keeps what was said to her between server restarts, and a random
@@ -89,41 +142,95 @@ index 0000000..932b07d
 +// 'zelda', one row per chat channel, so the module's own saving and loading never touch it.
 +
 +#include "Database/DatabaseEnv.h"
++#include <cctype>
 +#include <fstream>
 +#include <map>
 +#include <mutex>
 +#include <regex>
++#include <set>
 +#include <string>
 +#include <vector>
 +
 +namespace zelda_memory
 +{
-+    inline std::string Key(std::string const& channel)
++    inline std::string SafeKey(std::string key)
 +    {
-+        std::string key = "mem" + channel;
 +        if (key.size() > 32)
 +            key.resize(32);
 +        CharacterDatabase.escape_string(key);
 +        return key;
 +    }
 +
-+    inline std::string Load(uint32 guid, std::string const& channel)
++    inline std::string LoadValue(uint32 guid, std::string const& rawKey)
 +    {
-+        std::string const key = Key(channel);
++        std::string const key = SafeKey(rawKey);
 +        auto result = CharacterDatabase.PQuery("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s' LIMIT 1", guid, key.c_str());
 +        if (!result)
 +            return "";
 +        return result->Fetch()[0].GetCppString();
 +    }
 +
-+    inline void Save(uint32 guid, std::string const& channel, std::string text)
++    inline void SaveValue(uint32 guid, std::string const& rawKey, std::string text)
 +    {
 +        if (text.size() > 3900)
 +            text = text.substr(text.size() - 3900);
-+        std::string const key = Key(channel);
++        std::string const key = SafeKey(rawKey);
 +        CharacterDatabase.escape_string(text);
 +        CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'", guid, key.c_str());
 +        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '%s')", guid, key.c_str(), text.c_str());
++    }
++
++    // the conversation so far, one per chat channel
++    inline std::string Load(uint32 guid, std::string const& channel) { return LoadValue(guid, "mem" + channel); }
++    inline void Save(uint32 guid, std::string const& channel, std::string const& text) { SaveValue(guid, "mem" + channel, text); }
++
++    // what a player asked to be called
++    inline std::string Nick(uint32 guid, std::string const& player) { return LoadValue(guid, "nick" + player); }
++    inline void SetNick(uint32 guid, std::string const& player, std::string const& nick) { SaveValue(guid, "nick" + player, nick); }
++
++    // things she decided to remember for good, newest last (kept to the last 20)
++    inline std::vector<std::string> Facts(uint32 guid)
++    {
++        std::vector<std::string> facts;
++        std::string const all = LoadValue(guid, "facts");
++        size_t start = 0;
++        while (start < all.size())
++        {
++            size_t end = all.find('\n', start);
++            if (end == std::string::npos)
++                end = all.size();
++            if (end > start)
++                facts.push_back(all.substr(start, end - start));
++            start = end + 1;
++        }
++        return facts;
++    }
++
++    inline void AddFact(uint32 guid, std::string fact)
++    {
++        for (char& c : fact)
++            if (c == '\n' || c == '\r')
++                c = ' ';
++        if (fact.size() < 3)
++            return;
++        if (fact.size() > 160)
++            fact.resize(160);
++        std::vector<std::string> facts = Facts(guid);
++        for (auto i = facts.begin(); i != facts.end(); ++i)
++        {
++            if (*i == fact)
++            {
++                facts.erase(i);
++                break;
++            }
++        }
++        facts.push_back(fact);
++        while (facts.size() > 20)
++            facts.erase(facts.begin());
++        std::string all;
++        for (std::string const& f : facts)
++            all += f + "\n";
++        SaveValue(guid, "facts", all);
 +    }
 +
 +    // the bot's line in the character card ("Name::personality"), read straight from the file so it
@@ -204,7 +311,7 @@ index 0000000..932b07d
 +
 +    inline void ExtractActions(std::vector<std::string>& lines)
 +    {
-+        static std::regex const tag(R"(\[\s*(go|travel|follow|stay|wait|free|leave)\b\s*([^\]]*)\])", std::regex::icase);
++        static std::regex const tag(R"(\[\s*(go|travel|follow|stay|wait|free|leave|remember)\b\s*([^\]]*)\])", std::regex::icase);
 +        std::vector<std::string> kept;
 +        for (std::string const& line : lines)
 +        {
@@ -231,6 +338,12 @@ index 0000000..932b07d
 +        lines = kept;
 +    }
 +
++    inline void Push(uint32 bot, std::string const& action, std::string const& arg, uint32 requester)
++    {
++        std::lock_guard<std::mutex> guard(QueueLock());
++        Queue()[bot].push_back({ action, arg, requester });
++    }
++
 +    inline std::vector<Pending> Take(uint32 bot)
 +    {
 +        std::lock_guard<std::mutex> guard(QueueLock());
@@ -241,20 +354,135 @@ index 0000000..932b07d
 +        Queue().erase(found);
 +        return pending;
 +    }
++
++    // what the player plainly asks of her, recognised without the LLM: [action, place-or-name]
++    inline std::vector<std::pair<std::string, std::string>> DetectIntent(std::string const& message)
++    {
++        static std::regex const nick(R"(\b(?:call me|my name is|my name's|i go by|just call me)\s+([A-Za-z][A-Za-z'-]{1,15}))", std::regex::icase);
++        static std::regex const leave(R"(\b(?:leave|quit|drop|exit)\s+(?:the\s+|my\s+|your\s+|our\s+|this\s+)?(?:party|group)\b|\bdisband\b)", std::regex::icase);
++        static std::regex const follow(R"(\b(?:follow me|come with me|join me|join (?:my|the|our) (?:party|group)|come along|travel with me|team up|come here|come to me|party up|group up|let'?s go together|stay with me)\b)", std::regex::icase);
++        static std::regex const stay(R"(\b(?:wait|stay)\s+(?:here|there|right there|for me)\b|^\s*(?:wait|stay)\s*[.!]*\s*$)", std::regex::icase);
++        static std::regex const ownWay(R"(\b(?:do your own thing|go your own way|you'?re free|go explore|go on your own|go adventure)\b)", std::regex::icase);
++        static std::regex const go(R"(\b(?:meet(?: me| up| you)?(?: with me)?|go|head|travel|walk|run|come|let'?s go)\s+(?:over\s+)?(?:to|in|at|into)\s+(?:the\s+)?([A-Za-z' ]{3,40}))", std::regex::icase);
++
++        std::vector<std::pair<std::string, std::string>> found;
++        std::smatch match;
++        if (std::regex_search(message, match, nick))
++            found.push_back({ "nick", match[1].str() });
++        if (std::regex_search(message, leave))
++            found.push_back({ "leave", "" });
++        else if (std::regex_search(message, follow))
++            found.push_back({ "follow", "" });
++        else if (std::regex_search(message, stay))
++            found.push_back({ "stay", "" });
++        else if (std::regex_search(message, ownWay))
++            found.push_back({ "free", "" });
++        else if (std::regex_search(message, match, go))
++        {
++            std::string place = Trim(match[1].str());
++            static std::set<std::string> const notPlaces = { "me", "you", "us", "here", "there", "him", "her", "them", "it", "bed", "sleep", "work" };
++            std::string lower = place;
++            for (char& c : lower)
++                c = char(std::tolower((unsigned char)c));
++            if (!place.empty() && !notPlaces.count(lower.substr(0, lower.find(' '))))
++                found.push_back({ "go", place });
++        }
++        return found;
++    }
 +}
 diff --git a/playerbot/strategy/actions/SayAction.cpp b/playerbot/strategy/actions/SayAction.cpp
-index 0f98780..e5f4848 100644
+index 0f98780..004a169 100644
 --- a/playerbot/strategy/actions/SayAction.cpp
 +++ b/playerbot/strategy/actions/SayAction.cpp
-@@ -8,6 +8,7 @@
+@@ -8,6 +8,8 @@
  #include <regex>
  #include <boost/algorithm/string.hpp>
  #include "playerbot/PlayerbotLLMInterface.h"
 +#include "playerbot/ZeldaMemory.h"
++#include "ChooseTravelTargetAction.h"
  
  using namespace ai;
  
-@@ -434,6 +435,7 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
+@@ -418,6 +420,78 @@ delayedPackets ChatReplyAction::LinesToPackets(const std::vector<std::string>& l
+     return delayedPackets;
+ }
+ 
++// Zelda of Warcraft: the longest start of the words that names a place she can travel to
++static std::string ZeldaFindPlace(Player* bot, std::string const& words)
++{
++    std::vector<std::string> parts;
++    std::istringstream in(words);
++    for (std::string word; in >> word;)
++        parts.push_back(word);
++    for (size_t n = std::min<size_t>(parts.size(), 4); n > 0; --n)
++    {
++        std::string candidate;
++        for (size_t i = 0; i < n; ++i)
++            candidate += (i ? " " : "") + parts[i];
++        if (candidate.size() >= 3 && !ai::ChooseTravelTargetAction::FindDestination(bot, candidate).empty())
++            return candidate;
++    }
++    return "";
++}
++
++static std::string ZeldaDescribe(std::string const& action, std::string const& arg)
++{
++    if (action == "go") return "you are setting off for " + arg + " right now";
++    if (action == "follow") return "you are joining their party to travel at their side";
++    if (action == "stay") return "you wait right where you are";
++    if (action == "free") return "you go back to your own adventures";
++    if (action == "leave") return "you leave the party";
++    return "";
++}
++
++// what she knows about the person and about herself right now, for the LLM
++static std::string ZeldaSituation(PlayerbotAI* ai, Player* bot, Player* player, std::string const& callName, std::string const& doing)
++{
++    AiObjectContext* context = ai->GetAiObjectContext();
++    std::ostringstream out;
++    out << " The person talking to you is " << player->GetName();
++    if (callName != player->GetName())
++        out << ", who asked you to call them " << callName << ", so always call them " << callName << " and never " << player->GetName();
++    out << ".";
++
++    std::vector<std::string> facts = zelda_memory::Facts(bot->GetGUIDLow());
++    if (!facts.empty())
++    {
++        out << " Things you remember:";
++        for (std::string const& fact : facts)
++            out << " " << fact << ";";
++    }
++
++    Group* group = bot->GetGroup();
++    if (group && group->IsMember(player->GetObjectGuid()))
++        out << " Right now you are in a party with " << callName << (ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) ? " and waiting where you are." : " and travelling at their side.");
++    else if (group)
++        out << " Right now you are in a party with other people.";
++    else
++        out << " Right now you are on your own adventure, not in anyone's party.";
++
++    TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
++    if (target && target->IsForced() && target->GetDestination())
++        out << " You are on your way to " << target->GetDestination()->GetTitle() << ".";
++
++    if (bot->GetMapId() == player->GetMapId() && bot->IsWithinDist(player, 40.0f))
++        out << " " << callName << " is right next to you.";
++    else if (bot->GetMapId() == player->GetMapId())
++        out << " " << callName << " is about " << uint32(bot->GetDistance(player)) << " yards away from you.";
++    else
++        out << " " << callName << " is far away, in another land.";
++
++    if (!doing.empty())
++        out << " You do what " << callName << " asked: " << doing << ", so say yes and do not add an action tag.";
++    else
++        out << " If " << callName << " tells you something important about themselves, you may end with [remember <a short note>].";
++    return out.str();
++}
++
+ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
+     , const WorldPacket chatTemplate, const WorldPacket emoteTemplate, const WorldPacket systemTemplate, const std::string startPattern, const std::string endPattern, const std::string deletePattern, const std::string splitPattern, bool debug)
+ {
+@@ -434,6 +508,7 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
      auto timeDiff = (timeAfter - startTime) * IN_MILLISECONDS;
  
      std::vector<std::string> lines = PlayerbotLLMInterface::ParseResponse(response, startPattern, endPattern, deletePattern, splitPattern, debugLines);
@@ -262,7 +490,7 @@ index 0f98780..e5f4848 100644
  
      delayedPackets packets, debugPackets;
  
-@@ -526,6 +528,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -526,6 +601,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
              llmChannel = ((chatChannelSource == ChatChannelSource::SRC_WHISPER) ? name : std::to_string(chatChannelSource));
  
          std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
@@ -271,16 +499,44 @@ index 0f98780..e5f4848 100644
  
          if (player)
          {
-@@ -562,6 +566,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -561,7 +638,36 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+ 
                  placeholders["<initial message>"] = msg;
  
++                // Zelda of Warcraft: what the player plainly asks, she does without waiting for the LLM
++                // to get it right; her nickname for them, what she remembers and where she stands go
++                // into the prompt
++                std::string zeldaDoing;
++                if (player->isRealPlayer())
++                {
++                    for (auto const& intent : zelda_ai::DetectIntent(msg))
++                    {
++                        if (intent.first == "nick")
++                        {
++                            zelda_memory::SetNick(bot->GetGUIDLow(), playerName, intent.second);
++                            continue;
++                        }
++                        std::string arg = intent.second;
++                        if (intent.first == "go" && (arg = ZeldaFindPlace(bot, arg)).empty())
++                            continue;
++                        zelda_ai::Push(bot->GetGUIDLow(), intent.first, arg, player->GetGUIDLow());
++                        zeldaDoing = ZeldaDescribe(intent.first, arg);
++                    }
++                }
++                std::string zeldaCallName = zelda_memory::Nick(bot->GetGUIDLow(), playerName);
++                if (zeldaCallName.empty())
++                    zeldaCallName = playerName;
++                placeholders["<other name>"] = zeldaCallName;
++                placeholders["<receiver name>"] = zeldaCallName;
++
                  std::string llmPromptCustom = AI_VALUE(std::string, "manual saved string::llmdefaultprompt");
 +                if (llmPromptCustom.empty())
 +                    llmPromptCustom = zelda_memory::Personality(bot->GetGUIDLow(), bot->GetName());
++                llmPromptCustom += ZeldaSituation(ai, bot, player, zeldaCallName, zeldaDoing);
  
                  std::map<std::string, std::string> jsonFill;
                  jsonFill["<pre prompt>"] = sPlayerbotAIConfig.llmPrePrompt + " " + llmPromptCustom;
-@@ -650,7 +656,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -650,7 +756,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  WorldPacket emoteTemplate = (type == CHAT_MSG_SAY || type == CHAT_MSG_WHISPER) ? GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_EMOTE, bot, player) : WorldPacket();
                  WorldPacket systemTemplate = GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_WHISPER, bot, player);
  
@@ -296,7 +552,7 @@ index 0f98780..e5f4848 100644
  
                  ai->SendDelayedPacket(session, std::move(futPackets));
              }
-@@ -663,6 +676,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -663,6 +776,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  PlayerbotLLMInterface::LimitContext(llmContext, llmContext.size());
              }
              SET_AI_VALUE(std::string, "manual string::llmcontext" + llmChannel, llmContext);
