@@ -1,5 +1,20 @@
+diff --git a/playerbot/AiFactory.cpp b/playerbot/AiFactory.cpp
+index dec69c5..e57dfe5 100644
+--- a/playerbot/AiFactory.cpp
++++ b/playerbot/AiFactory.cpp
+@@ -902,7 +902,10 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
+     nonCombatEngine->addStrategy("dungeon");
+ 
+     if(sPlayerbotAIConfig.llmEnabled == 2)
++    {
+         nonCombatEngine->addStrategy("ai chat");
++        nonCombatEngine->addStrategy("silent");   // Zelda: she talks through the LLM, not status lines
++    }
+ 
+     if (!player->InBattleGround())
+     {
 diff --git a/playerbot/PlayerbotAI.cpp b/playerbot/PlayerbotAI.cpp
-index f5cba54..b6efc09 100644
+index f5cba54..c5846b9 100644
 --- a/playerbot/PlayerbotAI.cpp
 +++ b/playerbot/PlayerbotAI.cpp
 @@ -4,6 +4,7 @@
@@ -10,7 +25,7 @@ index f5cba54..b6efc09 100644
  
  #include "MotionGenerators/MovementGenerator.h"
  #include "Grids/GridNotifiers.h"
-@@ -274,8 +275,104 @@ PlayerbotAI::~PlayerbotAI()
+@@ -274,8 +275,156 @@ PlayerbotAI::~PlayerbotAI()
          delete aiObjectContext;
  }
  
@@ -85,6 +100,58 @@ index f5cba54..b6efc09 100644
 +        ai->DoSpecificAction("stay chat shortcut", Event("zelda", "", requester), true);
 +    else if (pending.action == "free")
 +        ai->DoSpecificAction("free chat shortcut", Event("zelda", "", requester), true);
++    else if (pending.action == "equip")
++    {
++        // the items linked in the request, or else everything the player just handed her
++        std::vector<uint32> items;
++        std::istringstream in(pending.arg);
++        for (uint32 entry; in >> entry;)
++            items.push_back(entry);
++        if (items.empty())
++            items = zelda_ai::TakeGifts(bot->GetGUIDLow());
++        if (items.empty())
++        {
++            // nothing handed over this session: the Zelda gear in her bags (armor sets, boutique)
++            for (uint32 entry = 190700; entry < 191000; ++entry)
++            {
++                Item* item = bot->GetItemByEntry(entry);
++                if (item && !item->IsEquipped())
++                    items.push_back(entry);
++            }
++        }
++        for (uint32 entry : items)
++        {
++            Item* item = bot->GetItemByEntry(entry);
++            if (!item)
++                continue;
++            if (!item->IsEquipped())
++            {
++                WorldPacket packet(CMSG_AUTOEQUIP_ITEM, 2);
++                packet << item->GetBagSlot() << item->GetSlot();
++                bot->GetSession()->HandleAutoEquipItemOpcode(packet);
++            }
++            Item* now = bot->GetItemByEntry(entry);
++            if (now && now->IsEquipped())
++                zelda_ai::SetKeptWorn(bot->GetGUIDLow(), entry, true);
++        }
++    }
++    else if (pending.action == "unequip")
++    {
++        std::istringstream in(pending.arg);
++        for (uint32 entry; in >> entry;)
++        {
++            zelda_ai::SetKeptWorn(bot->GetGUIDLow(), entry, false);
++            Item* item = bot->GetItemByEntry(entry);
++            if (!item || !item->IsEquipped())
++                continue;
++            ItemPosCountVec dest;
++            if (bot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, item, false) == EQUIP_ERR_OK)
++            {
++                bot->RemoveItem(INVENTORY_SLOT_BAG_0, item->GetSlot(), true);
++                bot->StoreItem(dest, item, true);
++            }
++        }
++    }
 +    else if (pending.action == "leave")
 +    {
 +        ZeldaLeaveParty(bot, nullptr);
@@ -115,7 +182,7 @@ index f5cba54..b6efc09 100644
      AiObjectContext* context = aiObjectContext;
      std::string mapString = WorldPosition(bot).isInstance() ? "I" : std::to_string(bot->GetMapId());
      auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAI " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
-@@ -2117,9 +2214,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
+@@ -2117,9 +2266,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
  
                  AiObjectContext* context = aiObjectContext;
                  std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
@@ -129,7 +196,7 @@ index f5cba54..b6efc09 100644
          }
  
 diff --git a/playerbot/PlayerbotDbStore.cpp b/playerbot/PlayerbotDbStore.cpp
-index 190fdfe..4215c5c 100644
+index 190fdfe..c470740 100644
 --- a/playerbot/PlayerbotDbStore.cpp
 +++ b/playerbot/PlayerbotDbStore.cpp
 @@ -20,23 +20,39 @@ void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
@@ -175,16 +242,16 @@ index 190fdfe..4215c5c 100644
 +        }
 +
 +        if (sPlayerbotAIConfig.llmEnabled == 2)
-+            ai->ChangeStrategy("+ai chat", BotState::BOT_STATE_NON_COMBAT);
++            ai->ChangeStrategy("+ai chat,+silent", BotState::BOT_STATE_NON_COMBAT);
  
          ai->GetAiObjectContext()->Load(values);
      }
 diff --git a/playerbot/ZeldaMemory.h b/playerbot/ZeldaMemory.h
 new file mode 100644
-index 0000000..9433039
+index 0000000..f0c1d3b
 --- /dev/null
 +++ b/playerbot/ZeldaMemory.h
-@@ -0,0 +1,256 @@
+@@ -0,0 +1,331 @@
 +#pragma once
 +
 +// Zelda of Warcraft: an AI chat bot keeps what was said to her between server restarts, and a random
@@ -199,6 +266,7 @@ index 0000000..9433039
 +#include <mutex>
 +#include <regex>
 +#include <set>
++#include <sstream>
 +#include <string>
 +#include <vector>
 +
@@ -406,6 +474,16 @@ index 0000000..9433039
 +        return pending;
 +    }
 +
++    // item entries linked in a chat message ("|Hitem:190901:...")
++    inline std::string LinkedItems(std::string const& message)
++    {
++        static std::regex const link(R"(Hitem:(\d+))");
++        std::string ids;
++        for (auto i = std::sregex_iterator(message.begin(), message.end(), link); i != std::sregex_iterator(); ++i)
++            ids += (*i)[1].str() + " ";
++        return ids;
++    }
++
 +    // what the player plainly asks of her, recognised without the LLM: [action, place-or-name]
 +    inline std::vector<std::pair<std::string, std::string>> DetectIntent(std::string const& message)
 +    {
@@ -420,6 +498,13 @@ index 0000000..9433039
 +        std::smatch match;
 +        if (std::regex_search(message, match, nick))
 +            found.push_back({ "nick", match[1].str() });
++        static std::regex const equip(R"(\b(?:equip\w*|wear|put (?:it |them |those |these |that |this )?on|try (?:it |them |those |these )?on|dress (?:up|in))\b)", std::regex::icase);
++        static std::regex const unequip(R"(\b(?:unequip\w*|take off|remove)\b)", std::regex::icase);
++        if (std::regex_search(message, unequip) && !LinkedItems(message).empty())
++            found.push_back({ "unequip", LinkedItems(message) });
++        else if (std::regex_search(message, equip))
++            found.push_back({ "equip", LinkedItems(message) });
++
 +        if (std::regex_search(message, leave))
 +            found.push_back({ "leave", "" });
 +        else if (std::regex_search(message, follow))
@@ -440,9 +525,66 @@ index 0000000..9433039
 +        }
 +        return found;
 +    }
++
++    // items a real player handed her in a trade this session (what "wear what I gave you" means)
++    inline std::mutex& GiftLock() { static std::mutex lock; return lock; }
++    inline std::map<uint32, std::vector<uint32>>& Gifts() { static std::map<uint32, std::vector<uint32>> gifts; return gifts; }
++
++    inline void AddGift(uint32 bot, uint32 item)
++    {
++        std::lock_guard<std::mutex> guard(GiftLock());
++        Gifts()[bot].push_back(item);
++    }
++
++    inline std::vector<uint32> TakeGifts(uint32 bot)
++    {
++        std::lock_guard<std::mutex> guard(GiftLock());
++        std::vector<uint32> gifts = std::move(Gifts()[bot]);
++        Gifts().erase(bot);
++        return gifts;
++    }
++
++    // what she was asked to wear: the bot AI's gear upgrades leave these on (kept across restarts)
++    inline std::mutex& WornLock() { static std::mutex lock; return lock; }
++    inline std::map<uint32, std::set<uint32>>& WornCache() { static std::map<uint32, std::set<uint32>> worn; return worn; }
++
++    inline std::set<uint32>& WornLocked(uint32 bot)
++    {
++        auto found = WornCache().find(bot);
++        if (found != WornCache().end())
++            return found->second;
++        std::set<uint32>& worn = WornCache()[bot];
++        std::istringstream in(zelda_memory::LoadValue(bot, "worn"));
++        for (uint32 item; in >> item;)
++            worn.insert(item);
++        return worn;
++    }
++
++    inline bool IsKeptWorn(uint32 bot, uint32 item)
++    {
++        std::lock_guard<std::mutex> guard(WornLock());
++        return WornLocked(bot).count(item) != 0;
++    }
++
++    inline void SetKeptWorn(uint32 bot, uint32 item, bool keep)
++    {
++        std::string all;
++        {
++            std::lock_guard<std::mutex> guard(WornLock());
++            std::set<uint32>& worn = WornLocked(bot);
++            if (keep)
++                worn.insert(item);
++            else
++                worn.erase(item);
++            for (uint32 entry : worn)
++                all += std::to_string(entry) + " ";
++        }
++        zelda_memory::SaveValue(bot, "worn", all);
++    }
++
 +}
 diff --git a/playerbot/strategy/actions/SayAction.cpp b/playerbot/strategy/actions/SayAction.cpp
-index 0f98780..004a169 100644
+index 0f98780..3d36eb9 100644
 --- a/playerbot/strategy/actions/SayAction.cpp
 +++ b/playerbot/strategy/actions/SayAction.cpp
 @@ -8,6 +8,8 @@
@@ -454,7 +596,7 @@ index 0f98780..004a169 100644
  
  using namespace ai;
  
-@@ -418,6 +420,78 @@ delayedPackets ChatReplyAction::LinesToPackets(const std::vector<std::string>& l
+@@ -418,6 +420,80 @@ delayedPackets ChatReplyAction::LinesToPackets(const std::vector<std::string>& l
      return delayedPackets;
  }
  
@@ -483,6 +625,8 @@ index 0f98780..004a169 100644
 +    if (action == "stay") return "you wait right where you are";
 +    if (action == "free") return "you go back to your own adventures";
 +    if (action == "leave") return "you leave the party";
++    if (action == "equip") return "you put on the gear they gave you";
++    if (action == "unequip") return "you take that gear off";
 +    return "";
 +}
 +
@@ -533,7 +677,7 @@ index 0f98780..004a169 100644
  delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
      , const WorldPacket chatTemplate, const WorldPacket emoteTemplate, const WorldPacket systemTemplate, const std::string startPattern, const std::string endPattern, const std::string deletePattern, const std::string splitPattern, bool debug)
  {
-@@ -434,6 +508,7 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
+@@ -434,6 +510,7 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
      auto timeDiff = (timeAfter - startTime) * IN_MILLISECONDS;
  
      std::vector<std::string> lines = PlayerbotLLMInterface::ParseResponse(response, startPattern, endPattern, deletePattern, splitPattern, debugLines);
@@ -541,7 +685,7 @@ index 0f98780..004a169 100644
  
      delayedPackets packets, debugPackets;
  
-@@ -526,6 +601,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -526,6 +603,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
              llmChannel = ((chatChannelSource == ChatChannelSource::SRC_WHISPER) ? name : std::to_string(chatChannelSource));
  
          std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
@@ -550,7 +694,7 @@ index 0f98780..004a169 100644
  
          if (player)
          {
-@@ -561,7 +638,36 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -561,7 +640,36 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
  
                  placeholders["<initial message>"] = msg;
  
@@ -587,7 +731,7 @@ index 0f98780..004a169 100644
  
                  std::map<std::string, std::string> jsonFill;
                  jsonFill["<pre prompt>"] = sPlayerbotAIConfig.llmPrePrompt + " " + llmPromptCustom;
-@@ -650,7 +756,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -650,7 +758,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  WorldPacket emoteTemplate = (type == CHAT_MSG_SAY || type == CHAT_MSG_WHISPER) ? GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_EMOTE, bot, player) : WorldPacket();
                  WorldPacket systemTemplate = GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_WHISPER, bot, player);
  
@@ -603,7 +747,7 @@ index 0f98780..004a169 100644
  
                  ai->SendDelayedPacket(session, std::move(futPackets));
              }
-@@ -663,6 +776,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -663,6 +778,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  PlayerbotLLMInterface::LimitContext(llmContext, llmContext.size());
              }
              SET_AI_VALUE(std::string, "manual string::llmcontext" + llmChannel, llmContext);
@@ -611,3 +755,59 @@ index 0f98780..004a169 100644
  
              return;
          }
+@@ -1530,7 +1646,8 @@ std::string ChatReplyAction::GenerateReplyMessage(Player* bot, std::string incom
+ 
+ bool ChatReplyAction::isUseful()
+ {
+-    return !ai->HasStrategy("silent", BotState::BOT_STATE_NON_COMBAT);
++    // Zelda of Warcraft: an AI chat bot is "silent" only about the bot AI's own status lines
++    return !ai->HasStrategy("silent", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("ai chat", BotState::BOT_STATE_NON_COMBAT);
+ }
+ 
+ bool SpeakAction::Execute(Event& event)
+diff --git a/playerbot/strategy/actions/TradeStatusAction.cpp b/playerbot/strategy/actions/TradeStatusAction.cpp
+index d04c3cd..9e0437a 100644
+--- a/playerbot/strategy/actions/TradeStatusAction.cpp
++++ b/playerbot/strategy/actions/TradeStatusAction.cpp
+@@ -1,5 +1,6 @@
+ 
+ #include "playerbot/playerbot.h"
++#include "playerbot/ZeldaMemory.h"
+ #include "TradeStatusAction.h"
+ 
+ #include "playerbot/strategy/ItemVisitors.h"
+@@ -74,6 +75,12 @@ bool TradeStatusAction::Execute(Event& event)
+                 return false;
+             }
+ 
++            if (!trader->GetPlayerbotAI())
++            {
++                for (auto const& given : givenItemIds)
++                    zelda_ai::AddGift(bot->GetGUIDLow(), given.first);
++            }
++
+             for (std::map<uint32, uint32>::iterator i = givenItemIds.begin(); i != givenItemIds.end(); ++i)
+             {
+                 uint32 itemId = i->first;
+diff --git a/playerbot/strategy/values/ItemUsageValue.cpp b/playerbot/strategy/values/ItemUsageValue.cpp
+index b1cbea6..bc364be 100644
+--- a/playerbot/strategy/values/ItemUsageValue.cpp
++++ b/playerbot/strategy/values/ItemUsageValue.cpp
+@@ -1,5 +1,6 @@
+ 
+ #include "playerbot/playerbot.h"
++#include "playerbot/ZeldaMemory.h"
+ #include "ItemUsageValue.h"
+ #include "CraftValues.h"
+ #include "MountValues.h"
+@@ -668,6 +669,10 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
+ 
+     const ItemPrototype* oldItemProto = oldItem->GetProto();
+ 
++    // Zelda of Warcraft: gear an AI chat bot was asked to wear stays on
++    if (oldItemProto->ItemId != itemProto->ItemId && zelda_ai::IsKeptWorn(bot->GetGUIDLow(), oldItemProto->ItemId))
++        return ItemUsage::ITEM_USAGE_BAD_EQUIP;
++
+     if(MustEquipForQuest(itemProto, bot) && !MustEquipForQuest(oldItemProto, bot))
+         return ItemUsage::ITEM_USAGE_EQUIP;
+ 
