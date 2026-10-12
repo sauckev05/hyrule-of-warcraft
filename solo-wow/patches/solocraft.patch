@@ -65,10 +65,10 @@ index 20bcff2..a6c8243 100644
  }
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 0000000..9a6d0ff
+index 0000000..3b4cdd5
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,886 @@
+@@ -0,0 +1,914 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -498,9 +498,10 @@ index 0000000..9a6d0ff
 +
 +    void UpdateFollower(uint32 diff, Player* owner)
 +    {
-+        if (!owner)
++        // the hero logged out or went elsewhere, or another copy of her travels with the hero now
++        // (one was left behind on this map when the hero went into a dungeon): this one goes home
++        if (!owner || !ZeldaIsCurrentFollower(owner, uint32(m_index), m_creature->GetObjectGuid()))
 +        {
-+            // the hero logged out or went elsewhere: this copy of her goes home
 +            m_creature->ForcedDespawn();
 +            return;
 +        }
@@ -579,8 +580,34 @@ index 0000000..9a6d0ff
 +        else if (!m_creature->IsInCombat())
 +            UpdateIdle(diff);
 +
-+        if (!m_creature->IsAlive())
++        if (!m_creature->IsAlive() || !m_creature->IsInWorld())
 +            return;
++
++        // the enemy fell: the next one the hero (or anyone) is fighting, else out of combat and
++        // back to the hero's side - never standing about "in combat" with nobody
++        if (m_creature->IsInCombat())
++        {
++            Unit* victim = m_creature->GetVictim();
++            if (!victim || !victim->IsAlive() || !m_creature->CanAttack(victim))
++            {
++                Unit* next = nullptr;
++                if (owner && owner->IsInCombat())
++                {
++                    next = owner->GetVictim();
++                    if (!next || !next->IsAlive() || !m_creature->CanAttack(next))
++                        next = owner->getAttackerForHelper();
++                }
++                if (!next)
++                    next = m_creature->getAttackerForHelper();
++                if (next && next->IsAlive() && m_creature->CanAttack(next))
++                    AttackStart(next);
++                else
++                {
++                    EnterEvadeMode();
++                    return;
++                }
++            }
++        }
 +
 +        if (m_globalCooldown == 0 && !m_creature->IsNonMeleeSpellCasted(false))
 +        {
@@ -734,7 +761,8 @@ index 0000000..9a6d0ff
 +    uint32 const NAVI_QUEST_LIGHT = 90501;
 +    uint32 const NAVI_QUEST_HEART = 90502;
 +    uint32 const NAVI_QUEST_HERO  = 90503;
-+    uint32 const NAVI_QUEST_LAST  = 90515;     // her errands at levels 15 to 42 are 90504-90515
++    uint32 const NAVI_QUEST_LAST  = 90515;
++    uint32 const NAVI_FOLLOWER_INDEX = 4;     // her slot among the hero's travelling companions     // her errands at levels 15 to 42 are 90504-90515
 +    uint32 const NAVI_TEXT_GREETING = 900601;
 +    uint32 const NAVI_TEXT_ABOUT    = 900610;
 +
@@ -820,9 +848,9 @@ index 0000000..9a6d0ff
 +
 +    void UpdateFollower(uint32 diff, Player* owner)
 +    {
-+        if (!owner)
++        if (!owner || !ZeldaIsCurrentFollower(owner, NAVI_FOLLOWER_INDEX, m_creature->GetObjectGuid()))
 +        {
-+            m_creature->ForcedDespawn();
++            m_creature->ForcedDespawn();     // the hero went on without this Navi (a new one is with them)
 +            return;
 +        }
 +        if (!m_following)
@@ -1016,10 +1044,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..27ba2de
+index 0000000..6efb3ab
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1639 @@
+@@ -0,0 +1,1649 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1525,6 +1553,16 @@ index 0000000..27ba2de
 +    state.followerEntry[index] = entry;
 +    state.followerGuid[index] = guid;
 +    state.followerBackAt[index] = 0;
++}
++
++bool ZeldaIsCurrentFollower(Player* player, uint32 index, ObjectGuid guid)
++{
++    if (!player || index >= COMPANION_COUNT)
++        return false;
++    ZeldaState& state = StateFor(player);
++    // a follower being summoned right now is not registered yet: give it the benefit of the doubt
++    // only while the slot is empty
++    return state.followerEntry[index] && (state.followerGuid[index] == guid || !state.followerGuid[index]);
 +}
 +
 +void ZeldaFollowerClear(Player* player, uint32 index)
@@ -2661,10 +2699,10 @@ index 0000000..27ba2de
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..a614a6d
+index 0000000..166d083
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,132 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -2785,6 +2823,8 @@ index 0000000..a614a6d
 +// The companions travelling with a hero (index 0 Lyra, 1 Faelin, 2 Durza, 3 Vesper).
 +void ZeldaFollowerSet(Player* player, uint32 index, uint32 entry, ObjectGuid guid);
 +void ZeldaFollowerClear(Player* player, uint32 index);
++// True when this creature is the copy of companion `index` travelling with the hero right now.
++bool ZeldaIsCurrentFollower(Player* player, uint32 index, ObjectGuid guid);
 +void ZeldaFollowerDied(Player* player, uint32 index);
 +// Navi's Light (item 190601): when the hero dies wearing it, the soulstone self-resurrection spell
 +// for their level, at most once every 30 minutes; 0 when it cannot help.
