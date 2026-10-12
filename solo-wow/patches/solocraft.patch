@@ -1280,10 +1280,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..ac12b06
+index 0000000..2bb5f5d
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1710 @@
+@@ -0,0 +1,1716 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2971,7 +2971,13 @@ index 0000000..ac12b06
 +    std::string escaped = name;
 +    CharacterDatabase.escape_string(escaped);
 +    if (auto result = CharacterDatabase.PQuery("SELECT guid FROM characters WHERE name = '%s'", escaped.c_str()))
++    {
++        // she starts every session with the bot AI's own strategies (moving, fighting, AI chat); a
++        // party she is in still gives her the follow strategies when she logs in
++        uint32 const guid = result->Fetch()[0].GetUInt32();
++        CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = '' AND `key` IN ('co', 'nc', 'dead', 'react')", guid);
 +        return;
++    }
 +
 +    WorldSession* session = new WorldSession(accountId, nullptr, SEC_PLAYER, 0, LOCALE_enUS, accountName, 0);
 +    Player* elara = new Player(session);

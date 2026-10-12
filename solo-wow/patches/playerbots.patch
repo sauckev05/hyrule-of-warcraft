@@ -128,6 +128,57 @@ index f5cba54..b6efc09 100644
              }
          }
  
+diff --git a/playerbot/PlayerbotDbStore.cpp b/playerbot/PlayerbotDbStore.cpp
+index 190fdfe..4215c5c 100644
+--- a/playerbot/PlayerbotDbStore.cpp
++++ b/playerbot/PlayerbotDbStore.cpp
+@@ -20,23 +20,39 @@ void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
+     auto results = CharacterDatabase.PQuery("SELECT `key`,`value` FROM `ai_playerbot_db_store` WHERE `guid` = '%lu' AND `preset` = '%s'", guid, preset.c_str());
+     if (results)
+     {
+-        ai->ClearStrategies(BotState::BOT_STATE_COMBAT);
+-        ai->ClearStrategies(BotState::BOT_STATE_NON_COMBAT);
+-        ai->ChangeStrategy("+chat", BotState::BOT_STATE_COMBAT);
+-        ai->ChangeStrategy("+chat", BotState::BOT_STATE_NON_COMBAT);
+-
++        // Zelda of Warcraft: the saved strategies replace the default ones only when strategies were
++        // saved at all (a bot with just a saved value, such as an LLM character card, used to be left
++        // with nothing but "chat": no moving, no fighting, no AI chat)
+         std::list<std::string> values;
++        std::list<std::pair<std::string, std::string>> strategies;
+         do
+         {
+             Field* fields = results->Fetch();
+             std::string key = fields[0].GetString();
+             std::string value = fields[1].GetString();
+             if (key == "value") values.push_back(value);
+-            else if (key == "co") ai->ChangeStrategy(value, BotState::BOT_STATE_COMBAT);
++            else strategies.push_back({ key, value });
++        } while (results->NextRow());
++
++        bool cleared = false;
++        for (auto const& [key, value] : strategies)
++        {
++            if ((key == "co" || key == "nc") && !cleared)
++            {
++                cleared = true;
++                ai->ClearStrategies(BotState::BOT_STATE_COMBAT);
++                ai->ClearStrategies(BotState::BOT_STATE_NON_COMBAT);
++                ai->ChangeStrategy("+chat", BotState::BOT_STATE_COMBAT);
++                ai->ChangeStrategy("+chat", BotState::BOT_STATE_NON_COMBAT);
++            }
++            if (key == "co") ai->ChangeStrategy(value, BotState::BOT_STATE_COMBAT);
+             else if (key == "nc") ai->ChangeStrategy(value, BotState::BOT_STATE_NON_COMBAT);
+             else if (key == "dead") ai->ChangeStrategy(value, BotState::BOT_STATE_DEAD);
+             else if (key == "react") ai->ChangeStrategy(value, BotState::BOT_STATE_REACTION);
+-        } while (results->NextRow());
++        }
++
++        if (sPlayerbotAIConfig.llmEnabled == 2)
++            ai->ChangeStrategy("+ai chat", BotState::BOT_STATE_NON_COMBAT);
+ 
+         ai->GetAiObjectContext()->Load(values);
+     }
 diff --git a/playerbot/ZeldaMemory.h b/playerbot/ZeldaMemory.h
 new file mode 100644
 index 0000000..9433039
