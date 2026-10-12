@@ -35,7 +35,9 @@ PLAYERBOT COMPANIONS (optional)
      /invite <CharacterName>         (invite it to your party)
   Bots follow you, fight and heal. Whisper "help" to a bot for its commands.
 
-ELARA STARFALL (an AI-played character who talks back)
+ELARA STARFALL, SYLWEN AND ZAGRA (AI-played characters who talk back)
+  Sylwen (night elf hunter) and Zagra (orc shaman) start at the inn in Darnassus, level 25,
+  and work just like Elara. Turn them off with Zelda.DarnassusBots = 0.
   Elara is a real level 25 human mage played by the bot AI. She travels, fights, quests and
   levels up on her own. To let her talk with her own personality she needs a local AI model:
     1. Install Ollama from https://ollama.com

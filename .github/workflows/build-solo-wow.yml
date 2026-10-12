@@ -322,6 +322,7 @@ jobs:
           $c += 'Zelda.DungeonReleaseHealth = 0.05'
           $c += 'Zelda.ResetDungeonsOnLeave = 1'
           $c += 'Zelda.ElaraPlayerBot = 1'
+          $c += 'Zelda.DarnassusBots = 1'
           $c += 'Zelda.HeartPieceChance = 15'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
@@ -338,17 +339,17 @@ jobs:
             $p = [System.Collections.Generic.List[string]](Get-Content $pb.FullName)
             $want = [ordered]@{
               'RandomBotAutologin' = '1'; 'RandomBotLoginAtStartup' = '1'; 'RandomBotAutoCreate' = '0'
-              'MinRandomBots' = '1'; 'MaxRandomBots' = '1'; 'RandomBotAccountCount' = '1'; 'DeleteRandomBotAccounts' = '0'
+              'MinRandomBots' = '3'; 'MaxRandomBots' = '3'; 'RandomBotAccountCount' = '3'; 'DeleteRandomBotAccounts' = '0'
               'RandomBotMinLevel' = '25'; 'RandomBotMaxLevel' = '25'; 'RandomBotMaxLevelChance' = '0'
               'MinRandomBotRandomizeTime' = '315360000'; 'MaxRandomRandomizeTime' = '315360000'
               'RandomBotTimedLogout' = '0'; 'RandomBotGuildCount' = '0'; 'RandomBotArenaTeamCount' = '0'
               'RandomBotFormGuild' = '0'; 'RandomBotJoinLfg' = '0'; 'RandomBotJoinBG' = '0'; 'RandomBotAutoJoinBG' = '0'
               'XPRate' = '1'; 'DisableActivityPriorities' = '1'; 'botActiveAlone' = '100'; 'ForceActiveWhenNearPlayer' = '1'
-              'RandomBotInvitePlayer' = '0'; 'RandomBotGroupNearby' = '0'
+              'RandomBotInvitePlayer' = '0'; 'RandomBotGroupNearby' = '0'; 'EnableRandomTeleports' = '0'
               'LLMEnabled' = '2'; 'LLMApiEndpoint' = 'http://127.0.0.1:11434/v1/chat/completions'
               'LLMApiJson' = '{"model": "qwen2.5:7b", "messages": [{"role": "system", "content": "<pre prompt> Conversation so far: <context>"},{"role": "user", "content": "<prompt>"}], "max_tokens": 100, "stream": false}'
               'LLMResponseStartPattern' = '("content":\s*")'; 'LLMGlobalContext' = '1'; 'LLMContextLength' = '3500'
-              'LLMRpgAIChatChance' = '50'; 'LLMDefaultPromptsFile' = 'llm_character_card.txt'
+              'LLMRpgAIChatChance' = '15'; 'LLMDefaultPromptsFile' = 'llm_character_card.txt'
             }
             foreach ($k in $want.Keys) {
               $line = "AiPlayerbot.$k = $($want[$k])"

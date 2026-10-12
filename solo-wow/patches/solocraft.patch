@@ -1280,10 +1280,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..2bb5f5d
+index 0000000..2f5b9d0
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1716 @@
+@@ -0,0 +1,1751 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2943,62 +2943,97 @@ index 0000000..2bb5f5d
 +    return true;
 +}
 +
-+void ZeldaEnsureElaraBot()
++namespace
 +{
-+    if (!sConfig.GetBoolDefault("Zelda.ElaraPlayerBot", true))
-+        return;
-+
-+    std::string const accountName = sConfig.GetStringDefault("Zelda.ElaraAccount", "RNDBOT0");
-+    std::string const name = sConfig.GetStringDefault("Zelda.ElaraName", "Elara");
-+
-+    uint32 accountId = sAccountMgr.GetId(accountName);
-+    if (!accountId)
++    // the characters the playerbots AI plays as people of their own (each on its own bot account,
++    // RNDBOT0..; their personalities are in llm_character_card.txt)
++    struct ZeldaAiBot
 +    {
-+        std::string password;
-+        for (int i = 0; i < 16; ++i)
-+            password += char(urand('a', 'z'));
-+        if (sAccountMgr.CreateAccount(accountName, password) != AOR_OK)
++        char const* config;     // on/off switch in mangosd.conf
++        char const* account;
++        char const* name;
++        uint8 race, cls, gender, skin, face, hairStyle, hairColor;
++        bool placed;            // false: wherever her race starts (the bot AI sends her on her way)
++        uint32 map;
++        float x, y, z, o;
++    };
++
++    ZeldaAiBot const ZELDA_AI_BOTS[] =
++    {
++        // Elara Starfall: a human mage with auburn hair
++        { "Zelda.ElaraPlayerBot", "RNDBOT0", "Elara", RACE_HUMAN, CLASS_MAGE, GENDER_FEMALE, 1, 3, 5, 3, false, 0, 0, 0, 0, 0 },
++        // Sylwen: a night elf hunter, at the Darnassus inn
++        { "Zelda.DarnassusBots", "RNDBOT1", "Sylwen", RACE_NIGHTELF, CLASS_HUNTER, GENDER_FEMALE, 2, 2, 3, 1, true, 1, 10124.6f, 2228.9f, 1328.81f, 5.4f },
++        // Zagra: an orc shaman, at the Darnassus inn
++        { "Zelda.DarnassusBots", "RNDBOT2", "Zagra", RACE_ORC, CLASS_SHAMAN, GENDER_FEMALE, 1, 2, 4, 2, true, 1, 10131.2f, 2227.6f, 1328.81f, 3.9f },
++    };
++
++    void EnsureAiBot(ZeldaAiBot const& def)
++    {
++        std::string const accountName = def.account;
++        std::string const name = def.name;
++
++        uint32 accountId = sAccountMgr.GetId(accountName);
++        if (!accountId)
 +        {
-+            sLog.outError("Zelda: could not create the account %s for %s", accountName.c_str(), name.c_str());
++            std::string password;
++            for (int i = 0; i < 16; ++i)
++                password += char(urand('a', 'z'));
++            if (sAccountMgr.CreateAccount(accountName, password) != AOR_OK)
++            {
++                sLog.outError("Zelda: could not create the account %s for %s", accountName.c_str(), name.c_str());
++                return;
++            }
++            accountId = sAccountMgr.GetId(accountName);
++            if (!accountId)
++                return;
++            sLog.outString("Zelda: created the account %s for %s", accountName.c_str(), name.c_str());
++        }
++
++        std::string escaped = name;
++        CharacterDatabase.escape_string(escaped);
++        if (auto result = CharacterDatabase.PQuery("SELECT guid FROM characters WHERE name = '%s'", escaped.c_str()))
++        {
++            // every session starts with the bot AI's own strategies (moving, fighting, AI chat); a
++            // party she is in still gives her the follow strategies when she logs in
++            uint32 const guid = result->Fetch()[0].GetUInt32();
++            CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = '' AND `key` IN ('co', 'nc', 'dead', 'react')", guid);
 +            return;
 +        }
-+        accountId = sAccountMgr.GetId(accountName);
-+        if (!accountId)
++
++        WorldSession* session = new WorldSession(accountId, nullptr, SEC_PLAYER, 0, LOCALE_enUS, accountName, 0);
++        Player* bot = new Player(session);
++        // level 1 here: the playerbots manager gives her her level (25), spells, talents and gear
++        if (!bot->Create(sObjectMgr.GeneratePlayerLowGuid(), name, def.race, def.cls, def.gender, def.skin, def.face, def.hairStyle, def.hairColor, 0, 0))
++        {
++            sLog.outError("Zelda: could not create %s", name.c_str());
++            delete bot;
++            delete session;
 +            return;
-+        sLog.outString("Zelda: created the account %s for %s", accountName.c_str(), name.c_str());
-+    }
-+
-+    std::string escaped = name;
-+    CharacterDatabase.escape_string(escaped);
-+    if (auto result = CharacterDatabase.PQuery("SELECT guid FROM characters WHERE name = '%s'", escaped.c_str()))
-+    {
-+        // she starts every session with the bot AI's own strategies (moving, fighting, AI chat); a
-+        // party she is in still gives her the follow strategies when she logs in
-+        uint32 const guid = result->Fetch()[0].GetUInt32();
-+        CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = '' AND `key` IN ('co', 'nc', 'dead', 'react')", guid);
-+        return;
-+    }
-+
-+    WorldSession* session = new WorldSession(accountId, nullptr, SEC_PLAYER, 0, LOCALE_enUS, accountName, 0);
-+    Player* elara = new Player(session);
-+    // a human woman with auburn hair; the playerbots manager gives her her level, spells and gear
-+    if (!elara->Create(sObjectMgr.GeneratePlayerLowGuid(), name, RACE_HUMAN, CLASS_MAGE, GENDER_FEMALE, 1, 3, 5, 3, 0, 0))
-+    {
-+        sLog.outError("Zelda: could not create %s", name.c_str());
-+        delete elara;
++        }
++        if (def.placed)
++        {
++            bot->SetLocationMapId(def.map);
++            bot->Relocate(def.x, def.y, def.z, def.o);
++        }
++        bot->setCinematic(1);
++        bot->SetAtLoginFlag(AT_LOGIN_NONE);
++        bot->SaveToDB();
++        uint32 const guid = bot->GetGUIDLow();
++        delete bot;
 +        delete session;
-+        return;
-+    }
-+    elara->setCinematic(1);
-+    elara->SetAtLoginFlag(AT_LOGIN_NONE);
-+    elara->SaveToDB();
-+    uint32 const guid = elara->GetGUIDLow();
-+    delete elara;
-+    delete session;
 +
-+    LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid = '%u' AND realmid = '%u'", accountId, realmID);
-+    LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (1, %u, %u)", accountId, realmID);
-+    sLog.outString("Zelda: %s (guid %u) is ready for the playerbots AI", name.c_str(), guid);
++        LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid = '%u' AND realmid = '%u'", accountId, realmID);
++        LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (1, %u, %u)", accountId, realmID);
++        sLog.outString("Zelda: %s (guid %u) is ready for the playerbots AI", name.c_str(), guid);
++    }
++}
++
++void ZeldaEnsureElaraBot()
++{
++    for (ZeldaAiBot const& def : ZELDA_AI_BOTS)
++        if (sConfig.GetBoolDefault(def.config, true))
++            EnsureAiBot(def);
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644

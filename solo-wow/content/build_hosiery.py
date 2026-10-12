@@ -31,9 +31,9 @@ COLORS = [
     # key, label, rgb, sheer alpha (0-1), seam
     ('Black', 'Black', (14, 14, 18), 0.62, False),
     ('Smoke', 'Light Black, Back Seam', (24, 22, 26), 0.36, True),
-    ('White', 'White', (248, 248, 250), 0.64, False),
-    ('Red', 'Red', (172, 12, 28), 0.50, False),
-    ('Blue', 'Blue', (26, 48, 168), 0.50, False),
+    ('White', 'White', (248, 248, 250), 0.30, False),
+    ('Red', 'Red', (172, 12, 28), 0.28, False),
+    ('Blue', 'Blue', (26, 48, 168), 0.28, False),
 ]
 
 

@@ -585,7 +585,7 @@ index 0000000..f0c1d3b
 +
 +}
 diff --git a/playerbot/strategy/actions/SayAction.cpp b/playerbot/strategy/actions/SayAction.cpp
-index 0f98780..3d36eb9 100644
+index 0f98780..96a7879 100644
 --- a/playerbot/strategy/actions/SayAction.cpp
 +++ b/playerbot/strategy/actions/SayAction.cpp
 @@ -8,6 +8,8 @@
@@ -597,7 +597,7 @@ index 0f98780..3d36eb9 100644
  
  using namespace ai;
  
-@@ -418,6 +420,80 @@ delayedPackets ChatReplyAction::LinesToPackets(const std::vector<std::string>& l
+@@ -418,6 +420,85 @@ delayedPackets ChatReplyAction::LinesToPackets(const std::vector<std::string>& l
      return delayedPackets;
  }
  
@@ -671,14 +671,19 @@ index 0f98780..3d36eb9 100644
 +    if (!doing.empty())
 +        out << " You do what " << callName << " asked: " << doing << ", so say yes and do not add an action tag.";
 +    else
-+        out << " If " << callName << " tells you something important about themselves, you may end with [remember <a short note>].";
++        out << " When you decide to really do something, end your reply with one action tag in square brackets:"
++               " [go PLACE] to travel there yourself (a city or zone, for example [go Stormwind City]),"
++               " [follow] to team up with " << callName << " and travel at their side, [stay] to wait where you are,"
++               " [free] to go back to your own adventures, [leave] to leave their party."
++               " If " << callName << " tells you something important about themselves, you may end with [remember <a short note>] instead."
++               " Only add a tag when you truly decide to act on it, never more than one, and keep your promises.";
 +    return out.str();
 +}
 +
  delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
      , const WorldPacket chatTemplate, const WorldPacket emoteTemplate, const WorldPacket systemTemplate, const std::string startPattern, const std::string endPattern, const std::string deletePattern, const std::string splitPattern, bool debug)
  {
-@@ -434,6 +510,7 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
+@@ -434,6 +515,7 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
      auto timeDiff = (timeAfter - startTime) * IN_MILLISECONDS;
  
      std::vector<std::string> lines = PlayerbotLLMInterface::ParseResponse(response, startPattern, endPattern, deletePattern, splitPattern, debugLines);
@@ -686,7 +691,7 @@ index 0f98780..3d36eb9 100644
  
      delayedPackets packets, debugPackets;
  
-@@ -526,6 +603,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -526,6 +608,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
              llmChannel = ((chatChannelSource == ChatChannelSource::SRC_WHISPER) ? name : std::to_string(chatChannelSource));
  
          std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
@@ -695,7 +700,7 @@ index 0f98780..3d36eb9 100644
  
          if (player)
          {
-@@ -561,7 +640,36 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -561,7 +645,36 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
  
                  placeholders["<initial message>"] = msg;
  
@@ -732,7 +737,7 @@ index 0f98780..3d36eb9 100644
  
                  std::map<std::string, std::string> jsonFill;
                  jsonFill["<pre prompt>"] = sPlayerbotAIConfig.llmPrePrompt + " " + llmPromptCustom;
-@@ -650,7 +758,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -650,7 +763,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  WorldPacket emoteTemplate = (type == CHAT_MSG_SAY || type == CHAT_MSG_WHISPER) ? GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_EMOTE, bot, player) : WorldPacket();
                  WorldPacket systemTemplate = GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_WHISPER, bot, player);
  
@@ -748,7 +753,7 @@ index 0f98780..3d36eb9 100644
  
                  ai->SendDelayedPacket(session, std::move(futPackets));
              }
-@@ -663,6 +778,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -663,6 +783,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  PlayerbotLLMInterface::LimitContext(llmContext, llmContext.size());
              }
              SET_AI_VALUE(std::string, "manual string::llmcontext" + llmChannel, llmContext);
@@ -756,7 +761,7 @@ index 0f98780..3d36eb9 100644
  
              return;
          }
-@@ -1530,7 +1646,8 @@ std::string ChatReplyAction::GenerateReplyMessage(Player* bot, std::string incom
+@@ -1530,7 +1651,8 @@ std::string ChatReplyAction::GenerateReplyMessage(Player* bot, std::string incom
  
  bool ChatReplyAction::isUseful()
  {
@@ -791,7 +796,7 @@ index d04c3cd..9e0437a 100644
              {
                  uint32 itemId = i->first;
 diff --git a/playerbot/strategy/values/ItemUsageValue.cpp b/playerbot/strategy/values/ItemUsageValue.cpp
-index b1cbea6..bc364be 100644
+index b1cbea6..c9827fe 100644
 --- a/playerbot/strategy/values/ItemUsageValue.cpp
 +++ b/playerbot/strategy/values/ItemUsageValue.cpp
 @@ -1,5 +1,6 @@
@@ -807,7 +812,7 @@ index b1cbea6..bc364be 100644
  
 +    // Zelda of Warcraft: gear an AI chat bot was asked to wear stays on
 +    if (oldItemProto->ItemId != itemProto->ItemId && zelda_ai::IsKeptWorn(bot->GetGUIDLow(), oldItemProto->ItemId))
-+        return ItemUsage::ITEM_USAGE_BAD_EQUIP;
++        return ItemUsage::ITEM_USAGE_KEEP;   // not BAD_EQUIP: "equip upgrades" puts those on too
 +
      if(MustEquipForQuest(itemProto, bot) && !MustEquipForQuest(oldItemProto, bot))
          return ItemUsage::ITEM_USAGE_EQUIP;
