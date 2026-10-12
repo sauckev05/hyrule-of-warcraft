@@ -1,5 +1,5 @@
 diff --git a/playerbot/PlayerbotAI.cpp b/playerbot/PlayerbotAI.cpp
-index f5cba54..779ae1b 100644
+index f5cba54..476d468 100644
 --- a/playerbot/PlayerbotAI.cpp
 +++ b/playerbot/PlayerbotAI.cpp
 @@ -4,6 +4,7 @@
@@ -10,7 +10,59 @@ index f5cba54..779ae1b 100644
  
  #include "MotionGenerators/MovementGenerator.h"
  #include "Grids/GridNotifiers.h"
-@@ -2117,9 +2118,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
+@@ -274,8 +275,51 @@ PlayerbotAI::~PlayerbotAI()
+         delete aiObjectContext;
+ }
+ 
++// Zelda of Warcraft: carries out what an AI chat bot said she would do (zelda_ai in ZeldaMemory.h)
++static void ZeldaRunAction(PlayerbotAI* ai, Player* bot, zelda_ai::Pending const& pending)
++{
++    Player* requester = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, pending.requester));
++    if (!requester || !requester->IsInWorld())
++        return;
++
++    if (pending.action == "go" || pending.action == "travel")
++    {
++        if (pending.arg.empty())
++            return;
++        if (bot->GetGroup() && bot->GetGroup() == requester->GetGroup())
++            ai->DoSpecificAction("free chat shortcut", Event("zelda", "", requester), true);
++        ai->DoSpecificAction("go", Event("zelda", "travel " + pending.arg, requester), true);
++    }
++    else if (pending.action == "follow")
++    {
++        if (bot->GetGroup() && bot->GetGroup() == requester->GetGroup())
++        {
++            ai->DoSpecificAction("follow chat shortcut", Event("zelda", "", requester), true);
++            return;
++        }
++        if (bot->GetGroup() || (requester->GetGroup() && requester->GetGroup()->IsFull()))
++            return;
++        // she asks to come along: the hero invites her, and she accepts like any invited bot
++        std::unique_ptr<WorldPacket> invite(new WorldPacket(CMSG_GROUP_INVITE));
++        *invite << std::string(bot->GetName());
++        requester->GetSession()->QueuePacket(std::move(invite));
++    }
++    else if (pending.action == "stay" || pending.action == "wait")
++        ai->DoSpecificAction("stay chat shortcut", Event("zelda", "", requester), true);
++    else if (pending.action == "free")
++        ai->DoSpecificAction("free chat shortcut", Event("zelda", "", requester), true);
++    else if (pending.action == "leave")
++    {
++        if (bot->GetGroup())
++            ai->DoSpecificAction("leave", Event("zelda", "", requester), true);
++    }
++}
++
+ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
+ {
++    for (zelda_ai::Pending const& pending : zelda_ai::Take(bot->GetGUIDLow()))
++        ZeldaRunAction(this, bot, pending);
++
+     AiObjectContext* context = aiObjectContext;
+     std::string mapString = WorldPosition(bot).isInstance() ? "I" : std::to_string(bot->GetMapId());
+     auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAI " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
+@@ -2117,9 +2161,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
  
                  AiObjectContext* context = aiObjectContext;
                  std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
@@ -25,10 +77,10 @@ index f5cba54..779ae1b 100644
  
 diff --git a/playerbot/ZeldaMemory.h b/playerbot/ZeldaMemory.h
 new file mode 100644
-index 0000000..35df34c
+index 0000000..932b07d
 --- /dev/null
 +++ b/playerbot/ZeldaMemory.h
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,161 @@
 +#pragma once
 +
 +// Zelda of Warcraft: an AI chat bot keeps what was said to her between server restarts, and a random
@@ -40,7 +92,9 @@ index 0000000..35df34c
 +#include <fstream>
 +#include <map>
 +#include <mutex>
++#include <regex>
 +#include <string>
++#include <vector>
 +
 +namespace zelda_memory
 +{
@@ -118,8 +172,78 @@ index 0000000..35df34c
 +        return value.size() > prefix.size() ? value.substr(prefix.size()) : "";
 +    }
 +}
++
++// Zelda of Warcraft: what an AI chat bot says she will do, she does. The LLM ends a reply with an
++// action tag ([go Stormwind City], [follow], [stay], [free], [leave]); the tag is taken out of the
++// chat line here (on the thread that asked the LLM) and queued for the bot, and the bot carries it
++// out on her next update (PlayerbotAI::UpdateAI).
++namespace zelda_ai
++{
++    struct Pending
++    {
++        std::string action;
++        std::string arg;
++        uint32 requester;
++    };
++
++    inline std::mutex& QueueLock() { static std::mutex lock; return lock; }
++    inline std::map<uint32, std::vector<Pending>>& Queue() { static std::map<uint32, std::vector<Pending>> queue; return queue; }
++
++    // who the reply being generated on this thread is from, and who it answers
++    inline thread_local uint32 t_bot = 0;
++    inline thread_local uint32 t_requester = 0;
++
++    inline std::string Trim(std::string text)
++    {
++        size_t const first = text.find_first_not_of(" \t*.,;!-");
++        if (first == std::string::npos)
++            return "";
++        size_t const last = text.find_last_not_of(" \t*,;-");
++        return text.substr(first, last - first + 1);
++    }
++
++    inline void ExtractActions(std::vector<std::string>& lines)
++    {
++        static std::regex const tag(R"(\[\s*(go|travel|follow|stay|wait|free|leave)\b\s*([^\]]*)\])", std::regex::icase);
++        std::vector<std::string> kept;
++        for (std::string const& line : lines)
++        {
++            std::string out;
++            auto begin = line.cbegin();
++            std::smatch match;
++            while (std::regex_search(begin, line.cend(), match, tag))
++            {
++                out.append(begin, match[0].first);
++                if (t_bot)
++                {
++                    std::string action = match[1].str();
++                    for (char& c : action)
++                        c = char(std::tolower((unsigned char)c));
++                    std::lock_guard<std::mutex> guard(QueueLock());
++                    Queue()[t_bot].push_back({ action, Trim(match[2].str()), t_requester });
++                }
++                begin = match[0].second;
++            }
++            out.append(begin, line.cend());
++            if (!Trim(out).empty())
++                kept.push_back(out);
++        }
++        lines = kept;
++    }
++
++    inline std::vector<Pending> Take(uint32 bot)
++    {
++        std::lock_guard<std::mutex> guard(QueueLock());
++        auto found = Queue().find(bot);
++        if (found == Queue().end())
++            return {};
++        std::vector<Pending> pending = std::move(found->second);
++        Queue().erase(found);
++        return pending;
++    }
++}
 diff --git a/playerbot/strategy/actions/SayAction.cpp b/playerbot/strategy/actions/SayAction.cpp
-index 0f98780..607a92b 100644
+index 0f98780..e5f4848 100644
 --- a/playerbot/strategy/actions/SayAction.cpp
 +++ b/playerbot/strategy/actions/SayAction.cpp
 @@ -8,6 +8,7 @@
@@ -130,7 +254,15 @@ index 0f98780..607a92b 100644
  
  using namespace ai;
  
-@@ -526,6 +527,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -434,6 +435,7 @@ delayedPackets ChatReplyAction::GenerateResponsePackets(const std::string json
+     auto timeDiff = (timeAfter - startTime) * IN_MILLISECONDS;
+ 
+     std::vector<std::string> lines = PlayerbotLLMInterface::ParseResponse(response, startPattern, endPattern, deletePattern, splitPattern, debugLines);
++    zelda_ai::ExtractActions(lines);
+ 
+     delayedPackets packets, debugPackets;
+ 
+@@ -526,6 +528,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
              llmChannel = ((chatChannelSource == ChatChannelSource::SRC_WHISPER) ? name : std::to_string(chatChannelSource));
  
          std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);
@@ -139,7 +271,7 @@ index 0f98780..607a92b 100644
  
          if (player)
          {
-@@ -562,6 +565,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -562,6 +566,8 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  placeholders["<initial message>"] = msg;
  
                  std::string llmPromptCustom = AI_VALUE(std::string, "manual saved string::llmdefaultprompt");
@@ -148,7 +280,23 @@ index 0f98780..607a92b 100644
  
                  std::map<std::string, std::string> jsonFill;
                  jsonFill["<pre prompt>"] = sPlayerbotAIConfig.llmPrePrompt + " " + llmPromptCustom;
-@@ -663,6 +668,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+@@ -650,7 +656,14 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
+                 WorldPacket emoteTemplate = (type == CHAT_MSG_SAY || type == CHAT_MSG_WHISPER) ? GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_EMOTE, bot, player) : WorldPacket();
+                 WorldPacket systemTemplate = GetPacketTemplate(CMSG_MESSAGECHAT, CHAT_MSG_WHISPER, bot, player);
+ 
+-                futurePackets futPackets = std::async(std::launch::async, ChatReplyAction::GenerateResponsePackets, json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug);
++                uint32 const zeldaBot = bot->GetGUIDLow();
++                uint32 const zeldaRequester = player->GetGUIDLow();
++                futurePackets futPackets = std::async(std::launch::async, [=]()
++                {
++                    zelda_ai::t_bot = zeldaBot;
++                    zelda_ai::t_requester = zeldaRequester;
++                    return ChatReplyAction::GenerateResponsePackets(json, chatTemplate, emoteTemplate, systemTemplate, startPattern, endPattern, deletePattern, splitPattern, debug);
++                });
+ 
+                 ai->SendDelayedPacket(session, std::move(futPackets));
+             }
+@@ -663,6 +676,7 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32 type, uint32 guid1, uint32
                  PlayerbotLLMInterface::LimitContext(llmContext, llmContext.size());
              }
              SET_AI_VALUE(std::string, "manual string::llmcontext" + llmChannel, llmContext);

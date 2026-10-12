@@ -343,7 +343,7 @@ jobs:
               'MinRandomBotRandomizeTime' = '315360000'; 'MaxRandomRandomizeTime' = '315360000'
               'RandomBotTimedLogout' = '0'; 'RandomBotGuildCount' = '0'; 'RandomBotArenaTeamCount' = '0'
               'RandomBotFormGuild' = '0'; 'RandomBotJoinLfg' = '0'; 'RandomBotJoinBG' = '0'; 'RandomBotAutoJoinBG' = '0'
-              'XPRate' = '1'
+              'XPRate' = '1'; 'DisableActivityPriorities' = '1'; 'botActiveAlone' = '100'; 'ForceActiveWhenNearPlayer' = '1'
               'LLMEnabled' = '2'; 'LLMApiEndpoint' = 'http://127.0.0.1:11434/v1/chat/completions'
               'LLMApiJson' = '{"model": "llama3.2:3b", "messages": [{"role": "system", "content": "<pre prompt> Conversation so far: <context>"},{"role": "user", "content": "<prompt>"}], "max_tokens": 80, "stream": false}'
               'LLMResponseStartPattern' = '("content":\s*")'; 'LLMGlobalContext' = '1'; 'LLMContextLength' = '3500'
