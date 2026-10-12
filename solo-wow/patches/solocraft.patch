@@ -65,10 +65,10 @@ index 20bcff2..a6c8243 100644
  }
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 0000000..3b4cdd5
+index 0000000..d55b4e8
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,914 @@
+@@ -0,0 +1,1150 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -79,6 +79,9 @@ index 0000000..3b4cdd5
 + *                                     spirits lead her from Durotar to Ragnaros
 + *   Vesper Duskhollow   undead warlock    soft-spoken, dry and gothic; she hunts the Scourge from
 + *                                     the graves of Brill to Naxxramas
++ *   Elara Starfall      human mage        cheerful, bookish and a little too sure of her fireballs;
++ *                                     she roams Elwynn, Westfall, Redridge and Duskwood on her own
++ *                                     (level 25), fighting whatever gets in her way
 + *
 + * Each girl has a spawn per chapter of her story (creature 1901xx-1904xx); zelda_stage decides which
 + * one a hero can see, so she seems to travel and level on her own. Ask her to travel with you and a
@@ -96,7 +99,7 @@ index 0000000..3b4cdd5
 +
 +namespace
 +{
-+    enum Role { ROLE_PRIEST, ROLE_HUNTER, ROLE_SHAMAN, ROLE_WARLOCK };
++    enum Role { ROLE_PRIEST, ROLE_HUNTER, ROLE_SHAMAN, ROLE_WARLOCK, ROLE_MAGE };
 +
 +    struct Rank { uint32 level; uint32 spell; };
 +
@@ -135,6 +138,13 @@ index 0000000..3b4cdd5
 +    std::vector<Rank> const IMMOLATE       = { {1, 348}, {10, 707}, {20, 1094}, {30, 2941}, {40, 11665}, {50, 11667}, {60, 11668} };
 +    std::vector<Rank> const CURSE_OF_AGONY = { {8, 980}, {18, 1014}, {28, 6217}, {38, 11711}, {48, 11712}, {58, 11713} };
 +    std::vector<Rank> const DEMON_ARMOR    = { {1, 687}, {10, 696}, {20, 706}, {30, 1086}, {40, 11733}, {50, 11734}, {60, 11735} };
++
++    std::vector<Rank> const FIREBALL         = { {1, 133}, {6, 143}, {12, 145}, {18, 3140}, {24, 8400}, {30, 8401}, {36, 8402}, {42, 10148}, {48, 10149}, {54, 10150}, {60, 10151} };
++    std::vector<Rank> const FROSTBOLT        = { {4, 116}, {8, 205}, {14, 837}, {20, 7322}, {26, 8406}, {32, 8407}, {38, 8408}, {44, 10179}, {50, 10180}, {56, 10181} };
++    std::vector<Rank> const FIRE_BLAST       = { {6, 2136}, {14, 2137}, {22, 2138}, {30, 8412}, {38, 8413}, {46, 10197}, {54, 10199} };
++    std::vector<Rank> const FROST_NOVA       = { {10, 122}, {26, 865}, {40, 6131}, {54, 10230} };
++    std::vector<Rank> const ARCANE_INTELLECT = { {1, 1459}, {14, 1460}, {28, 1461}, {42, 10156}, {56, 10157} };
++    std::vector<Rank> const MAGE_ARMOR       = { {1, 168}, {10, 7300}, {20, 7301}, {30, 7302}, {40, 7320}, {50, 10219}, {60, 10220} };
 +
 +    // ---------------------------------------------------------------- who they are
 +    struct Companion
@@ -246,6 +256,63 @@ index 0000000..3b4cdd5
 +            { "Stay with me. Death is MY hobby, not yours.", "Do not die. I mean it." },
 +            { "How... dull. I'll be back. I always come back." },
 +        },
++        {   // 4: Elara Starfall - human mage, cheerful, bookish, a little too sure of her fireballs
++            "Elara", ROLE_MAGE, 28.0f, 900710,
++            {
++                "Hmm? Oh! Hello! I was just talking to myself. Don't worry, I'm excellent company.",
++                "I found a rock shaped exactly like a murloc. I'm keeping it. For science.",
++                "The Kirin Tor say I 'lack restraint'. I say a fireball is just enthusiasm with a little heat.",
++                "*flips through a tiny notebook* Elwynn... done. Westfall... done. Duskwood... spooky. Next!",
++                "If you see a pastry stand, tell me. It's for magical research. Very important research.",
++                "I've been walking since sunrise. My feet are filing a formal complaint with the Mage Quarter.",
++                "Did you know you can boil water with a Fire Blast? You can also boil a lake. Ask me how I know.",
++            },
++            {
++                "An escort? For me? Oh, this is going to be SO much fun. Try to keep up!",
++                "Alright, partner! I'll handle anything that's on fire. Or anything that should be.",
++            },
++            {
++                "Back to wandering, then! If you hear an explosion somewhere, that's probably me saying hi.",
++                "That was lovely. I'll be out there somewhere - follow the scorch marks!",
++            },
++            { "Oh good, target practice!", "Stand back - this one's going to be warm!", "Fire, meet face. Face, meet fire." },
++            { "Ha! Crispy.", "And THAT is why you don't interrupt a lady's walk.", "Was that too much? That felt like too much." },
++            { "Hey - hey! Don't you fall on me now!", "Get behind me! I've got a Frost Nova with your name on it!" },
++            { "Ow... note to self... more... armor..." },
++        },
++    };
++
++    uint32 const ELARA = 190701;
++    int32 const ELARA_INDEX = 4;
++
++    // follower slots: 0-3 the four girls, 4 Navi, 5 Elara
++    uint32 FollowerSlot(int32 index)
++    {
++        return index == ELARA_INDEX ? 5u : uint32(index < 0 ? 0 : index);
++    }
++
++    // where Elara likes to go, and which places she walks between (the roads join them)
++    struct Hub { char const* name; float x, y, z; std::vector<uint32> next; };
++    std::vector<Hub> const ELARA_HUBS =
++    {
++        { "Goldshire",              -9460.0f,    62.0f,  56.6f, { 1, 2, 5 } },
++        { "the Mage Quarter",       -8993.0f,   866.0f,  29.7f, { 0 } },
++        { "the Tower of Azora",     -9550.5f,  -726.0f,  99.3f, { 0, 3 } },
++        { "Lakeshire",              -9221.0f, -2152.0f,  64.0f, { 2, 4 } },
++        { "Darkshire",             -10556.0f, -1148.0f,  28.1f, { 3, 5 } },
++        { "Sentinel Hill",         -10504.0f,  1048.0f,  60.6f, { 4, 0 } },
++    };
++    char const* const ELARA_SETTING_OFF[] =
++    {
++        "Right! Off to %s. Don't wait up!",
++        "I think I'll see what's happening in %s. Adventure!",
++        "%s, here I come! ...Which way was it again? Oh, that way.",
++    };
++    char const* const ELARA_ARRIVED[] =
++    {
++        "Ah, %s! Exactly where I meant to be. Mostly.",
++        "Made it to %s! And only set one bush on fire on the way.",
++        "%s! Time for a snack and some reading.",
 +    };
 +
 +    // creature entries: 1901xx Lyra, 1902xx Faelin, 1903xx Durza, 1904xx Vesper; 190101 is Lyra captive
@@ -257,6 +324,8 @@ index 0000000..3b4cdd5
 +
 +    int32 CompanionIndex(uint32 entry)
 +    {
++        if (entry == ELARA)
++            return ELARA_INDEX;
 +        if (entry < 190100 || entry >= 190500)
 +            return -1;
 +        return int32((entry - 190000) / 100) - 1;
@@ -288,6 +357,12 @@ index 0000000..3b4cdd5
 +        SetRangedMode(true, c.castRange, TYPE_FULL_CASTER);
 +        if (m_follower)
 +            m_ownerGuid = creature->GetSpawnerGuid();
++        m_roaming = !m_follower && m_index == ELARA_INDEX;
++        if (m_roaming)
++        {
++            creature->SetActiveObjectState(true);   // she keeps walking when nobody is near
++            m_roamWait = urand(20000, 60000);
++        }
 +        Reset();
 +    }
 +
@@ -300,7 +375,15 @@ index 0000000..3b4cdd5
 +    uint32 m_buffTimer = 0;
 +    uint32 m_idleLineTimer = 0;
 +    uint32 m_hurtLineTimer = 0;
++    uint32 m_novaTimer = 0;
 +    bool m_boundToOwner = false;
++    // Elara's own wandering
++    bool m_roaming = false;
++    int32 m_hub = -1;               // where she is heading (-1: resting, waiting to set off)
++    uint32 m_roamWait = 0;          // resting time left at a hub
++    uint32 m_progressTimer = 0;     // checks she is still getting closer
++    float m_lastDist = 0.0f;
++    uint32 m_stuckCount = 0;
 +
 +    Companion const& Data() const { return COMPANIONS[m_index < 0 ? 0 : m_index]; }
 +    uint32 Level() const { return m_creature->GetLevel(); }
@@ -347,7 +430,7 @@ index 0000000..3b4cdd5
 +    {
 +        Say(Pick(Data().died));
 +        if (Player* owner = Owner())
-+            ZeldaFollowerDied(owner, uint32(m_index));
++            ZeldaFollowerDied(owner, FollowerSlot(m_index));
 +    }
 +
 +    void Aggro(Unit* /*who*/) override
@@ -364,6 +447,19 @@ index 0000000..3b4cdd5
 +
 +    void EnterEvadeMode() override
 +    {
++        if (m_roaming)
++        {
++            // the fight is over: she simply carries on with her walk
++            m_creature->RemoveAllAurasOnEvade();
++            m_creature->CombatStop(true);
++            m_creature->SetLootRecipient(nullptr);
++            m_creature->GetMotionMaster()->Clear();
++            if (m_hub >= 0)
++                MoveOn();
++            else
++                m_creature->GetMotionMaster()->MoveIdle();
++            return;
++        }
 +        if (!m_follower)
 +        {
 +            ScriptedAI::EnterEvadeMode();
@@ -427,6 +523,7 @@ index 0000000..3b4cdd5
 +                break;
 +            case ROLE_WARLOCK:
 +            case ROLE_HUNTER:
++            case ROLE_MAGE:
 +                break;
 +        }
 +        return false;
@@ -448,6 +545,11 @@ index 0000000..3b4cdd5
 +                Cast(m_creature, BestRank(DEMON_ARMOR, lvl), CAST_AURA_NOT_PRESENT);
 +                break;
 +            case ROLE_HUNTER:
++                break;
++            case ROLE_MAGE:
++                if (Cast(m_creature, BestRank(MAGE_ARMOR, lvl), CAST_AURA_NOT_PRESENT))
++                    break;
++                Cast(m_creature, BestRank(ARCANE_INTELLECT, lvl), CAST_AURA_NOT_PRESENT);
 +                break;
 +        }
 +    }
@@ -493,6 +595,22 @@ index 0000000..3b4cdd5
 +                    return;
 +                Cast(target, BestRank(SHADOW_BOLT, lvl));
 +                break;
++            case ROLE_MAGE:
++                // too close: freeze them in place, then blast
++                if (m_novaTimer == 0 && lvl >= 10 && m_creature->IsWithinDistInMap(target, 9.0f) && Cast(target, BestRank(FROST_NOVA, lvl)))
++                {
++                    m_novaTimer = 25000;
++                    return;
++                }
++                if (m_shockTimer == 0 && lvl >= 6 && Cast(target, BestRank(FIRE_BLAST, lvl)))
++                {
++                    m_shockTimer = 8000;
++                    return;
++                }
++                if (lvl >= 4 && urand(0, 2) == 0 && Cast(target, BestRank(FROSTBOLT, lvl)))
++                    return;
++                Cast(target, BestRank(FIREBALL, lvl));
++                break;
 +        }
 +    }
 +
@@ -500,7 +618,7 @@ index 0000000..3b4cdd5
 +    {
 +        // the hero logged out or went elsewhere, or another copy of her travels with the hero now
 +        // (one was left behind on this map when the hero went into a dungeon): this one goes home
-+        if (!owner || !ZeldaIsCurrentFollower(owner, uint32(m_index), m_creature->GetObjectGuid()))
++        if (!owner || !ZeldaIsCurrentFollower(owner, FollowerSlot(m_index), m_creature->GetObjectGuid()))
 +        {
 +            m_creature->ForcedDespawn();
 +            return;
@@ -544,6 +662,121 @@ index 0000000..3b4cdd5
 +            m_creature->GetMotionMaster()->MoveFollow(owner, FOLLOW_DIST, FOLLOW_ANGLES[m_index & 3]);
 +    }
 +
++    // ---------------------------------------------------------------- Elara's wandering
++    Player* PlayerNear(float range) const
++    {
++        Map::PlayerList const& players = m_creature->GetMap()->GetPlayers();
++        for (auto const& ref : players)
++        {
++            Player* player = ref.getSource();
++            if (player && player->IsAlive() && m_creature->IsWithinDistInMap(player, range))
++                return player;
++        }
++        return nullptr;
++    }
++
++    void SayAbout(char const* format, char const* place)
++    {
++        if (Player* near = PlayerNear(30.0f))
++        {
++            char text[256];
++            snprintf(text, sizeof(text), format, place);
++            m_creature->MonsterSay(text, LANG_UNIVERSAL, near);
++        }
++    }
++
++    float DistToHub() const
++    {
++        Hub const& h = ELARA_HUBS[m_hub];
++        return m_creature->GetDistance(h.x, h.y, h.z);
++    }
++
++    void MoveOn()
++    {
++        Hub const& h = ELARA_HUBS[m_hub];
++        m_creature->GetMotionMaster()->MovePoint(1, h.x, h.y, h.z, FORCED_MOVEMENT_RUN, true);
++        m_lastDist = DistToHub();
++        m_progressTimer = 20000;
++    }
++
++    void SetOff()
++    {
++        // somewhere joined to where she is now (or the nearest place, the first time)
++        int32 from = 0;
++        float best = 1e9f;
++        for (uint32 i = 0; i < ELARA_HUBS.size(); ++i)
++        {
++            float d = m_creature->GetDistance(ELARA_HUBS[i].x, ELARA_HUBS[i].y, ELARA_HUBS[i].z);
++            if (d < best)
++            {
++                best = d;
++                from = int32(i);
++            }
++        }
++        std::vector<uint32> const& next = ELARA_HUBS[from].next;
++        m_hub = int32(next[urand(0, uint32(next.size()) - 1)]);
++        m_stuckCount = 0;
++        SayAbout(ELARA_SETTING_OFF[urand(0, 2)], ELARA_HUBS[m_hub].name);
++        MoveOn();
++    }
++
++    void MovementInform(uint32 type, uint32 id) override
++    {
++        if (!m_roaming || type != POINT_MOTION_TYPE || id != 1 || m_hub < 0 || m_creature->IsInCombat())
++            return;
++        if (DistToHub() > 10.0f)
++        {
++            MoveOn();                            // a long road comes in pieces: on to the next
++            return;
++        }
++        SayAbout(ELARA_ARRIVED[urand(0, 2)], ELARA_HUBS[m_hub].name);
++        m_hub = -1;
++        m_roamWait = urand(90000, 240000);       // a rest, a snack, a book
++        m_idleLineTimer = urand(20000, 40000);
++        m_creature->GetMotionMaster()->Clear();
++        m_creature->GetMotionMaster()->MoveRandomAroundPoint(m_creature->GetPositionX(), m_creature->GetPositionY(),
++                                                              m_creature->GetPositionZ(), 6.0f);
++    }
++
++    void UpdateRoam(uint32 diff)
++    {
++        if (m_hub < 0)
++        {
++            UpdateIdle(diff);
++            if (m_roamWait > diff)
++            {
++                m_roamWait -= diff;
++                return;
++            }
++            SetOff();
++            return;
++        }
++        // on the road: make sure she is still getting somewhere
++        if (m_progressTimer > diff)
++        {
++            m_progressTimer -= diff;
++            return;
++        }
++        float const d = DistToHub();
++        if (d > m_lastDist - 3.0f)
++        {
++            if (++m_stuckCount >= 3)
++            {
++                // this road is no good today: somewhere else
++                m_creature->GetMotionMaster()->Clear();
++                m_hub = -1;
++                m_roamWait = 5000;
++                return;
++            }
++        }
++        else
++            m_stuckCount = 0;
++        if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE)
++            MoveOn();
++        m_lastDist = d;
++        m_progressTimer = 20000;
++    }
++
 +    void UpdateIdle(uint32 diff)
 +    {
 +        if (m_creature->GetEntry() == LYRA_CAPTIVE)
@@ -573,10 +806,13 @@ index 0000000..3b4cdd5
 +        if (m_globalCooldown > diff) m_globalCooldown -= diff; else m_globalCooldown = 0;
 +        if (m_shockTimer > diff) m_shockTimer -= diff; else m_shockTimer = 0;
 +        if (m_hurtLineTimer > diff) m_hurtLineTimer -= diff; else m_hurtLineTimer = 0;
++        if (m_novaTimer > diff) m_novaTimer -= diff; else m_novaTimer = 0;
 +
 +        Player* owner = Owner();
 +        if (m_follower)
 +            UpdateFollower(diff, owner);
++        else if (m_roaming && m_creature->IsAlive() && !m_creature->IsInCombat())
++            UpdateRoam(diff);
 +        else if (!m_creature->IsInCombat())
 +            UpdateIdle(diff);
 +
@@ -656,7 +892,7 @@ index 0000000..3b4cdd5
 +    }
 +
 +    // she grows with you
-+    if (!creature->IsTemporarySummon() && creature->GetLevel() != player->GetLevel() && !creature->IsInCombat())
++    if (!creature->IsTemporarySummon() && index != ELARA_INDEX && creature->GetLevel() != player->GetLevel() && !creature->IsInCombat())
 +        creature->SelectLevel(player->GetLevel());
 +
 +    if (creature->isQuestGiver())
@@ -713,7 +949,7 @@ index 0000000..3b4cdd5
 +            player->GetNearPoint(player, x, y, z, 0.0f, 2.0f, player->GetOrientation() + M_PI_F);
 +            if (Creature* follower = player->SummonCreature(creature->GetEntry(), x, y, z, player->GetOrientation(), TEMPSPAWN_CORPSE_TIMED_DESPAWN, 10000))
 +            {
-+                ZeldaFollowerSet(player, uint32(index), follower->GetEntry(), follower->GetObjectGuid());
++                ZeldaFollowerSet(player, FollowerSlot(index), follower->GetEntry(), follower->GetObjectGuid());
 +                follower->MonsterSay(Pick(c.join), LANG_UNIVERSAL, player);
 +                // she has left her haunt for now
 +                creature->SetRespawnDelay(600, true);
@@ -724,7 +960,7 @@ index 0000000..3b4cdd5
 +        case ACTION_DISMISS:
 +            player->CLOSE_GOSSIP_MENU();
 +            creature->MonsterSay(Pick(c.leave), LANG_UNIVERSAL, player);
-+            ZeldaFollowerClear(player, uint32(index));
++            ZeldaFollowerClear(player, FollowerSlot(index));
 +            creature->ForcedDespawn(2000);
 +            return true;
 +    }
@@ -1044,10 +1280,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..6efb3ab
+index 0000000..dfb428c
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1649 @@
+@@ -0,0 +1,1654 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1121,10 +1357,10 @@ index 0000000..6efb3ab
 +        bool shield = false;
 +        uint32 shoutCheckIn = 0;
 +        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
-+        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper, Navi)
-+        uint32 followerEntry[5] = { 0, 0, 0, 0, 0 };
-+        ObjectGuid followerGuid[5];
-+        uint32 followerBackAt[5] = { 0, 0, 0, 0, 0 };   // after she falls, she rejoins at this time
++        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper, Navi, Elara)
++        uint32 followerEntry[6] = { 0, 0, 0, 0, 0, 0 };
++        ObjectGuid followerGuid[6];
++        uint32 followerBackAt[6] = { 0, 0, 0, 0, 0, 0 };   // after she falls, she rejoins at this time
 +        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
 +        uint32 naviHealReadyAt = 0;                     // and heal again after this (ms)
 +        // running: after Zelda.SprintAfterSeconds of running without stopping the hero sprints
@@ -1407,7 +1643,7 @@ index 0000000..6efb3ab
 +        return false;
 +    }
 +
-+    uint32 const COMPANION_COUNT = 5;
++    uint32 const COMPANION_COUNT = 6;
 +
 +    // Navi and her light: while the trinket is worn, the wisp follows, heals in combat and revives
 +    uint32 const NAVI_INDEX = 4;
@@ -2492,6 +2728,11 @@ index 0000000..6efb3ab
 +    return true;
 +}
 +
++bool ZeldaFemaleOnlyItem(uint32 itemId)
++{
++    return itemId >= 190900 && itemId <= 190949;
++}
++
 +void ZeldaAutoSellJunk(Player* player)
 +{
 +    static bool const junk = sConfig.GetBoolDefault("Zelda.AutoSellJunk", true);
@@ -2699,10 +2940,10 @@ index 0000000..6efb3ab
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..166d083
+index 0000000..9e562f5
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,132 @@
+@@ -0,0 +1,134 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -2751,6 +2992,8 @@ index 0000000..166d083
 +// Releasing the spirit inside a dungeon or raid: the hero comes back alive (5% health) where they
 +// entered it, instead of as a ghost at the graveyard outside (Zelda.DungeonReleaseAtEntrance).
 +bool ZeldaDungeonRelease(Player* player);
++// Items only female characters may wear (the hosiery, 190900-190949).
++bool ZeldaFemaleOnlyItem(uint32 itemId);
 +// Opening a vendor sells every grey item and every white weapon or armor piece in the bags
 +// (Zelda.AutoSellJunk, Zelda.AutoSellWhiteGear); they stay in the buyback tab.
 +void ZeldaAutoSellJunk(Player* player);
@@ -2820,7 +3063,7 @@ index 0000000..166d083
 +void ZeldaLoadStages();
 +// True when this companion spawn belongs to a chapter of the story this hero is not at.
 +bool ZeldaStageHidden(Creature const* creature, Player const* player);
-+// The companions travelling with a hero (index 0 Lyra, 1 Faelin, 2 Durza, 3 Vesper).
++// The companions travelling with a hero (index 0 Lyra, 1 Faelin, 2 Durza, 3 Vesper, 4 Navi, 5 Elara).
 +void ZeldaFollowerSet(Player* player, uint32 index, uint32 entry, ObjectGuid guid);
 +void ZeldaFollowerClear(Player* player, uint32 index);
 +// True when this creature is the copy of companion `index` travelling with the hero right now.
@@ -3075,7 +3318,7 @@ index 60cf414..c86aa00 100644
      GetPlayer()->RemovePet(PET_SAVE_REAGENTS);
      GetPlayer()->BuildPlayerRepop();
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e916..a48bb9c 100644
+index 4d8e916..01a31c2 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -3136,7 +3379,18 @@ index 4d8e916..a48bb9c 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -18082,9 +18094,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -9825,6 +9837,10 @@ InventoryResult Player::CanUseItem(ItemPrototype const* pProto, bool direct_acti
+         if ((pProto->AllowableClass & getClassMask()) == 0 || (pProto->AllowableRace & getRaceMask()) == 0)
+             return EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM;
+ 
++        // Zelda of Warcraft: the Silk & Lace boutique's hosiery is for ladies only
++        if (ZeldaFemaleOnlyItem(pProto->ItemId) && getGender() != GENDER_FEMALE)
++            return EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM;
++
+         if (pProto->RequiredSkill != 0)
+         {
+             if (GetSkillValue(pProto->RequiredSkill) == 0)
+@@ -18082,9 +18098,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -3151,7 +3405,7 @@ index 4d8e916..a48bb9c 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19680,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19684,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -3179,7 +3433,7 @@ index 4d8e916..a48bb9c 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20068,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20072,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -3188,7 +3442,7 @@ index 4d8e916..a48bb9c 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20257,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20261,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  

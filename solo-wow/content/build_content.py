@@ -167,12 +167,12 @@ def main():
 
     # the companions, one spawn per chapter
     for key, c in COMPANIONS.items():
-        base = {'lyra': 900100, 'faelin': 900200, 'durza': 900300, 'vesper': 900400}[key]
+        base = c.get('text_base') or {'lyra': 900100, 'faelin': 900200, 'durza': 900300, 'vesper': 900400}[key]
         texts.append(npc_text(base + 1, c['greeting']))
         texts.append(npc_text(base + 10, c['about']))
         for (entry, chapter, level, pos, wander, show, hide) in c['stages']:
             sub = c['subname'] if entry != LYRA_CAPTIVE else 'Prisoner of the Defias'
-            templates.append(creature_template(entry, c['name'], sub, c['display'], 35, c['equipment'], level,
+            templates.append(creature_template(entry, c['name'], sub, c['display'], c.get('faction', 35), c['equipment'], level,
                                                c['unit_class'], 'npc_zelda_companion', health=1.5, power=2.0))
             m, x, y, z, o = pos
             spawns.append(dict(guid=guid, id=entry, map=m, spawnMask=1, position_x=x, position_y=y, position_z=z,
