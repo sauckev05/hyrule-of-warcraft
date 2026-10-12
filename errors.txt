@@ -1,0 +1,6 @@
+
+> build.log:1029:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(1730,18): error C2248: 'WorldObject::SetLocationMapId': cannot access protected member declared in class 'WorldObject' [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:1030:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:1031:      D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Entities\Object.h(1173,14):
+
+
