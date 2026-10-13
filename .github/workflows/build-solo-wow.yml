@@ -347,7 +347,7 @@ jobs:
               'XPRate' = '1'; 'DisableActivityPriorities' = '1'; 'botActiveAlone' = '100'; 'ForceActiveWhenNearPlayer' = '1'
               'RandomBotInvitePlayer' = '0'; 'RandomBotGroupNearby' = '0'; 'EnableRandomTeleports' = '0'
               'LLMEnabled' = '2'; 'LLMApiEndpoint' = 'http://127.0.0.1:11434/v1/chat/completions'
-              'LLMApiJson' = '{"model": "qwen2.5:7b", "messages": [{"role": "system", "content": "<pre prompt> Conversation so far: <context>"},{"role": "user", "content": "<prompt>"}], "max_tokens": 100, "stream": false}'
+              'LLMApiJson' = '{"model": "llama3.2:3b", "messages": [{"role": "system", "content": "<pre prompt> Conversation so far: <context>"},{"role": "user", "content": "<prompt>"}], "max_tokens": 100, "stream": false}'
               'LLMResponseStartPattern' = '("content":\s*")'; 'LLMGlobalContext' = '1'; 'LLMContextLength' = '3500'
               'LLMRpgAIChatChance' = '15'; 'LLMDefaultPromptsFile' = 'llm_character_card.txt'
             }

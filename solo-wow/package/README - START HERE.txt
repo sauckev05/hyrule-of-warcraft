@@ -41,8 +41,8 @@ ELARA STARFALL, SYLWEN AND ZAGRA (AI-played characters who talk back)
   Elara is a real level 25 human mage played by the bot AI. She travels, fights, quests and
   levels up on her own. To let her talk with her own personality she needs a local AI model:
     1. Install Ollama from https://ollama.com
-    2. In a command window run:   ollama pull qwen2.5:7b
-       (a weaker PC can use llama3.2:3b; then change "qwen2.5:7b" in the LLMApiJson line
+    2. In a command window run:   ollama pull llama3.2:3b
+       (a stronger PC can use qwen2.5:7b; then change "llama3.2:3b" in the LLMApiJson line
         of server\aiplayerbot.conf to match)
   Talk to her with /say when she is near, or whisper /w Elara anywhere. /invite Elara to travel
   together. She remembers your conversations, even after the server restarts.
