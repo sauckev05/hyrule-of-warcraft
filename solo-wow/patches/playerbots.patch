@@ -14,7 +14,7 @@ index dec69c5..e57dfe5 100644
      if (!player->InBattleGround())
      {
 diff --git a/playerbot/PlayerbotAI.cpp b/playerbot/PlayerbotAI.cpp
-index f5cba54..f07c7ad 100644
+index f5cba54..b7a81cf 100644
 --- a/playerbot/PlayerbotAI.cpp
 +++ b/playerbot/PlayerbotAI.cpp
 @@ -4,6 +4,7 @@
@@ -25,7 +25,7 @@ index f5cba54..f07c7ad 100644
  
  #include "MotionGenerators/MovementGenerator.h"
  #include "Grids/GridNotifiers.h"
-@@ -274,8 +275,157 @@ PlayerbotAI::~PlayerbotAI()
+@@ -274,8 +275,169 @@ PlayerbotAI::~PlayerbotAI()
          delete aiObjectContext;
  }
  
@@ -177,13 +177,25 @@ index f5cba54..f07c7ad 100644
 +        if (first && bot->IsInWorld() && sRandomPlayerbotMgr.IsRandomBot(bot))
 +            ZeldaDropStaleParty(bot);
 +    }
++
++    // Zelda of Warcraft: an AI chat bot invited by a real player says yes right away, so an
++    // invitation never hangs (a hanging one blocks every later invite with "already in a group")
++    if (HasStrategy("ai chat", BotState::BOT_STATE_NON_COMBAT) && bot->IsInWorld())
++    {
++        if (Group* invite = bot->GetGroupInvite())
++        {
++            Player* leader = sObjectMgr.GetPlayer(invite->GetLeaderGuid());
++            if (leader && leader != bot && leader->isRealPlayer())
++                DoSpecificAction("accept invitation", Event("zelda"), true);
++        }
++    }
 +    for (zelda_ai::Pending const& pending : zelda_ai::Take(bot->GetGUIDLow()))
 +        ZeldaRunAction(this, bot, pending);
 +
      AiObjectContext* context = aiObjectContext;
      std::string mapString = WorldPosition(bot).isInstance() ? "I" : std::to_string(bot->GetMapId());
      auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAI " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
-@@ -2117,9 +2267,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
+@@ -2117,9 +2279,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
  
                  AiObjectContext* context = aiObjectContext;
                  std::string llmContext = AI_VALUE(std::string, "manual string::llmcontext" + llmChannel);

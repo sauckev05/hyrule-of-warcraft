@@ -49,6 +49,11 @@ ELARA STARFALL, SYLWEN AND ZAGRA (AI-played characters who talk back)
   Her personality is in server\llm_character_card.txt (one line: Name::description).
   To remove her: Zelda.ElaraPlayerBot = 0 in mangosd.conf and AiPlayerbot.MinRandomBots = 0, MaxRandomBots = 0 in aiplayerbot.conf.
 
+YOUR LEVEL 25 CHARACTERS
+  The PLAYER account gets Ruuka (orc shaman), Morwenna (undead priest), Lianne (human priest)
+  and Faelenna (night elf druid). They start at the Darnassus inn and become level 25 with
+  their class spells on their first login (spend the talent points yourself).
+
 ACCOUNTS
   PLAYER / PLAYER (normal)  -  ADMINISTRATOR / ADMINISTRATOR (game master)
   New account: in the world-server console window type   account create NAME PASSWORD
