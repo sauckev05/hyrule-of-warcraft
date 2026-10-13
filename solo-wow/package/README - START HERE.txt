@@ -35,20 +35,6 @@ PLAYERBOT COMPANIONS (optional)
      /invite <CharacterName>         (invite it to your party)
   Bots follow you, fight and heal. Whisper "help" to a bot for its commands.
 
-ELARA STARFALL, SYLWEN AND ZAGRA (AI-played characters who talk back)
-  Sylwen (night elf hunter) and Zagra (orc shaman) start at the inn in Darnassus, level 25,
-  and work just like Elara. Turn them off with Zelda.DarnassusBots = 0.
-  Elara is a real level 25 human mage played by the bot AI. She travels, fights, quests and
-  levels up on her own. To let her talk with her own personality she needs a local AI model:
-    1. Install Ollama from https://ollama.com
-    2. In a command window run:   ollama pull llama3.2:3b
-       (a stronger PC can use qwen2.5:7b; then change "llama3.2:3b" in the LLMApiJson line
-        of server\aiplayerbot.conf to match)
-  Talk to her with /say when she is near, or whisper /w Elara anywhere. /invite Elara to travel
-  together. She remembers your conversations, even after the server restarts.
-  Her personality is in server\llm_character_card.txt (one line: Name::description).
-  To remove her: Zelda.ElaraPlayerBot = 0 in mangosd.conf and AiPlayerbot.MinRandomBots = 0, MaxRandomBots = 0 in aiplayerbot.conf.
-
 YOUR LEVEL 25 CHARACTERS
   The PLAYER account gets Ruuka (orc shaman), Morwenna (undead priest), Lianne (human priest)
   and Faelenna (night elf druid). They start at the Darnassus inn and become level 25 with

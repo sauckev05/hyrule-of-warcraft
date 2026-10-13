@@ -53,16 +53,6 @@ jobs:
         env:
           BOOST_ROOT: ${{ steps.install-boost.outputs.BOOST_ROOT }}
         run: cmake -DBUILD_EXTRACTORS=ON -DBUILD_PLAYERBOTS=ON -DBUILD_AHBOT=ON -DPCH=ON -B cmangos/bin/builddir -S cmangos
-      - name: Patch the playerbots module (Zelda AI chat memory)
-        shell: pwsh
-        run: |
-          $pb = "cmangos/src/modules/PlayerBots"
-          git -C $pb config core.autocrlf false
-          git -C $pb rm -q -r --cached .
-          git -C $pb reset -q --hard
-          git -C $pb apply --whitespace=nowarn "$env:GITHUB_WORKSPACE/repo/solo-wow/patches/playerbots.patch"
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          git -C $pb status --short
       - name: Build
         shell: pwsh
         run: |
@@ -321,8 +311,6 @@ jobs:
           $c += 'Zelda.DungeonReleaseAtEntrance = 1'
           $c += 'Zelda.DungeonReleaseHealth = 0.05'
           $c += 'Zelda.ResetDungeonsOnLeave = 1'
-          $c += 'Zelda.ElaraPlayerBot = 1'
-          $c += 'Zelda.DarnassusBots = 1'
           $c += 'Zelda.HeartPieceChance = 15'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
@@ -331,25 +319,13 @@ jobs:
             (Get-Content $acd.FullName) -replace '^Enable\s*=.*', 'Enable = 0' -replace '^Warden\.Enable\s*=.*', 'Warden.Enable = 0' |
               Set-Content (Join-Path $acd.DirectoryName "anticheat.conf")
           }
-          # Playerbots: companions on demand, and one random bot: Elara Starfall, a level 25 mage the bot
-          # AI plays on her own, who talks through a local LLM (Ollama) with her character card and
-          # remembers conversations (ZeldaEnsureElaraBot, patches/playerbots.patch)
+          # Playerbots: companions on demand, no random-bot population and no AI chat (keeps it light)
           $pb = Get-ChildItem -Recurse $s -Filter "aiplayerbot.conf" | Select-Object -First 1
           if ($pb) {
             $p = [System.Collections.Generic.List[string]](Get-Content $pb.FullName)
             $want = [ordered]@{
-              'RandomBotAutologin' = '1'; 'RandomBotLoginAtStartup' = '1'; 'RandomBotAutoCreate' = '0'
-              'MinRandomBots' = '3'; 'MaxRandomBots' = '3'; 'RandomBotAccountCount' = '3'; 'DeleteRandomBotAccounts' = '0'
-              'RandomBotMinLevel' = '25'; 'RandomBotMaxLevel' = '25'; 'RandomBotMaxLevelChance' = '0'
-              'MinRandomBotRandomizeTime' = '315360000'; 'MaxRandomRandomizeTime' = '315360000'
-              'RandomBotTimedLogout' = '0'; 'RandomBotGuildCount' = '0'; 'RandomBotArenaTeamCount' = '0'
-              'RandomBotFormGuild' = '0'; 'RandomBotJoinLfg' = '0'; 'RandomBotJoinBG' = '0'; 'RandomBotAutoJoinBG' = '0'
-              'XPRate' = '1'; 'DisableActivityPriorities' = '1'; 'botActiveAlone' = '100'; 'ForceActiveWhenNearPlayer' = '1'
-              'RandomBotInvitePlayer' = '0'; 'RandomBotGroupNearby' = '0'; 'EnableRandomTeleports' = '0'
-              'LLMEnabled' = '2'; 'LLMApiEndpoint' = 'http://127.0.0.1:11434/v1/chat/completions'
-              'LLMApiJson' = '{"model": "llama3.2:3b", "messages": [{"role": "system", "content": "<pre prompt> Conversation so far: <context>"},{"role": "user", "content": "<prompt>"}], "max_tokens": 100, "stream": false}'
-              'LLMResponseStartPattern' = '("content":\s*")'; 'LLMGlobalContext' = '1'; 'LLMContextLength' = '3500'
-              'LLMRpgAIChatChance' = '15'; 'LLMDefaultPromptsFile' = 'llm_character_card.txt'
+              'RandomBotAutologin' = '0'; 'RandomBotAutoCreate' = '0'; 'MinRandomBots' = '0'; 'MaxRandomBots' = '0'
+              'RandomBotAccountCount' = '0'; 'DeleteRandomBotAccounts' = '0'; 'LLMEnabled' = '0'
             }
             foreach ($k in $want.Keys) {
               $line = "AiPlayerbot.$k = $($want[$k])"

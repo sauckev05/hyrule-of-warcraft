@@ -1280,10 +1280,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..a0d5144
+index 0000000..1367287
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1907 @@
+@@ -0,0 +1,1835 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2734,11 +2734,6 @@ index 0000000..a0d5144
 +    return true;
 +}
 +
-+bool ZeldaFemaleOnlyItem(uint32 itemId)
-+{
-+    return itemId >= 190900 && itemId <= 190949;
-+}
-+
 +void ZeldaAutoSellJunk(Player* player)
 +{
 +    static bool const junk = sConfig.GetBoolDefault("Zelda.AutoSellJunk", true);
@@ -2947,104 +2942,6 @@ index 0000000..a0d5144
 +
 +namespace
 +{
-+    // the characters the playerbots AI plays as people of their own (each on its own bot account,
-+    // RNDBOT0..; their personalities are in llm_character_card.txt)
-+    struct ZeldaAiBot
-+    {
-+        char const* config;     // on/off switch in mangosd.conf
-+        char const* account;
-+        char const* name;
-+        uint8 race, cls, gender, skin, face, hairStyle, hairColor;
-+        bool placed;            // false: wherever her race starts (the bot AI sends her on her way)
-+        uint32 map;
-+        float x, y, z, o;
-+        uint32 zone;
-+    };
-+
-+    ZeldaAiBot const ZELDA_AI_BOTS[] =
-+    {
-+        // Elara Starfall: a human mage with auburn hair, at the Darnassus inn
-+        { "Zelda.ElaraPlayerBot", "RNDBOT0", "Elara", RACE_HUMAN, CLASS_MAGE, GENDER_FEMALE, 1, 3, 5, 3, true, 1, 10128.2f, 2231.4f, 1328.81f, 4.6f, 1657 },
-+        // Sylwen: a night elf hunter, at the Darnassus inn
-+        { "Zelda.DarnassusBots", "RNDBOT1", "Sylwen", RACE_NIGHTELF, CLASS_HUNTER, GENDER_FEMALE, 2, 2, 3, 1, true, 1, 10124.6f, 2228.9f, 1328.81f, 5.4f, 1657 },
-+        // Zagra: an orc shaman, at the Darnassus inn
-+        { "Zelda.DarnassusBots", "RNDBOT2", "Zagra", RACE_ORC, CLASS_SHAMAN, GENDER_FEMALE, 1, 2, 4, 2, true, 1, 10131.2f, 2227.6f, 1328.81f, 3.9f, 1657 },
-+    };
-+
-+    void EnsureAiBot(ZeldaAiBot const& def)
-+    {
-+        std::string const accountName = def.account;
-+        std::string const name = def.name;
-+
-+        uint32 accountId = sAccountMgr.GetId(accountName);
-+        if (!accountId)
-+        {
-+            std::string password;
-+            for (int i = 0; i < 16; ++i)
-+                password += char(urand('a', 'z'));
-+            if (sAccountMgr.CreateAccount(accountName, password) != AOR_OK)
-+            {
-+                sLog.outError("Zelda: could not create the account %s for %s", accountName.c_str(), name.c_str());
-+                return;
-+            }
-+            accountId = sAccountMgr.GetId(accountName);
-+            if (!accountId)
-+                return;
-+            sLog.outString("Zelda: created the account %s for %s", accountName.c_str(), name.c_str());
-+        }
-+
-+        std::string escaped = name;
-+        CharacterDatabase.escape_string(escaped);
-+        if (auto result = CharacterDatabase.PQuery("SELECT guid FROM characters WHERE name = '%s'", escaped.c_str()))
-+        {
-+            // every session starts with the bot AI's own strategies (moving, fighting, AI chat); a
-+            // party she is in still gives her the follow strategies when she logs in
-+            uint32 const guid = result->Fetch()[0].GetUInt32();
-+            CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = '' AND `key` IN ('co', 'nc', 'dead', 'react')", guid);
-+            // never logged in yet, or not yet gathered at the Darnassus inn (once): she starts there
-+            if (def.placed)
-+            {
-+                bool const gathered = bool(CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = 'gathered1'", guid));
-+                CharacterDatabase.PExecute("UPDATE `characters` SET `map` = '%u', `position_x` = '%f', `position_y` = '%f', `position_z` = '%f', `orientation` = '%f', `zone` = '%u' WHERE `guid` = '%u'%s",
-+                                           def.map, def.x, def.y, def.z, def.o, def.zone, guid, gathered ? " AND `totaltime` = 0" : "");
-+                if (!gathered)
-+                {
-+                    CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', 'gathered1', '1')", guid);
-+                    sLog.outString("Zelda: %s waits at the Darnassus inn", name.c_str());
-+                }
-+            }
-+            return;
-+        }
-+
-+        WorldSession* session = new WorldSession(accountId, nullptr, SEC_PLAYER, 0, LOCALE_enUS, accountName, 0);
-+        Player* bot = new Player(session);
-+        // level 1 here: the playerbots manager gives her her level (25), spells, talents and gear
-+        if (!bot->Create(sObjectMgr.GeneratePlayerLowGuid(), name, def.race, def.cls, def.gender, def.skin, def.face, def.hairStyle, def.hairColor, 0, 0))
-+        {
-+            sLog.outError("Zelda: could not create %s", name.c_str());
-+            delete bot;
-+            delete session;
-+            return;
-+        }
-+        bot->setCinematic(1);
-+        bot->SetAtLoginFlag(AT_LOGIN_NONE);
-+        bot->SaveToDB();
-+        uint32 const guid = bot->GetGUIDLow();
-+        delete bot;
-+        delete session;
-+        // where she first logs in (queued after the save above, on the same database queue)
-+        if (def.placed)
-+            CharacterDatabase.PExecute("UPDATE `characters` SET `map` = '%u', `position_x` = '%f', `position_y` = '%f', `position_z` = '%f', `orientation` = '%f', `zone` = '%u' WHERE `guid` = '%u'",
-+                                       def.map, def.x, def.y, def.z, def.o, def.zone, guid);
-+
-+        LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid = '%u' AND realmid = '%u'", accountId, realmID);
-+        LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (1, %u, %u)", accountId, realmID);
-+        sLog.outString("Zelda: %s (guid %u) is ready for the playerbots AI", name.c_str(), guid);
-+    }
-+}
-+
-+namespace
-+{
 +    // characters made for the player's own account: they start at the Darnassus inn and become
 +    // level 25, with their class spells, the first time they log in
 +    struct ZeldaHero
@@ -3133,11 +3030,42 @@ index 0000000..a0d5144
 +    }
 +}
 +
-+void ZeldaEnsureElaraBot()
++namespace
 +{
-+    for (ZeldaAiBot const& def : ZELDA_AI_BOTS)
-+        if (sConfig.GetBoolDefault(def.config, true))
-+            EnsureAiBot(def);
++    // content taken out of the game: the AI-played characters (Elara, Sylwen and Zagra, on the bot
++    // accounts RNDBOT0-2) and the boutique hosiery (items 190900-190949) wherever players kept it
++    void RemoveRetiredContent()
++    {
++        for (char const* accountName : { "RNDBOT0", "RNDBOT1", "RNDBOT2" })
++        {
++            uint32 const accountId = sAccountMgr.GetId(accountName);
++            if (!accountId)
++                continue;
++            if (auto result = CharacterDatabase.PQuery("SELECT guid, name FROM characters WHERE account = '%u'", accountId))
++            {
++                do
++                {
++                    uint32 const guid = result->Fetch()[0].GetUInt32();
++                    std::string const name = result->Fetch()[1].GetCppString();
++                    CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u'", guid);
++                    CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_random_bots` WHERE `bot` = '%u'", guid);
++                    sLog.outString("Zelda: removing the AI character %s", name.c_str());
++                }
++                while (result->NextRow());
++            }
++            sAccountMgr.DeleteAccount(accountId);
++        }
++
++        CharacterDatabase.Execute("DELETE FROM `character_inventory` WHERE `item_template` BETWEEN 190900 AND 190949");
++        CharacterDatabase.Execute("DELETE FROM `item_instance` WHERE `itemEntry` BETWEEN 190900 AND 190949");
++        CharacterDatabase.Execute("DELETE FROM `auction` WHERE `item_template` BETWEEN 190900 AND 190949");
++        CharacterDatabase.Execute("DELETE FROM `mail_items` WHERE `item_template` BETWEEN 190900 AND 190949");
++    }
++}
++
++void ZeldaStartupCharacters()
++{
++    RemoveRetiredContent();
 +    EnsureHeroes();
 +}
 +
@@ -3193,10 +3121,10 @@ index 0000000..a0d5144
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..bc5b0a9
+index 0000000..7fb6271
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,137 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -3245,8 +3173,6 @@ index 0000000..bc5b0a9
 +// Releasing the spirit inside a dungeon or raid: the hero comes back alive (5% health) where they
 +// entered it, instead of as a ghost at the graveyard outside (Zelda.DungeonReleaseAtEntrance).
 +bool ZeldaDungeonRelease(Player* player);
-+// Items only female characters may wear (the hosiery, 190900-190949).
-+bool ZeldaFemaleOnlyItem(uint32 itemId);
 +// Opening a vendor sells every grey item and every white weapon or armor piece in the bags
 +// (Zelda.AutoSellJunk, Zelda.AutoSellWhiteGear); they stay in the buyback tab.
 +void ZeldaAutoSellJunk(Player* player);
@@ -3329,10 +3255,9 @@ index 0000000..bc5b0a9
 +void ZeldaHeartPieceDrop(Player* looter, Creature* victim, Loot* loot);
 +// A raid attunement quest the hero may stand in for with a companion's chapter.
 +bool ZeldaAlternateQuestDone(Player const* player, uint32 requiredQuest);
-+// Elara Starfall as a real character the playerbots AI plays: makes sure her bot account and her
-+// level 1 human mage exist before the bots start (the bot manager levels her to 25 on her first
-+// login). Zelda.ElaraPlayerBot = 1, the default.
-+void ZeldaEnsureElaraBot();
++// At startup: takes out retired content (the AI-played characters, the hosiery) and makes the
++// player's level 25 characters once.
++void ZeldaStartupCharacters();
 +// A character made for the player's account becomes level 25 with her class spells on her first login.
 +void ZeldaHeroFirstLogin(Player* player);
 +
@@ -3577,7 +3502,7 @@ index 60cf414..c86aa00 100644
      GetPlayer()->RemovePet(PET_SAVE_REAGENTS);
      GetPlayer()->BuildPlayerRepop();
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e916..01a31c2 100644
+index 4d8e916..a48bb9c 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -3638,18 +3563,7 @@ index 4d8e916..01a31c2 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -9825,6 +9837,10 @@ InventoryResult Player::CanUseItem(ItemPrototype const* pProto, bool direct_acti
-         if ((pProto->AllowableClass & getClassMask()) == 0 || (pProto->AllowableRace & getRaceMask()) == 0)
-             return EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM;
- 
-+        // Zelda of Warcraft: the Silk & Lace boutique's hosiery is for ladies only
-+        if (ZeldaFemaleOnlyItem(pProto->ItemId) && getGender() != GENDER_FEMALE)
-+            return EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM;
-+
-         if (pProto->RequiredSkill != 0)
-         {
-             if (GetSkillValue(pProto->RequiredSkill) == 0)
-@@ -18082,9 +18098,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18094,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -3664,7 +3578,7 @@ index 4d8e916..01a31c2 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19684,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19680,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -3692,7 +3606,7 @@ index 4d8e916..01a31c2 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20072,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20068,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -3701,7 +3615,7 @@ index 4d8e916..01a31c2 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20261,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20257,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -4133,7 +4047,7 @@ index 330ad8f..3916c50 100644
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
 diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
-index e344c52..efe5f5e 100644
+index e344c52..3f874a3 100644
 --- a/src/game/World/World.cpp
 +++ b/src/game/World/World.cpp
 @@ -21,6 +21,7 @@
@@ -4170,7 +4084,7 @@ index e344c52..efe5f5e 100644
      PlayerbotMgr::SetInitialWorldSettings();
  #endif
  
-+    ZeldaEnsureElaraBot();
++    ZeldaStartupCharacters();
 +
  #ifdef ENABLE_PLAYERBOTS
      sPlayerbotAIConfig.Initialize();
