@@ -3968,7 +3968,7 @@ index bf5c5c5..15f0fe9 100644
                  uint32 itemid    = m_spellInfo->Reagent[i];
                  uint32 itemcount = m_spellInfo->ReagentCount[i];
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
-index a9fb230..e130970 100644
+index a9fb230..35ceecd 100644
 --- a/src/game/Spells/SpellEffects.cpp
 +++ b/src/game/Spells/SpellEffects.cpp
 @@ -17,6 +17,7 @@
@@ -3979,7 +3979,7 @@ index a9fb230..e130970 100644
  #include "Database/DatabaseEnv.h"
  #include "Server/WorldPacket.h"
  #include "Server/Opcodes.h"
-@@ -241,6 +242,17 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
+@@ -241,6 +242,15 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
  {
      if (unitTarget && unitTarget->IsAlive())
      {
@@ -3987,17 +3987,15 @@ index a9fb230..e130970 100644
 +        if (m_spellInfo->Id == 15712 && m_caster && m_caster->IsPlayer())
 +            damage = int32(ZeldaBoomerangDamage(static_cast<Player*>(m_caster)));
 +
-+        // Zelda of Warcraft: Linken's Sword of Mastery strikes with holy light and heals its wielder as much
-+        if (m_spellInfo->Id == 25912 && m_CastItem && m_CastItem->GetEntry() == 11902 && m_caster)
-+        {
-+            damage = int32(urand(75, 150));
-+            m_caster->CastSpell(m_caster, 25914, TRIGGERED_OLD_TRIGGERED, m_CastItem);
-+        }
++        // Zelda of Warcraft: the Sword of Mastery (and the Unfinished one) strikes with holy light and
++        // heals its wielder as much (Light of Mastery 40002 -> 40003, Light of Linken 40006 -> 40007)
++        if ((m_spellInfo->Id == 40002 || m_spellInfo->Id == 40006) && m_caster)
++            m_caster->CastSpell(m_caster, m_spellInfo->Id + 1, TRIGGERED_OLD_TRIGGERED, m_CastItem);
 +
          switch (m_spellInfo->SpellFamilyName)
          {
              case SPELLFAMILY_GENERIC:
-@@ -1535,6 +1547,11 @@ void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
+@@ -1535,6 +1545,11 @@ void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
  {
      uint32 triggered_spell_id = m_spellInfo->EffectTriggerSpell[effIndex];
  
@@ -4009,18 +4007,7 @@ index a9fb230..e130970 100644
      // special cases
      switch (triggered_spell_id)
      {
-@@ -1836,6 +1853,10 @@ void Spell::EffectHeal(SpellEffectIndex eff_idx)
- 
-         int32 addhealth = damage;
- 
-+        // Zelda of Warcraft: the holy light of Linken's Sword of Mastery
-+        if (m_spellInfo->Id == 25914 && m_CastItem && m_CastItem->GetEntry() == 11902)
-+            addhealth = int32(urand(75, 150));
-+
-         // Swiftmend - consumes Regrowth or Rejuvenation
-         if (m_spellInfo->Id == 18562)
-         {
-@@ -3555,6 +3576,10 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
+@@ -3555,6 +3570,10 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
      }
  
      // total damage

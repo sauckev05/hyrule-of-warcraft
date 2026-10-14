@@ -693,9 +693,5 @@ for (_id, _lvl, _zone, _mob, _n, _title, _details, _obj, _req, _rew) in NAVI_ERR
           rep=(0, 0), prev=90501, next=0)
 
 # Linken's Sword of Mastery becomes a legendary blade and It's Dangerous to Go Alone gives only it.
-LINKEN_SWORD = dict(entry=11902, quality=5, dmg_min=120, dmg_max=160, delay=2600, item_level=70,
-                    stats=[(3, 15), (4, 15), (5, 15), (6, 15), (7, 15)],   # agility, strength, intellect, spirit, stamina
-                    holy_spell=25912, holy_ppm=2.0,                         # Holy Shock (damage); the server sets 75-150 and heals as much
-                    extra_attack_spell=15494, extra_attack_ppm=1.15,        # 2 extra attacks, about 5% of swings at 2.60 speed
-                    durability=125)
+LINKEN_SWORD_ENTRY = 11902   # the Unfinished Sword of Mastery (build_mastery.py)
 LINKEN_FINAL_QUEST = 3962

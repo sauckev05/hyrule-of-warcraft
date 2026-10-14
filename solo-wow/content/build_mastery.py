@@ -1,0 +1,279 @@
+"""Zelda of Warcraft: the Sword of Mastery.
+
+Linken's Sword of Mastery (the reward of Linken's quests, item 11902) becomes the epic *Unfinished
+Sword of Mastery*: Quel'Serrar's blade with a blue glow instead of its green one. Like Jang'thraze
+and Sang'thraze becoming Sul'thraze, using it while carrying Quel'Serrar forges the two into the
+legendary *Sword of Mastery* (191001): the look of the Grand Marshal's Longsword, 138-207 damage at
+2.90 speed, +25 to every stat, 2% hit and 2% critical strike with melee attacks and spells (heals
+included), a holy strike that burns the enemy for 150-300 and heals the wielder as much, and about
+a 15% chance per swing of two extra attacks.
+
+Writes
+  - zelda-sql/006_mastery.sql: the spells (spell_template) and the two swords (item_template)
+  - patch-Z.MPQ (when given the client's ItemDisplayInfo.dbc and Spell.dbc): the blue-glow look
+    and the new spells' names and tooltips, for the client's Data folder (both clients load it)
+
+usage: build_mastery.py [<ItemDisplayInfo.dbc> <Spell.dbc> <output patch-Z.MPQ>]
+"""
+
+import os
+import struct
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..', 'tools'))
+
+UNFINISHED = 11902          # Linken's Sword of Mastery
+QUEL_SERRAR = 18348
+MASTERY = 191001            # the Sword of Mastery
+GRAND_MARSHAL_LONGSWORD = 12584
+
+QUEL_SERRAR_LOOK = 30994    # Quel'Serrar's ItemDisplayInfo
+UNFINISHED_LOOK = 60101     # the same with a blue glow
+BLUE_GLOW = 42              # ItemVisuals: the blue glow of Azuresong Mageblade and Glacial Blade
+MASTERY_LOOK = 31966        # Grand Marshal's Longsword
+
+STR, AGI, STA, INT, SPI = 4, 3, 7, 5, 6
+EXTRA_ATTACKS = 15494       # Ironfoe's Fury of Forgewright: 2 extra attacks on the next swing
+
+# custom spells: (id, cloned from, name, tooltip text, changes)
+#   changes: {spell_template column: value}, and copy_effect1_to_2 to add a second aura like the first
+SPELLS = [
+    (40001, 11654, 'Forge the Sword of Mastery',
+     "Combines the Unfinished Sword of Mastery and Quel'Serrar to forge the legendary Sword of Mastery.",
+     dict(EffectItemType1=MASTERY, Reagent1=0, ReagentCount1=0, Reagent2=QUEL_SERRAR, ReagentCount2=1)),
+    (40002, 25912, 'Light of Mastery',
+     'Burns the enemy with holy light for 150 to 300 Holy damage and heals you for 150 to 300.',
+     dict(EffectBasePoints1=149, EffectDieSides1=151, EffectBaseDice1=1)),
+    (40003, 25914, 'Light of Mastery', '', dict(EffectBasePoints1=149, EffectDieSides1=151, EffectBaseDice1=1)),
+    (40004, 15465, 'Mastery of the Blade', 'Improves your chance to hit with melee attacks and spells by 2%.',
+     dict(copy_effect1_to_2=True, EffectApplyAuraName2=55)),
+    (40005, 7598, 'Mastery of the Blade',
+     'Improves your chance to get a critical strike with melee attacks, spells and heals by 2%.',
+     dict(copy_effect1_to_2=True, EffectApplyAuraName2=57)),
+    (40006, 25912, 'Light of Linken',
+     'Burns the enemy with holy light for 75 to 150 Holy damage and heals you for 75 to 150.',
+     dict(EffectBasePoints1=74, EffectDieSides1=76, EffectBaseDice1=1)),
+    (40007, 25914, 'Light of Linken', '', dict(EffectBasePoints1=74, EffectDieSides1=76, EffectBaseDice1=1)),
+]
+
+EFFECT_GROUPS = ['Effect', 'EffectDieSides', 'EffectBaseDice', 'EffectDicePerLevel', 'EffectRealPointsPerLevel',
+                 'EffectBasePoints', 'EffectMechanic', 'EffectImplicitTargetA', 'EffectImplicitTargetB',
+                 'EffectRadiusIndex', 'EffectApplyAuraName', 'EffectAmplitude', 'EffectMultipleValue',
+                 'EffectChainTarget', 'EffectItemType', 'EffectMiscValue', 'EffectTriggerSpell',
+                 'EffectPointsPerComboPoint', 'DmgMultiplier']
+
+SPELL_COLUMNS = ['Id', 'School', 'Category', 'CastUI', 'Dispel', 'Mechanic', 'Attributes', 'AttributesEx', 'AttributesEx2',
+    'AttributesEx3', 'AttributesEx4', 'Stances', 'StancesNot', 'Targets', 'TargetCreatureType',
+    'RequiresSpellFocus', 'CasterAuraState', 'TargetAuraState', 'CastingTimeIndex', 'RecoveryTime',
+    'CategoryRecoveryTime', 'InterruptFlags', 'AuraInterruptFlags', 'ChannelInterruptFlags', 'ProcFlags',
+    'ProcChance', 'ProcCharges', 'MaxLevel', 'BaseLevel', 'SpellLevel', 'DurationIndex', 'PowerType',
+    'ManaCost', 'ManaCostPerlevel', 'ManaPerSecond', 'ManaPerSecondPerLevel', 'RangeIndex', 'Speed',
+    'ModalNextSpell', 'StackAmount', 'Totem1', 'Totem2', 'Reagent1', 'Reagent2', 'Reagent3', 'Reagent4',
+    'Reagent5', 'Reagent6', 'Reagent7', 'Reagent8', 'ReagentCount1', 'ReagentCount2', 'ReagentCount3',
+    'ReagentCount4', 'ReagentCount5', 'ReagentCount6', 'ReagentCount7', 'ReagentCount8', 'EquippedItemClass',
+    'EquippedItemSubClassMask', 'EquippedItemInventoryTypeMask', 'Effect1', 'Effect2', 'Effect3',
+    'EffectDieSides1', 'EffectDieSides2', 'EffectDieSides3', 'EffectBaseDice1', 'EffectBaseDice2',
+    'EffectBaseDice3', 'EffectDicePerLevel1', 'EffectDicePerLevel2', 'EffectDicePerLevel3',
+    'EffectRealPointsPerLevel1', 'EffectRealPointsPerLevel2', 'EffectRealPointsPerLevel3',
+    'EffectBasePoints1', 'EffectBasePoints2', 'EffectBasePoints3', 'EffectMechanic1', 'EffectMechanic2',
+    'EffectMechanic3', 'EffectImplicitTargetA1', 'EffectImplicitTargetA2', 'EffectImplicitTargetA3',
+    'EffectImplicitTargetB1', 'EffectImplicitTargetB2', 'EffectImplicitTargetB3', 'EffectRadiusIndex1',
+    'EffectRadiusIndex2', 'EffectRadiusIndex3', 'EffectApplyAuraName1', 'EffectApplyAuraName2',
+    'EffectApplyAuraName3', 'EffectAmplitude1', 'EffectAmplitude2', 'EffectAmplitude3',
+    'EffectMultipleValue1', 'EffectMultipleValue2', 'EffectMultipleValue3', 'EffectChainTarget1',
+    'EffectChainTarget2', 'EffectChainTarget3', 'EffectItemType1', 'EffectItemType2', 'EffectItemType3',
+    'EffectMiscValue1', 'EffectMiscValue2', 'EffectMiscValue3', 'EffectTriggerSpell1', 'EffectTriggerSpell2',
+    'EffectTriggerSpell3', 'EffectPointsPerComboPoint1', 'EffectPointsPerComboPoint2',
+    'EffectPointsPerComboPoint3', 'SpellVisual', 'SpellIconID', 'ActiveIconID', 'SpellPriority', 'SpellName',
+    'SpellName2', 'SpellName3', 'SpellName4', 'SpellName5', 'SpellName6', 'SpellName7', 'SpellName8',
+    'Rank1', 'Rank2', 'Rank3', 'Rank4', 'Rank5', 'Rank6', 'Rank7', 'Rank8', 'ManaCostPercentage',
+    'StartRecoveryCategory', 'StartRecoveryTime', 'MaxTargetLevel', 'SpellFamilyName', 'SpellFamilyFlags',
+    'MaxAffectedTargets', 'DmgClass', 'PreventionType', 'StanceBarOrder', 'DmgMultiplier1', 'DmgMultiplier2',
+    'DmgMultiplier3', 'MinFactionId', 'MinReputation', 'RequiredAuraVision', 'IsServerSide',
+    'AttributesServerside']
+ITEM_COLUMNS = ['entry', 'class', 'subclass', 'name', 'displayid', 'Quality', 'Flags', 'BuyCount', 'BuyPrice', 'SellPrice',
+    'InventoryType', 'AllowableClass', 'AllowableRace', 'ItemLevel', 'RequiredLevel', 'RequiredSkill',
+    'RequiredSkillRank', 'requiredspell', 'requiredhonorrank', 'RequiredCityRank',
+    'RequiredReputationFaction', 'RequiredReputationRank', 'maxcount', 'stackable', 'ContainerSlots',
+    'stat_type1', 'stat_value1', 'stat_type2', 'stat_value2', 'stat_type3', 'stat_value3', 'stat_type4',
+    'stat_value4', 'stat_type5', 'stat_value5', 'stat_type6', 'stat_value6', 'stat_type7', 'stat_value7',
+    'stat_type8', 'stat_value8', 'stat_type9', 'stat_value9', 'stat_type10', 'stat_value10', 'dmg_min1',
+    'dmg_max1', 'dmg_type1', 'dmg_min2', 'dmg_max2', 'dmg_type2', 'dmg_min3', 'dmg_max3', 'dmg_type3',
+    'dmg_min4', 'dmg_max4', 'dmg_type4', 'dmg_min5', 'dmg_max5', 'dmg_type5', 'armor', 'holy_res',
+    'fire_res', 'nature_res', 'frost_res', 'shadow_res', 'arcane_res', 'delay', 'ammo_type',
+    'RangedModRange', 'spellid_1', 'spelltrigger_1', 'spellcharges_1', 'spellppmRate_1', 'spellcooldown_1',
+    'spellcategory_1', 'spellcategorycooldown_1', 'spellid_2', 'spelltrigger_2', 'spellcharges_2',
+    'spellppmRate_2', 'spellcooldown_2', 'spellcategory_2', 'spellcategorycooldown_2', 'spellid_3',
+    'spelltrigger_3', 'spellcharges_3', 'spellppmRate_3', 'spellcooldown_3', 'spellcategory_3',
+    'spellcategorycooldown_3', 'spellid_4', 'spelltrigger_4', 'spellcharges_4', 'spellppmRate_4',
+    'spellcooldown_4', 'spellcategory_4', 'spellcategorycooldown_4', 'spellid_5', 'spelltrigger_5',
+    'spellcharges_5', 'spellppmRate_5', 'spellcooldown_5', 'spellcategory_5', 'spellcategorycooldown_5',
+    'bonding', 'description', 'PageText', 'LanguageID', 'PageMaterial', 'startquest', 'lockid', 'Material',
+    'sheath', 'RandomProperty', 'block', 'itemset', 'MaxDurability', 'area', 'Map', 'BagFamily',
+    'ScriptName', 'DisenchantID', 'FoodType', 'minMoneyLoot', 'maxMoneyLoot', 'Duration', 'ExtraFlags']
+
+# Spell.dbc (1.12.1, 173 fields): where the spell_template columns sit
+DBC_FIELD = {'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51}
+for _i, _g in enumerate(EFFECT_GROUPS[:-1]):
+    for _k in (1, 2, 3):
+        DBC_FIELD['%s%d' % (_g, _k)] = 61 + _i * 3 + (_k - 1)
+for _k in (1, 2, 3):
+    DBC_FIELD['DmgMultiplier%d' % _k] = 166 + _k
+DBC_NAME, DBC_RANK, DBC_DESCRIPTION, DBC_TOOLTIP = 120, 129, 138, 147
+
+
+def sql_str(s):
+    return "'" + s.replace('\\', '\\\\').replace("'", "\\'") + "'"
+
+
+# ------------------------------------------------------------------ server SQL
+def clone(table, key, new_id, source_id, columns):
+    rest = [c for c in columns if c != key]
+    cols = ', '.join('`%s`' % c for c in rest)
+    return ('DELETE FROM `%s` WHERE `%s` = %d;\n' % (table, key, new_id) +
+            'INSERT INTO `%s` (`%s`, %s) SELECT %d, %s FROM `%s` WHERE `%s` = %d;\n'
+            % (table, key, cols, new_id, cols, table, key, source_id))
+
+
+def spell_sql():
+    out = []
+    for sid, source, name, text, changes in SPELLS:
+        out.append(clone('spell_template', 'Id', sid, source, SPELL_COLUMNS))
+        sets = ['`SpellName` = %s' % sql_str(name)]
+        if changes.get('copy_effect1_to_2'):
+            sets += ['`%s2` = `%s1`' % (g, g) for g in EFFECT_GROUPS]
+        sets += ['`%s` = %d' % (k, v) for k, v in changes.items() if k != 'copy_effect1_to_2']
+        out.append('UPDATE `spell_template` SET %s WHERE `Id` = %d;\n' % (', '.join(sets), sid))
+    return ''.join(out)
+
+
+def spells_sql(slots):
+    """item_template columns for the five item spells: (spell, trigger, ppm, charges)"""
+    sets = []
+    for n in range(1, 6):
+        spell, trigger, ppm, charges = slots[n - 1] if n <= len(slots) else (0, 0, 0, 0)
+        sets.append('`spellid_%d` = %d, `spelltrigger_%d` = %d, `spellppmRate_%d` = %s, `spellcharges_%d` = %d, '
+                    '`spellcooldown_%d` = -1, `spellcategory_%d` = 0, `spellcategorycooldown_%d` = -1'
+                    % (n, spell, n, trigger, n, ppm, n, charges, n, n, n))
+    return ', '.join(sets)
+
+
+def stats_sql(stats):
+    sets = []
+    for n in range(1, 11):
+        t, v = stats[n - 1] if n <= len(stats) else (0, 0)
+        sets.append('`stat_type%d` = %d, `stat_value%d` = %d' % (n, t, n, v))
+    return ', '.join(sets)
+
+
+def item_sql():
+    out = []
+    # the Unfinished Sword of Mastery: Linken's reward, now epic, in Quel'Serrar's shape
+    out.append('UPDATE `item_template` SET `name` = %s, `Quality` = 4, `displayid` = %d, `ItemLevel` = 70, '
+               '`dmg_min1` = 120, `dmg_max1` = 160, `dmg_type1` = 0, `delay` = 2600, `DisenchantID` = 0, '
+               '`MaxDurability` = 125, %s, %s, `description` = %s WHERE `entry` = %d;\n'
+               % (sql_str('Unfinished Sword of Mastery'), UNFINISHED_LOOK,
+                  stats_sql([(AGI, 15), (STR, 15), (INT, 15), (SPI, 15), (STA, 15)]),
+                  spells_sql([(40006, 2, 2.0, 0),                 # holy light, 75-150
+                              (EXTRA_ATTACKS, 2, 1.15, 0),        # 2 extra attacks, about 5% of swings
+                              (40001, 0, 0, -1)]),                # use: forge it with Quel'Serrar (used up)
+                  sql_str("Linken's blade, waiting for a worthy steel to make it whole."), UNFINISHED))
+    # the Sword of Mastery, made from the Grand Marshal's Longsword's row
+    out.append(clone('item_template', 'entry', MASTERY, GRAND_MARSHAL_LONGSWORD, ITEM_COLUMNS))
+    out.append('UPDATE `item_template` SET `name` = %s, `Quality` = 5, `Flags` = 0, `displayid` = %d, '
+               '`ItemLevel` = 80, `RequiredLevel` = 60, `requiredhonorrank` = 0, `RequiredCityRank` = 0, '
+               '`RequiredReputationFaction` = 0, `RequiredReputationRank` = 0, `AllowableClass` = -1, '
+               '`AllowableRace` = -1, `BuyPrice` = 0, `SellPrice` = 250000, `bonding` = 1, `maxcount` = 1, '
+               '`dmg_min1` = 138, `dmg_max1` = 207, `dmg_type1` = 0, `delay` = 2900, `MaxDurability` = 125, '
+               '`DisenchantID` = 0, %s, %s, `description` = %s WHERE `entry` = %d;\n'
+               % (sql_str('Sword of Mastery'), MASTERY_LOOK,
+                  stats_sql([(STR, 25), (AGI, 25), (STA, 25), (INT, 25), (SPI, 25)]),
+                  spells_sql([(40004, 1, 0, 0),                  # 2% hit, melee and spells
+                              (40005, 1, 0, 0),                  # 2% crit, melee and spells (heals too)
+                              (40002, 2, 2.0, 0),                # holy light, 150-300
+                              (EXTRA_ATTACKS, 2, 3.1, 0)]),      # 2 extra attacks: 15% of swings at 2.90
+                  sql_str("Linken's courage and Quel'Serrar's steel, made one."), MASTERY))
+    return ''.join(out)
+
+
+def write_sql():
+    path = os.path.join(HERE, 'zelda-sql', '006_mastery.sql')
+    text = '-- Zelda of Warcraft: the Sword of Mastery (generated by build_mastery.py)\n' + spell_sql() + item_sql()
+    with open(path, 'w', newline='\n') as f:
+        f.write(text)
+    print('wrote', path, len(text), 'bytes')
+
+
+# ------------------------------------------------------------------ client patch
+def read_dbc(path):
+    d = open(path, 'rb').read()
+    magic, n, f, rs, ss = struct.unpack('<4s4I', d[:20])
+    assert magic == b'WDBC' and rs == f * 4, path
+    rows = [list(struct.unpack('<%dI' % f, d[20 + i * rs:20 + (i + 1) * rs])) for i in range(n)]
+    return f, rows, bytearray(d[20 + n * rs:])
+
+
+def add_string(strings, s):
+    if not s:
+        return 0
+    off = len(strings)
+    strings += s.encode() + b'\0'
+    return off
+
+
+def write_dbc(f, rows, strings):
+    out = bytearray(b'WDBC' + struct.pack('<4I', len(rows), f, f * 4, len(strings)))
+    for r in rows:
+        out += struct.pack('<%dI' % f, *[v & 0xFFFFFFFF for v in r])
+    return bytes(out + strings)
+
+
+def patch_display(path):
+    f, rows, strings = read_dbc(path)
+    byid = {r[0]: r for r in rows}
+    assert UNFINISHED_LOOK not in byid
+    row = list(byid[QUEL_SERRAR_LOOK])
+    row[0] = UNFINISHED_LOOK
+    row[22] = BLUE_GLOW
+    rows.append(row)
+    rows.sort(key=lambda r: r[0])
+    return write_dbc(f, rows, strings)
+
+
+def patch_spells(path):
+    f, rows, strings = read_dbc(path)
+    assert f == 173, f
+    byid = {r[0]: r for r in rows}
+    top = max(byid)
+    for sid, source, name, text, changes in SPELLS:
+        assert sid not in byid and sid > top, sid
+        row = list(byid[source])
+        row[0] = sid
+        if changes.get('copy_effect1_to_2'):
+            for g in EFFECT_GROUPS:
+                a = DBC_FIELD['%s1' % g]
+                row[a + 1] = row[a]
+        for k, v in changes.items():
+            if k != 'copy_effect1_to_2':
+                row[DBC_FIELD[k]] = v
+        row[DBC_NAME] = add_string(strings, name)
+        row[DBC_RANK] = 0
+        row[DBC_DESCRIPTION] = add_string(strings, text)
+        row[DBC_TOOLTIP] = 0
+        rows.append(row)
+    return write_dbc(f, rows, strings)
+
+
+def build_patch(display_dbc, spell_dbc, out_mpq):
+    import mpq
+    files = {'DBFilesClient\\ItemDisplayInfo.dbc': patch_display(display_dbc),
+             'DBFilesClient\\Spell.dbc': patch_spells(spell_dbc)}
+    mpq.write_archive(out_mpq, files)
+    print('wrote', out_mpq, os.path.getsize(out_mpq), 'bytes')
+
+
+if __name__ == '__main__':
+    write_sql()
+    if len(sys.argv) == 4:
+        build_patch(*sys.argv[1:])

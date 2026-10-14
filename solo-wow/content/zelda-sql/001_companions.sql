@@ -357,8 +357,6 @@ INSERT INTO `creature_involvedrelation` (`id`,`quest`) VALUES
 (190601,90514),
 (190601,90515);
 
-UPDATE `item_template` SET `Quality` = 5, `dmg_min1` = 120, `dmg_max1` = 160, `dmg_type1` = 0, `delay` = 2600, `ItemLevel` = 70, `DisenchantID` = 0, `MaxDurability` = 125, `stat_type1` = 3, `stat_value1` = 15, `stat_type2` = 4, `stat_value2` = 15, `stat_type3` = 5, `stat_value3` = 15, `stat_type4` = 6, `stat_value4` = 15, `stat_type5` = 7, `stat_value5` = 15, `spellid_1` = 25912, `spelltrigger_1` = 2, `spellppmRate_1` = 2.0, `spellcooldown_1` = -1, `spellcategorycooldown_1` = -1, `spellid_2` = 15494, `spelltrigger_2` = 2, `spellppmRate_2` = 1.15, `spellcooldown_2` = -1, `spellcategorycooldown_2` = -1 WHERE `entry` = 11902;
-
 UPDATE `quest_template` SET `RewChoiceItemId1` = 11902, `RewChoiceItemCount1` = 1, `RewChoiceItemId2` = 0, `RewChoiceItemCount2` = 0, `RewChoiceItemId3` = 0, `RewChoiceItemCount3` = 0, `RewChoiceItemId4` = 0, `RewChoiceItemCount4` = 0, `RewChoiceItemId5` = 0, `RewChoiceItemCount5` = 0, `RewChoiceItemId6` = 0, `RewChoiceItemCount6` = 0, `RewItemId1` = 0, `RewItemCount1` = 0 WHERE `entry` = 3962;
 
 UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;

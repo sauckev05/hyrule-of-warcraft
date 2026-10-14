@@ -5,7 +5,7 @@ quests, quest items, drops and dialogue. The server applies zelda-sql/*.sql by i
 import json
 import os
 from story import (STORY_NPCS, COMPANIONS, RETIRED_ENTRIES, QUEST_ITEMS, Q, KATRANA_TEXTS, CAPTIVE_TEXT, NAVI, NAVI_ITEMS,
-                   LINKEN_SWORD, LINKEN_FINAL_QUEST)
+                   LINKEN_SWORD_ENTRY, LINKEN_FINAL_QUEST)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REWARDS = {int(k): v for k, v in json.load(open(os.path.join(HERE, 'rewards.json'))).items()}
@@ -285,20 +285,11 @@ def main():
     out.append(insert('creature_questrelation', starts))
     out.append(insert('creature_involvedrelation', ends))
 
-    # Linken's Sword of Mastery: a legendary blade (holy proc and extra attacks are scripted in the core)
-    sw = LINKEN_SWORD
-    stat_cols = ', '.join('`stat_type%d` = %d, `stat_value%d` = %d' % (i, t, i, v) for i, (t, v) in enumerate(sw['stats'], start=1))
-    out.append('UPDATE `item_template` SET `Quality` = %d, `dmg_min1` = %d, `dmg_max1` = %d, `dmg_type1` = 0, `delay` = %d, '
-               '`ItemLevel` = %d, `DisenchantID` = 0, `MaxDurability` = %d, %s, '
-               '`spellid_1` = %d, `spelltrigger_1` = 2, `spellppmRate_1` = %s, `spellcooldown_1` = -1, `spellcategorycooldown_1` = -1, '
-               '`spellid_2` = %d, `spelltrigger_2` = 2, `spellppmRate_2` = %s, `spellcooldown_2` = -1, `spellcategorycooldown_2` = -1 '
-               'WHERE `entry` = %d;\n' % (sw['quality'], sw['dmg_min'], sw['dmg_max'], sw['delay'], sw['item_level'],
-                                          sw['durability'], stat_cols, sw['holy_spell'], sw['holy_ppm'],
-                                          sw['extra_attack_spell'], sw['extra_attack_ppm'], sw['entry']))
+    # Linken's Sword of Mastery (11902) itself: see build_mastery.py (006_mastery.sql)
     # It's Dangerous to Go Alone: the sword only (no boomerang, no Spirit of Aquementas)
     others = ', '.join('`RewChoiceItemId%d` = 0, `RewChoiceItemCount%d` = 0' % (n, n) for n in range(2, 7))
     out.append('UPDATE `quest_template` SET `RewChoiceItemId1` = %d, `RewChoiceItemCount1` = 1, %s, '
-               '`RewItemId1` = 0, `RewItemCount1` = 0 WHERE `entry` = %d;\n' % (sw['entry'], others, LINKEN_FINAL_QUEST))
+               '`RewItemId1` = 0, `RewItemCount1` = 0 WHERE `entry` = %d;\n' % (LINKEN_SWORD_ENTRY, others, LINKEN_FINAL_QUEST))
     # Linken's story now begins with Navi: The Hero of Time leads into It's a Secret to Everybody
     out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;\n')
     out.append('UPDATE `quest_template` SET `NextQuestInChain` = 3908 WHERE `entry` = 90503;\n')

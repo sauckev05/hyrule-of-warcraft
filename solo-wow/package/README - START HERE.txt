@@ -35,6 +35,11 @@ PLAYERBOT COMPANIONS (optional)
      /invite <CharacterName>         (invite it to your party)
   Bots follow you, fight and heal. Whisper "help" to a bot for its commands.
 
+THE SWORD OF MASTERY
+  Linken's quests reward the Unfinished Sword of Mastery (epic, Quel'Serrar's blade with a blue
+  glow). Use it while you carry Quel'Serrar to forge both into the legendary Sword of Mastery.
+  Its look and tooltips need patch-Z.MPQ in your WoW Data folder (made by build_mastery.py).
+
 YOUR LEVEL 25 CHARACTERS
   The PLAYER account gets Ruuka (orc shaman), Morwenna (undead priest), Lianne (human priest)
   and Faelenna (night elf druid). They start at the Darnassus inn and become level 25 with
