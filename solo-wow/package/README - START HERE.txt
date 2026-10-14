@@ -35,6 +35,12 @@ PLAYERBOT COMPANIONS (optional)
      /invite <CharacterName>         (invite it to your party)
   Bots follow you, fight and heal. Whisper "help" to a bot for its commands.
 
+A WARRIOR'S WORLD
+  Raid items (except Quel'Serrar) and gear a warrior does not use - cloth (not cloaks) and
+  leather armor, mail from level 40, staves, wands, librams, idols, totems and other classes'
+  gear - no longer drop, are not sold or given by quests, and their recipes are not taught.
+  What your characters already own stays. List: zelda-sql/007_warrior_gear.sql.
+
 THE SWORD OF MASTERY
   Linken's quests reward the Unfinished Sword of Mastery (epic, Quel'Serrar's blade with a blue
   glow). Use it while you carry Quel'Serrar to forge both into the legendary Sword of Mastery.

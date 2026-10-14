@@ -1239,6 +1239,27 @@ index d4e7525..5bbe70c 100644
      AddSC_war_effort();
      AddSC_scourge_invasion();
      AddSC_lunar_festival();
+diff --git a/src/game/AuctionHouseBot/AuctionHouseBot.cpp b/src/game/AuctionHouseBot/AuctionHouseBot.cpp
+index 811d227..cfd7b4d 100644
+--- a/src/game/AuctionHouseBot/AuctionHouseBot.cpp
++++ b/src/game/AuctionHouseBot/AuctionHouseBot.cpp
+@@ -25,6 +25,7 @@
+ #include "Server/DBCEnums.h"
+ #include "SystemConfig.h"
+ #include "World/World.h"
++#include "Chat/ZeldaCommands.h"
+ 
+ // Format is YYYYMMDDRR where RR is the change in the conf file
+ // for that day.
+@@ -226,6 +227,8 @@ void AuctionHouseBot::Update()
+             ItemPrototype const* prototype = ObjectMgr::GetItemPrototype(itemEntry.first);
+             if (!prototype || prototype->GetMaxStackSize() == 0)
+                 continue; // really shouldn't happen, but better safe than sorry
++            if (ZeldaItemRemoved(itemEntry.first))
++                continue; // Zelda of Warcraft: taken out of the game
+             auto iterator = m_itemData.find(prototype->ItemId);
+             if (iterator != m_itemData.end() && iterator->second.Value == 0)
+                 continue; // item is blacklisted
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
 index ffa25ba..ea8cbc6 100644
 --- a/src/game/Chat/Chat.cpp
@@ -1280,10 +1301,10 @@ index 00fde0a..c794795 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 0000000..1367287
+index 0000000..4038bcb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1835 @@
+@@ -0,0 +1,1860 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1347,6 +1368,7 @@ index 0000000..1367287
 +#include <vector>
 +#include <mutex>
 +#include <unordered_map>
++#include <unordered_set>
 +
 +namespace
 +{
@@ -2627,6 +2649,8 @@ index 0000000..1367287
 +                continue;
 +            if (proto->RequiredLevel < 1 || proto->RequiredLevel > 60)
 +                continue;
++            if (ZeldaItemRemoved(proto->ItemId))
++                continue;
 +            std::string const name = proto->Name1 ? proto->Name1 : "";
 +            if (name.empty() || StartsWith(name, "Deprecated") || StartsWith(name, "Test") || StartsWith(name, "TEST") ||
 +                StartsWith(name, "Monster") || StartsWith(name, "[PH]") || StartsWith(name, "OLD") || StartsWith(name, "QA") ||
@@ -2813,6 +2837,28 @@ index 0000000..1367287
 +{
 +    static bool const enabled = sConfig.GetBoolDefault("Zelda.OwnProfessionReagentsOnly", true);
 +    return enabled && !s_waivedReagents.empty() && s_waivedReagents.count({ spellId, itemId }) != 0;
++}
++
++namespace
++{
++    std::unordered_set<uint32> s_removedItems;
++}
++
++void ZeldaLoadRemovedItems()
++{
++    s_removedItems.clear();
++    if (auto result = WorldDatabase.Query("SELECT entry FROM zelda_removed_item"))
++    {
++        do
++            s_removedItems.insert(result->Fetch()[0].GetUInt32());
++        while (result->NextRow());
++    }
++    sLog.outString(">> Zelda: %u items no longer appear in the game", uint32(s_removedItems.size()));
++}
++
++bool ZeldaItemRemoved(uint32 itemId)
++{
++    return s_removedItems.count(itemId) != 0;
 +}
 +
 +void ZeldaLoadWaivedReagents()
@@ -3121,10 +3167,10 @@ index 0000000..1367287
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 0000000..7fb6271
+index 0000000..484b572
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,140 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -3167,6 +3213,9 @@ index 0000000..7fb6271
 +// Crafting: a reagent another profession provides is not needed (zelda_waived_reagent).
 +bool ZeldaReagentWaived(uint32 spellId, uint32 itemId);
 +void ZeldaLoadWaivedReagents();
++// Items taken out of the game (zelda_removed_item): no auction house bot listings, no bonus chest loot.
++void ZeldaLoadRemovedItems();
++bool ZeldaItemRemoved(uint32 itemId);
 +// Called from the world thread (no map is updating): a hero who just left a five-player dungeon
 +// gets it reset, so it is fresh the next time (Zelda.ResetDungeonsOnLeave).
 +void ZeldaWorldThreadUpdate(Player* player);
@@ -4034,7 +4083,7 @@ index 330ad8f..3916c50 100644
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
 diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
-index e344c52..3f874a3 100644
+index e344c52..4c52233 100644
 --- a/src/game/World/World.cpp
 +++ b/src/game/World/World.cpp
 @@ -21,6 +21,7 @@
@@ -4055,7 +4104,7 @@ index e344c52..3f874a3 100644
      ///- Loading strings. Getting no records means core load has to be canceled because no error message can be output.
      sLog.outString("Loading MaNGOS strings...");
      if (!sObjectMgr.LoadMangosStrings())
-@@ -1100,6 +1104,11 @@ void World::SetInitialWorldSettings()
+@@ -1100,6 +1104,12 @@ void World::SetInitialWorldSettings()
      sLog.outString("Loading Quests...");
      sObjectMgr.LoadQuests();                                // must be loaded after DBCs, creature_template, item_template, gameobject tables
  
@@ -4063,11 +4112,12 @@ index e344c52..3f874a3 100644
 +    ZeldaLoadStages();
 +    ZeldaLoadItemSets();
 +    ZeldaLoadWaivedReagents();
++    ZeldaLoadRemovedItems();
 +
      sLog.outString("Loading Quests Relations...");
      sObjectMgr.LoadQuestRelations();                        // must be after quest load
      sLog.outString(">>> Quests Relations loaded");
-@@ -1442,6 +1451,8 @@ void World::SetInitialWorldSettings()
+@@ -1442,6 +1452,8 @@ void World::SetInitialWorldSettings()
      PlayerbotMgr::SetInitialWorldSettings();
  #endif
  
@@ -4076,7 +4126,7 @@ index e344c52..3f874a3 100644
  #ifdef ENABLE_PLAYERBOTS
      sPlayerbotAIConfig.Initialize();
  #ifndef BUILD_AHBOT
-@@ -2173,7 +2184,12 @@ void World::UpdateSessions(uint32 diff)
+@@ -2173,7 +2185,12 @@ void World::UpdateSessions(uint32 diff)
              delete pSession;
          }
          else

@@ -157,7 +157,7 @@ jobs:
             echo "loading $f"
             mysql -h127.0.0.1 -uroot -proot classicmangos < "$f" 2> zelda-sql.err || { echo "$f" >> zelda-sql.err; cat zelda-sql.err; exit 1; }
           done
-          mysql -h127.0.0.1 -uroot -proot classicmangos -e "SELECT COUNT(*) AS zelda_quests FROM quest_template WHERE entry BETWEEN 90100 AND 90599; SELECT COUNT(*) AS zelda_creatures FROM creature WHERE id BETWEEN 190000 AND 190999; SELECT COUNT(*) AS stages FROM zelda_stage; SELECT COUNT(*) AS set_pieces FROM zelda_itemset_item; SELECT COUNT(*) AS beedles FROM creature WHERE id = 190650; SELECT COUNT(*) AS set_drops FROM creature_loot_template WHERE item BETWEEN 190700 AND 190799;"
+          mysql -h127.0.0.1 -uroot -proot classicmangos -e "SELECT COUNT(*) AS zelda_quests FROM quest_template WHERE entry BETWEEN 90100 AND 90599; SELECT COUNT(*) AS zelda_creatures FROM creature WHERE id BETWEEN 190000 AND 190999; SELECT COUNT(*) AS stages FROM zelda_stage; SELECT COUNT(*) AS set_pieces FROM zelda_itemset_item; SELECT COUNT(*) AS beedles FROM creature WHERE id = 190650; SELECT COUNT(*) AS set_drops FROM creature_loot_template WHERE item BETWEEN 190700 AND 190799; SELECT COUNT(*) AS removed_items FROM zelda_removed_item; SELECT COUNT(*) AS removed_still_dropping FROM creature_loot_template WHERE item IN (SELECT entry FROM zelda_removed_item); SELECT COUNT(*) AS removed_still_sold FROM npc_vendor WHERE item IN (SELECT entry FROM zelda_removed_item); SELECT entry, RewChoiceItemId1 FROM quest_template WHERE entry = 7509;"
       - name: Publish story content errors (ci-logs-solo-db branch)
         if: failure()
         run: |
