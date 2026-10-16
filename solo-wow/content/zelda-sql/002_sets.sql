@@ -49,10 +49,10 @@ INSERT INTO `item_template` (`entry`,`class`,`name`,`displayid`,`Quality`,`Flags
 
 INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`groupid`,`mincountOrRef`,`maxcount`,`condition_id`,`comments`) VALUES
 (4275,190701,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
-(4829,190702,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
+(1696,190702,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
 (639,190703,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
 (646,190704,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
-(3673,190705,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
+(1666,190705,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
 (4278,190706,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
 (4421,190711,100,0,1,1,0,'Zelda armor set: Zora Scale'),
 (4422,190712,100,0,1,1,0,'Zelda armor set: Zora Scale'),

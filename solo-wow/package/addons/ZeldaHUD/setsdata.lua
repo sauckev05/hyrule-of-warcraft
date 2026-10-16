@@ -2,7 +2,7 @@
 ZELDA_SETS = {
   [1] = {
     name = "Kokiri Garb",
-    items = { { 190701, "Kokiri Coif", "Archmage Arugal (Shadowfang Keep)" }, { 190702, "Kokiri Spaulders", "Aku'mai (Blackfathom Deeps)" }, { 190703, "Kokiri Tunic", "Edwin VanCleef (The Deadmines)" }, { 190704, "Kokiri Gauntlets", "Mr. Smite (The Deadmines)" }, { 190705, "Kokiri Leggings", "Lord Serpentis (Wailing Caverns)" }, { 190706, "Kokiri Boots", "Commander Springvale (Shadowfang Keep)" } },
+    items = { { 190701, "Kokiri Coif", "Archmage Arugal (Shadowfang Keep)" }, { 190702, "Kokiri Spaulders", "Targorr the Dread (The Stockade)" }, { 190703, "Kokiri Tunic", "Edwin VanCleef (The Deadmines)" }, { 190704, "Kokiri Gauntlets", "Mr. Smite (The Deadmines)" }, { 190705, "Kokiri Leggings", "Kam Deepfury (The Stockade)" }, { 190706, "Kokiri Boots", "Commander Springvale (Shadowfang Keep)" } },
     bonuses = { { 2, "(2) Set: Increases your chance to get a critical strike by 1%." }, { 3, "(3) Set: Your melee hits have a 3% chance to knock the enemy back." }, { 6, "(6) Set: Your melee hits have a 3% chance to swing again at once." }, { 6, "(6) Set: Your weapon attacks deal 5% more damage." } },
   },
   [2] = {

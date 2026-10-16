@@ -39,10 +39,10 @@ SETS = [
          pieces=[
              # (entry, slot, name, display, boss entry, boss name)
              (190701, 'head', 'Kokiri Coif', 30091, 4275, 'Archmage Arugal (Shadowfang Keep)'),
-             (190702, 'shoulder', 'Kokiri Spaulders', 9422, 4829, "Aku'mai (Blackfathom Deeps)"),
+             (190702, 'shoulder', 'Kokiri Spaulders', 9422, 1696, 'Targorr the Dread (The Stockade)'),
              (190703, 'chest', 'Kokiri Tunic', 13088, 639, 'Edwin VanCleef (The Deadmines)'),
              (190704, 'hands', 'Kokiri Gauntlets', 9414, 646, 'Mr. Smite (The Deadmines)'),
-             (190705, 'legs', 'Kokiri Leggings', 9415, 3673, 'Lord Serpentis (Wailing Caverns)'),
+             (190705, 'legs', 'Kokiri Leggings', 9415, 1666, 'Kam Deepfury (The Stockade)'),
              (190706, 'feet', 'Kokiri Boots', 9412, 4278, 'Commander Springvale (Shadowfang Keep)'),
          ]),
     dict(id=2, name='Zora Scale', level=30, subclass=3, material=5,
