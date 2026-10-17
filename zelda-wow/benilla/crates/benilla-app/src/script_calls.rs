@@ -35,6 +35,7 @@ pub(crate) fn apply_script_calls(
     mut zelda: (
         Option<ResMut<crate::player::ZeldaLock>>,
         Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
+        Option<ResMut<crate::creature_anim::ZeldaSwingHold>>,
     ),
 ) {
     let Some(mut script) = script else {
@@ -82,6 +83,9 @@ pub(crate) fn apply_script_calls(
             ScriptCall::ZeldaSwing { step, seconds } => {
                 if let Some(swings) = zelda.1.as_deref_mut() {
                     swings.0.push((step, seconds));
+                }
+                if let Some(hold) = zelda.2.as_deref_mut() {
+                    hold.0 = seconds;
                 }
             }
         }

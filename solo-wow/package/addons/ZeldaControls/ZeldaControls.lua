@@ -93,12 +93,29 @@ local COMBO_CHAIN = 1.1          -- seconds after a swing ends that the next one
 local swingReadyAt = 0
 local comboStep = 0
 
+local TWO_HANDED_SLOWER = 1.5   -- a two-handed weapon swings 50% slower
+
+local function MainHandTwoHanded()
+	local link = GetInventoryItemLink("player", 16)
+	if not link then return false end
+	local _, _, id = string.find(link, "item:(%d+)")
+	if not id then return false end
+	local _, _, _, _, _, _, _, equipLoc = GetItemInfo(tonumber(id))
+	return equipLoc == "INVTYPE_2HWEAPON"
+end
+
 function ZeldaControls_SwingTime(step)
 	local speed = UnitAttackSpeed("player") or 2.0
+	local t
 	if step >= COMBO_STEPS then
-		return math.min(1.4, math.max(0.4, speed * 0.35))
+		t = math.min(1.4, math.max(0.4, speed * 0.35))
+	else
+		t = math.min(1.0, math.max(0.3, speed * 0.25))
 	end
-	return math.min(1.0, math.max(0.3, speed * 0.25))
+	if MainHandTwoHanded() then
+		t = t * TWO_HANDED_SLOWER
+	end
+	return t
 end
 
 function ZeldaControls_Slash()

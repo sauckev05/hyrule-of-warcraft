@@ -1301,10 +1301,10 @@ index 00fde0a85..c794795fe 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..b994ef1df
+index 000000000..80d1abd48
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1966 @@
+@@ -0,0 +1,1970 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2451,7 +2451,11 @@ index 000000000..b994ef1df
 +    }
 +    state.comboCount = step;
 +    state.lastSlash = now;
-+    state.slashReadyAt = now + SlashDurationMs(player, step);
++    // a two-handed weapon swings 50% slower (the addon's TWO_HANDED_SLOWER)
++    uint32 duration = SlashDurationMs(player, step);
++    if (style == Style::TwoHanded)
++        duration = duration * 3 / 2;
++    state.slashReadyAt = now + duration;
 +    bool const finisher = step == COMBO_STEPS;
 +
 +    std::list<Unit*> enemies;

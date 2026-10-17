@@ -524,7 +524,7 @@ mod driver;
 pub(crate) use driver::oneshot_is_live;
 /// Zelda of Warcraft: the sword combo's swings, asked for by the ZeldaControls addon.
 mod zelda_swing;
-pub(crate) use zelda_swing::ZeldaSwingRequests;
+pub(crate) use zelda_swing::{ZeldaSwingHold, ZeldaSwingRequests};
 use driver::{drive_animations, drive_hand_grip};
 
 /// The model event-keyframe scanner.
@@ -787,6 +787,7 @@ impl Plugin for CreatureAnimPlugin {
             .add_message::<SwingSlowdown>()
             .init_resource::<PendingImpacts>()
             .init_resource::<ZeldaSwingRequests>()
+            .init_resource::<ZeldaSwingHold>()
             .init_resource::<PlaySeq>()
             .init_resource::<gesture::GestureQueue>()
             .add_message::<EmoteAnim>()

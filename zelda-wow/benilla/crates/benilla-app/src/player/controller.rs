@@ -13,7 +13,7 @@ pub(super) fn control(
     keys: Res<ButtonInput<KeyCode>>,
     buttons: Res<ButtonInput<MouseButton>>,
     // Tupled parameters keep this system under Bevy's limit of 16.
-    pointer: (
+    mut pointer: (
         Res<AccumulatedMouseMotion>,
         Res<camera::LookConfig>,
         Res<camera_zoom::ZoomLimit>,
@@ -21,6 +21,8 @@ pub(super) fn control(
         Res<camera_dynamics::CameraOptions>,
         // Only `nearclip` is read here, for the self-avatar fade.
         Res<benilla_world::view::ViewDistance>,
+        // Zelda of Warcraft: the sword swing playing now holds the hero in place.
+        Option<ResMut<crate::creature_anim::ZeldaSwingHold>>,
     ),
     mut net: (
         Res<NetCommands>,
@@ -360,7 +362,12 @@ pub(super) fn control(
             return;
         }
         // `0x514560`, after `apply_server_moves`, so this frame's root edge is already in `modes`.
-        let may_translate = mover.may_translate(player.modes.rooted);
+        // Zelda of Warcraft: a sword swing roots the hero until it ends, as Link stands to strike.
+        let swinging = pointer.6.as_deref_mut().is_some_and(|hold| {
+            hold.0 = (hold.0 - dt).max(0.0);
+            hold.0 > 0.0
+        });
+        let may_translate = mover.may_translate(player.modes.rooted) && !swinging;
         let axes = input::move_axes(
             binds,
             &buttons,
