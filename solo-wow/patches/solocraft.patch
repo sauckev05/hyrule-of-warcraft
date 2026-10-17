@@ -1301,10 +1301,10 @@ index 00fde0a85..c794795fe 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..9233eb440
+index 000000000..3b682ddc7
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,2031 @@
+@@ -0,0 +1,2055 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1441,8 +1441,8 @@ index 000000000..9233eb440
 +    const uint32 SLASH_LOCK_TOLERANCE_MS = 100;      // network jitter between the two clocks
 +    uint32 SlashDurationMs(Player* player, uint32 step)
 +    {
-+        // ms, with haste (Flurry): the hasted field, which is also what the client's
-+        // UnitAttackSpeed reads; GetAttackTime gives the unhasted weapon speed
++        // ms, as the client's UnitAttackSpeed reads it (the attack-time field; Flurry no longer
++        // touches it, see ZeldaFlurryPercent)
 +        float const speed = player->GetFloatValue(UNIT_FIELD_BASEATTACKTIME + BASE_ATTACK);
 +        if (step >= COMBO_STEPS)
 +            return uint32(std::min(1400.0f, std::max(400.0f, speed * 0.35f)));
@@ -1619,6 +1619,28 @@ index 000000000..9233eb440
 +{
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.RangedDamageRate", 2.0f));
 +    return rate;
++}
++
++bool ZeldaIsFlurry(uint32 spellId)
++{
++    switch (spellId)
++    {
++        case 12966: case 12967: case 12968: case 12969: case 12970:     // warrior Flurry 1-5
++        case 16257: case 16277: case 16278: case 16279: case 16280:     // shaman Flurry 1-5
++        case 17687:
++            return true;
++        default:
++            return false;
++    }
++}
++
++float ZeldaFlurryPercent(Player const* player)
++{
++    float best = 0.0f;
++    for (Aura* aura : player->GetAurasByType(SPELL_AURA_MOD_MELEE_HASTE))
++        if (ZeldaIsFlurry(aura->GetId()))
++            best = std::max(best, float(aura->GetModifier()->m_amount));
++    return best;
 +}
 +
 +float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim)
@@ -2469,6 +2491,8 @@ index 000000000..9233eb440
 +    uint32 duration = SlashDurationMs(player, step);
 +    if (style == Style::TwoHanded)
 +        duration = duration * 3 / 2;
++    // Flurry: every swing goes its percentage faster (the addon's FlurryPercent)
++    duration = uint32(duration / (1.0f + ZeldaFlurryPercent(player) / 100.0f));
 +    state.slashReadyAt = now + duration;
 +    bool const finisher = step == COMBO_STEPS;
 +
@@ -3338,10 +3362,10 @@ index 000000000..9233eb440
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..876dbab7a
+index 000000000..78e354a4d
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,154 @@
+@@ -0,0 +1,158 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -3454,6 +3478,10 @@ index 000000000..876dbab7a
 +// Zelda of Warcraft: damage factor for the hero's ranged weapon shots (Zelda.RangedDamageRate, 2).
 +float ZeldaRangedDamageMultiplier();
 +
++// Zelda of Warcraft: Flurry (warrior and shaman) speeds a hero's sword combo by its percentage
++// instead of hasting the auto attack.
++bool ZeldaIsFlurry(uint32 spellId);
++float ZeldaFlurryPercent(Player const* player);
 +// Zelda of Warcraft: factor on an enemy creature's normal melee or ranged attack on a hero or
 +// the hero's side (Zelda.EnemyMeleeDamageRate, 3); 1 otherwise.
 +float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim);
@@ -4249,6 +4277,28 @@ index bf5c5c578..d1279baf7 100644
  
                  uint32 itemid    = m_spellInfo->Reagent[i];
                  uint32 itemcount = m_spellInfo->ReagentCount[i];
+diff --git a/src/game/Spells/SpellAuras.cpp b/src/game/Spells/SpellAuras.cpp
+index 500bb08eb..659ab8f3d 100644
+--- a/src/game/Spells/SpellAuras.cpp
++++ b/src/game/Spells/SpellAuras.cpp
+@@ -46,6 +46,7 @@
+ #include "Grids/CellImpl.h"
+ #include "Tools/Language.h"
+ #include "Maps/MapManager.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Loot/LootMgr.h"
+ #include "AI/ScriptDevAI/include/sc_grid_searchers.h"
+ #include "Spells/SpellStacking.h"
+@@ -3936,6 +3937,9 @@ void Aura::HandleModMeleeSpeedPct(bool apply, bool /*Real*/)
+     float amount = m_modifier.m_amount;
+ 
+     Unit* target = GetTarget();
++    // Zelda of Warcraft: a hero's Flurry speeds the sword combo instead of the auto attack
++    if (target->IsPlayer() && ZeldaIsFlurry(GetId()))
++        return;
+     target->ApplyAttackTimePercentMod(BASE_ATTACK, amount, apply);
+     target->ApplyAttackTimePercentMod(OFF_ATTACK, amount, apply);
+ }
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
 index a9fb2306c..35ceecd03 100644
 --- a/src/game/Spells/SpellEffects.cpp

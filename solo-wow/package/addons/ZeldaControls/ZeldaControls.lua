@@ -123,6 +123,30 @@ local function MainHandTwoHanded()
 	return equipLoc == "INVTYPE_2HWEAPON"
 end
 
+-- Flurry speeds every combo swing by its percentage (10% per rank step: 10/15/20/25/30) instead
+-- of the auto attack. Keep in step with the server's ZeldaFlurryPercent.
+local function FlurryPercent()
+	local up = false
+	for i = 1, 32 do
+		local texture = UnitBuff("player", i)
+		if not texture then break end
+		if string.find(string.lower(texture), "ghoulfrenzy") then
+			up = true
+			break
+		end
+	end
+	if not up then return 0 end
+	for tab = 1, (GetNumTalentTabs() or 0) do
+		for i = 1, (GetNumTalents(tab) or 0) do
+			local name, _, _, _, rank = GetTalentInfo(tab, i)
+			if name == "Flurry" then
+				return (rank and rank > 0) and (5 + 5 * rank) or 0
+			end
+		end
+	end
+	return 0
+end
+
 function ZeldaControls_SwingTime(step)
 	local speed = UnitAttackSpeed("player") or 2.0
 	local t
@@ -134,7 +158,7 @@ function ZeldaControls_SwingTime(step)
 	if MainHandTwoHanded() then
 		t = t * TWO_HANDED_SLOWER
 	end
-	return t
+	return t / (1 + FlurryPercent() / 100)
 end
 
 function ZeldaControls_Slash()
