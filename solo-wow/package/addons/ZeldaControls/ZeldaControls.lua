@@ -48,11 +48,16 @@ spinSpark:SetHeight(32)
 local spinText = spinBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 spinText:SetPoint("TOP", spinBar, "TOP", 0, 5)
 
--- In Defensive Stance with a shield the charged attack is a Shield Slam (stuns the enemies in
--- front for 2 seconds, damage = the shield's armor); in any other stance it is the Spin Attack.
+-- The charged attack follows the stance: in Defensive Stance with a shield a Shield Slam (stuns the
+-- enemies in front for 2 seconds, damage = the shield's armor), in Berserker Stance a Leaping
+-- Strike (one enemy in front, twice the attack power), otherwise the Spin Attack.
+local LEAP_SECONDS = 1.2          -- the leap's animation length
 local function ChargedAttackName()
 	for i = 1, (GetNumShapeshiftForms and GetNumShapeshiftForms() or 0) do
 		local _, name, active = GetShapeshiftFormInfo(i)
+		if active and name == "Berserker Stance" then
+			return "Leaping Strike"
+		end
 		if active and name == "Defensive Stance" then
 			local link = GetInventoryItemLink("player", 17)
 			local _, _, id = string.find(link or "", "item:(%d+)")
@@ -188,7 +193,13 @@ function ZeldaControls_Attack(state)
 		ZeldaControls_Slash()
 	else
 		if attackDownAt and GetTime() - attackDownAt >= SPIN_HOLD then
-			ZeldaControls_Command(".zspin")
+			-- the Zelda client plays the Leaping Strike's leap itself
+			if ChargedAttackName() == "Leaping Strike" and ZeldaSwingAnim and not SpinRageShort() then
+				ZeldaSwingAnim(4, LEAP_SECONDS)
+				ZeldaControls_Command(".zspin 1")
+			else
+				ZeldaControls_Command(".zspin")
+			end
 		end
 		attackDownAt = nil
 		spinBar:Hide()
@@ -254,7 +265,7 @@ local DEFAULT_KEYS = {
 -- keys older versions used; freed if they still hold a Zelda move
 local OLD_KEYS = { "F", "G", "R", "V", "H", "Z", "SHIFT-W", "SHIFT-A", "SHIFT-D" }
 local KEYS_VERSION = 5
-local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack, or shield slam in Defensive Stance, 50 rage), 2 bow, 3 shield (hold), 4 boomerang, 5 roll, Shift+Q/E side roll, Shift+S backflip."
+local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold), 4 boomerang, 5 roll, Shift+Q/E side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")

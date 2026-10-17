@@ -360,7 +360,7 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
                 Some(Value::Number(n)) => n,
                 _ => 0.0,
             };
-            let step = num(step).clamp(1.0, 3.0) as u8;
+            let step = num(step).clamp(1.0, 4.0) as u8;
             let seconds = num(seconds).clamp(0.05, 5.0) as f32;
             push_call(lua, ScriptCall::ZeldaSwing { step, seconds });
             Ok(())

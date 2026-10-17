@@ -55,7 +55,8 @@ pub enum ScriptCall {
     /// (anything else, or no argument).
     ZeldaLock(i32),
     /// Zelda of Warcraft: `ZeldaSwingAnim(step, seconds)` plays the sword combo's swing `step`
-    /// (1 right slash, 2 left slash, 3 special strike) on the hero, finishing in `seconds`.
+    /// (1 right slash, 2 left slash, 3 special strike, 4 Berserker Stance's leaping strike) on the
+    /// hero, finishing in `seconds`.
     ZeldaSwing { step: u8, seconds: f32 },
 }
 

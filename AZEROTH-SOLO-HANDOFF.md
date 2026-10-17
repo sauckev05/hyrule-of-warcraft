@@ -75,7 +75,11 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   reach halved. (Standing still while swinging was tried and removed.)
 - Enemy creatures' normal melee/ranged attacks on heroes hit 3x (Zelda.EnemyMeleeDamageRate).
 - Charged attack by stance: Defensive Stance + shield = Shield Slam (spell 23922, damage = shield
-  armor) on enemies in front + 2 s stun (Charge Stun 7922, duration overridden); otherwise Spin Attack.
+  armor) on enemies in front + 2 s stun (Charge Stun 7922, duration overridden); Berserker Stance =
+  Leaping Strike (custom spell 40008 in 006_mastery/patch-Z, melee class, damage 2x attack power) on
+  one enemy in front, the client playing Special2H (ZeldaSwingAnim step 4); otherwise Spin Attack.
+- ZeldaHUD stats.lua: a Combat Stats panel beside the character sheet, filled from `.zstats`
+  (server reply "ZSTATS:..." hidden from chat).
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)

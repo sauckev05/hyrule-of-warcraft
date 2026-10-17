@@ -1261,15 +1261,16 @@ index 811d227d9..cfd7b4d1d 100644
              if (iterator != m_itemData.end() && iterator->second.Value == 0)
                  continue; // item is blacklisted
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba3d..ea8cbc603 100644
+index ffa25ba3d..1d3fb3f8c 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,14 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,15 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
 +        { "zslash",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaSlashCommand,          "", nullptr },
 +        { "zspin",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaSpinCommand,           "", nullptr },
++        { "zstats",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaStatsCommand,          "", nullptr },
 +        { "zroll",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaRollCommand,           "", nullptr },
 +        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
 +        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
@@ -1280,16 +1281,17 @@ index ffa25ba3d..ea8cbc603 100644
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a85..c794795fe 100644
+index 00fde0a85..2ed202a0b 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,15 @@ class ChatHandler
+@@ -679,6 +679,16 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
 +        // Zelda of Warcraft combat moves (ZeldaCommands.cpp)
 +        bool HandleZeldaSlashCommand(char* args);
 +        bool HandleZeldaSpinCommand(char* args);
++        bool HandleZeldaStatsCommand(char* args);
 +        bool HandleZeldaRollCommand(char* args);
 +        bool HandleZeldaFlipCommand(char* args);
 +        bool HandleZeldaShieldCommand(char* args);
@@ -1301,10 +1303,10 @@ index 00fde0a85..c794795fe 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..3b682ddc7
+index 000000000..a76d68e20
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,2055 @@
+@@ -0,0 +1,2111 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2557,7 +2559,53 @@ index 000000000..3b682ddc7
 +        PlaySpellVisual(player, SHIELD_SLAM_SPELL, {});   // the slam at the air
 +}
 +
-+bool ChatHandler::HandleZeldaSpinCommand(char* /*args*/)
++// Berserker Stance's charged attack: a leaping strike on one enemy in front (the selected one when
++// it is there), for twice the hero's attack power. A melee-class spell (Leaping Strike, 40008), so
++// it crits like a melee hit and never glances. The Zelda client plays the leap (Special2H) itself.
++static void ZeldaLeapingStrike(Player* player, bool clientAnimates)
++{
++    const uint32 LEAPING_STRIKE_SPELL = 40008;
++    StyleStats const reach = StatsFor(Style::TwoHanded);
++    std::list<Unit*> enemies;
++    CollectEnemies(player, reach.slashRange + 8.0f, enemies);
++    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
++    Unit* target = nullptr;
++    for (Unit* unit : enemies)
++    {
++        if (!player->IsWithinDistInMap(unit, reach.slashRange + unit->GetCombatReach()) || !player->HasInArc(unit, reach.slashArc))
++            continue;
++        if (unit == selected)
++        {
++            target = unit;
++            break;
++        }
++        if (!target || player->GetDistance(unit) < player->GetDistance(target))
++            target = unit;
++    }
++    if (!clientAnimates)
++        player->HandleEmoteCommand(EMOTE_ONESHOT_SPECIALATTACK1H);
++    if (!target)
++        return;
++    int32 const damage = std::max<int32>(1, int32(player->GetTotalAttackPowerValue(BASE_ATTACK) * 2.0f));
++    player->CastCustomSpell(target, LEAPING_STRIKE_SPELL, &damage, nullptr, nullptr,
++                            TriggerCastFlags(TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS));
++}
++
++bool ChatHandler::HandleZeldaStatsCommand(char* /*args*/)
++{
++    // the ZeldaHUD addon's combat stats panel asks for what the 1.12 interface cannot read; the
++    // reply is a system line it hides from the chat
++    Player* player = m_session->GetPlayer();
++    PSendSysMessage("ZSTATS:%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%u;%u",
++                    player->GetCritChance(BASE_ATTACK), player->GetCritChance(RANGED_ATTACK),
++                    player->GetCritChance(SPELL_SCHOOL_MASK_HOLY), player->GetHitChance(BASE_ATTACK),
++                    player->GetHitChance(SPELL_SCHOOL_MASK_HOLY), player->GetFloatValue(PLAYER_DODGE_PERCENTAGE),
++                    player->GetFloatValue(PLAYER_PARRY_PERCENTAGE), player->GetFloatValue(PLAYER_BLOCK_PERCENTAGE),
++                    player->GetWeaponSkillValue(BASE_ATTACK), uint32(player->GetSkillMaxForLevel()));
++    return true;
++}
++
++bool ChatHandler::HandleZeldaSpinCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
 +    if (!CanAct(player))
@@ -2583,6 +2631,16 @@ index 000000000..3b682ddc7
 +
 +    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
 +    state.comboCount = 0;
++
++    // Berserker Stance: a leaping strike on one enemy (".zspin 1" when the client animates it)
++    if (player->GetShapeshiftForm() == FORM_BERSERKERSTANCE)
++    {
++        uint32 clientAnimates = 0;
++        if (args && *args)
++            ExtractUInt32(&args, clientAnimates);
++        ZeldaLeapingStrike(player, clientAnimates != 0);
++        return true;
++    }
 +
 +    // Defensive Stance with a shield: the charged attack is a Shield Slam on the enemies in front
 +    // instead of the spin - its damage is the shield's armor, and each is stunned for 2 seconds

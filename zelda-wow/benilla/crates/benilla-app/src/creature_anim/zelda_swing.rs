@@ -5,7 +5,8 @@
 //!
 //! 1. the right slash: the swing clip's variation whose sword hand crosses right to left;
 //! 2. the left slash: the variation crossing left to right;
-//! 3. the special strike, Heroic Strike's Special1H (Special2H with a two-hander).
+//! 3. the special strike, Heroic Strike's Special1H (Special2H with a two-hander);
+//! 4. Berserker Stance's charged attack: the two-hander's leaping Special2H, whatever is held.
 //!
 //! Which variation crosses which way differs by model, so [`VARIATIONS`] names them per race and
 //! gender, measured from the 1.12 character models (the right hand's sideways travel over the
@@ -42,7 +43,10 @@ const VARIATIONS: [(u8, u8, [(u8, u8); 4]); 16] = [
 /// armed main hand): the animation id and the variation index among that id's clips.
 pub(super) fn combo_clip(step: u8, main: Option<(u8, u8)>, race: u8, gender: u8) -> (u16, usize) {
     let swing = super::select::swing_anim_main(main);
-    if step >= 3 {
+    if step >= 4 {
+        return (58, 0); // the leaping two-handed strike, even with a one-hander
+    }
+    if step == 3 {
         // Heroic Strike's special strike; the play seam turns it unarmed with empty hands
         let special = if matches!(swing, 18 | 19) { 58 } else { 57 };
         return (special, 0);
@@ -77,5 +81,6 @@ mod tests {
         assert_eq!(combo_clip(3, sword, 1, 0), (57, 0));
         assert_eq!(combo_clip(3, Some((2, 8)), 1, 0), (58, 0)); // two-handed sword
         assert_eq!(combo_clip(1, sword, 2, 0), (17, 1)); // an orc's arcs are the other way round
+        assert_eq!(combo_clip(4, sword, 1, 0), (58, 0)); // the leap, one-hander or not
     }
 }

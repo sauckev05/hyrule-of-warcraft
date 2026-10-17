@@ -59,6 +59,9 @@ SPELLS = [
      'Burns the enemy with holy light for 75 to 150 Holy damage and heals you for 75 to 150.',
      dict(EffectBasePoints1=74, EffectDieSides1=76, EffectBaseDice1=1)),
     (40007, 25914, 'Light of Linken', '', dict(EffectBasePoints1=74, EffectDieSides1=76, EffectBaseDice1=1)),
+    # Berserker Stance's charged attack (ZeldaCommands.cpp, ZeldaLeapingStrike): a plain melee-class
+    # physical strike whose damage the server sets (twice the attack power); it crits like melee
+    (40008, 2816, 'Leaping Strike', 'Leaps at the enemy in front, striking for twice your attack power.', {}),
 ]
 
 EFFECT_GROUPS = ['Effect', 'EffectDieSides', 'EffectBaseDice', 'EffectDicePerLevel', 'EffectRealPointsPerLevel',
