@@ -55,7 +55,7 @@ INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`grou
 (1666,190705,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
 (4278,190706,100,0,1,1,0,'Zelda armor set: Kokiri Garb'),
 (4421,190711,100,0,1,1,0,'Zelda armor set: Zora Scale'),
-(4422,190712,100,0,1,1,0,'Zelda armor set: Zora Scale'),
+(3654,190712,100,0,1,1,0,'Zelda armor set: Zora Scale'),
 (7800,190713,100,0,1,1,0,'Zelda armor set: Zora Scale'),
 (6235,190714,100,0,1,1,0,'Zelda armor set: Zora Scale'),
 (4832,190715,100,0,1,1,0,'Zelda armor set: Zora Scale'),

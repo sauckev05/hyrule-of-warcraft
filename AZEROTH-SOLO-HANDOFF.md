@@ -31,7 +31,8 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   setsdata.lua); `build_reagents.py` → 003; `build_vendors.py` → 004; 005_hosiery is now a
   removal script; `build_mastery.py` → 006_mastery (+ client patch-Z.MPQ);
   `build_warrior_gear.py` → 007_warrior_gear; 008_teleporters is hand-written;
-  `build_blackfathom.py` → 009_blackfathom (needs a world dump without 009 applied).
+  `build_dungeons.py` → 009_blackfathom and 011_wailing_caverns (needs a world dump without them);
+  010_dungeon_teleports is generated once from mmaps-checked spots (see its header).
   The server applies changed SQL files at startup.
 - `solo-wow/tools/mpq.py`: pure-Python MPQ reader/writer used to build `patch-Z.MPQ`.
   `build_mastery.py` can rebuild patch-Z.MPQ from the DBCs inside an existing patch-Z.MPQ (it also
@@ -83,6 +84,10 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   one enemy in front, the client playing Special2H (ZeldaSwingAnim step 4); otherwise Spin Attack.
 - ZeldaHUD stats.lua: a Combat Stats panel beside the character sheet, filled from `.zstats`
   (server reply "ZSTATS:..." hidden from chat).
+- Innkeeper dungeon list (gossip menu 50238): each entry teleports to that dungeon's meeting
+  stone (dbscripts_on_gossip 900700-900718); WC/BFD list conditions follow their new levels.
+- Wailing Caverns is level 28-33 (Mutanus 33), loot scaled; Zora Fin Pauldrons drop from Mutanus
+  (moved from Agathelos, Razorfen Kraul).
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)

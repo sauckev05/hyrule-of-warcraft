@@ -1,17 +1,21 @@
-"""Zelda of Warcraft: Blackfathom Deeps becomes a level 30-35 dungeon. Builds
-zelda-sql/009_blackfathom.sql.
+"""Zelda of Warcraft: dungeons moved to a new level range. For each dungeon in DUNGEONS it builds one
+zelda-sql file:
 
-  - every enemy in the dungeon (and the ones its events summon) moves up to level 30-34, the bosses
-    to 31-35 (Aku'mai is 35). Health, damage and armor follow the level (creature_template
-    multipliers on the class level stats), and so does the money they carry.
+  - every enemy in the dungeon (and the ones its events summon) moves to the new levels, the bosses
+    each to its own. Health, damage and armor follow the level (creature_template multipliers on
+    the class level stats), and so does the money they carry.
   - their random drops (the green, blue, white and grey world-drop tables) are swapped for the
     tables of the same kind that creatures of the new level use.
   - the boss drops that only come from this dungeon go up by as many levels as their boss: item
     level, required level, stats, resistances, armor, block, weapon damage and price.
 
-Set pieces (sets.py) and items taken out of the game (007_warrior_gear.sql) are left alone.
+Set pieces (sets.py) and items taken out of the game (007_warrior_gear.sql) are left alone; so are
+creatures that also live outside the dungeon (snakes, toads).
 
-usage: build_blackfathom.py <world database dump (.sql) without 009 applied>
+  - Blackfathom Deeps (009_blackfathom.sql): level 30-35, Aku'mai 35
+  - Wailing Caverns (011_wailing_caverns.sql): level 28-33, Mutanus the Devourer 33
+
+usage: build_dungeons.py <world database dump (.sql) without these files applied>
 """
 
 import collections
@@ -22,12 +26,22 @@ import sys
 from build_warrior_gear import parse_values
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MAP = 48
 CUSTOM_FROM = 190000
-NOT_ENEMIES = {4787}                    # Argent Guard Thaelrid (quest giver)
-SUMMONED = {12876, 4977, 4978}          # Baron Aquanis, Murkshallow Softshell, Aku'mai Servant
-BOSSES = {4887: 31, 4831: 32, 6243: 32, 12902: 33, 12876: 33, 4832: 34, 4830: 34, 4829: 35}
-TRASH_FLOOR, TRASH_CAP = 30, 34
+
+# trash: new level = round(new_lo + (old - old_lo) * slope), kept within [floor, cap]
+DUNGEONS = [
+    dict(name='Blackfathom Deeps', file='009_blackfathom.sql', range='30-35', map=48,
+         not_enemies={4787},                    # Argent Guard Thaelrid (quest giver)
+         summoned={12876, 4977, 4978},          # Baron Aquanis, Murkshallow Softshell, Aku'mai Servant
+         bosses={4887: 31, 4831: 32, 6243: 32, 12902: 33, 12876: 33, 4832: 34, 4830: 34, 4829: 35},
+         trash=(22, 30, 5 / 6, 30, 34), max_req=35),
+    dict(name='Wailing Caverns', file='011_wailing_caverns.sql', range='28-33', map=43,
+         not_enemies={3678, 3679, 5914},        # Disciple of Naralex, Naralex, Deviate Nightmare (friendly)
+         # Lady Anacondra and Mutanus come from scripts; the Moccasins and Ectoplasms from the ritual
+         summoned={3671, 3654, 5762, 5763},
+         bosses={3671: 30, 3669: 30, 3653: 30, 3670: 31, 3674: 31, 5912: 31, 3673: 32, 5775: 32, 3654: 33},
+         trash=(17, 28, 3 / 4, 28, 31), max_req=33),
+]
 WORLD_DROP_REFS = range(60000, 61000)   # level-bracket world drop tables (series = id // 100)
 
 TABLES = ['creature_template', 'creature', 'creature_spawn_entry', 'creature_loot_template',
@@ -54,23 +68,27 @@ def removed_items():
     return {int(x) for x in re.findall(r'\((\d+)\)', m.group(1))}
 
 
-def new_level(entry, old):
-    if entry in BOSSES:
-        return BOSSES[entry]
-    return max(TRASH_FLOOR, min(TRASH_CAP, int(30 + (old - 22) * 5 / 6 + 0.5)))
+def new_level(d, entry, old):
+    if entry in d['bosses']:
+        return d['bosses'][entry]
+    old_lo, new_lo, slope, floor, cap = d['trash']
+    return max(floor, min(cap, int(new_lo + (old - old_lo) * slope + 0.5)))
 
 
-def compute(db):
+def compute(db, d):
+    MAP = d['map']
     templates = {r['Entry']: r for r in db['creature_template']}
     spawned = {r['id'] for r in db['creature'] if r['map'] == MAP and r['id']}
     random_guids = {r['guid'] for r in db['creature'] if r['map'] == MAP and not r['id']}
     spawned |= {r['entry'] for r in db['creature_spawn_entry'] if r['guid'] in random_guids}
-    enemies = sorted(e for e in (spawned | SUMMONED) if e < CUSTOM_FROM and e not in NOT_ENEMIES)
+    elsewhere_spawn = {r['id'] for r in db['creature'] if r['map'] != MAP and r['id']}
+    enemies = sorted(e for e in (spawned | d['summoned']) if e < CUSTOM_FROM and e not in d['not_enemies']
+                     and e not in elsewhere_spawn)
 
     creatures = {}
     for e in enemies:
         t = templates[e]
-        lo, hi = new_level(e, t['MinLevel']), new_level(e, t['MaxLevel'])
+        lo, hi = new_level(d, e, t['MinLevel']), new_level(d, e, t['MaxLevel'])
         old_avg = (t['MinLevel'] + t['MaxLevel']) / 2
         money = (((lo + hi) / 2) / old_avg) ** 2
         creatures[e] = dict(name=t['Name'], old=(t['MinLevel'], t['MaxLevel']), new=(lo, hi),
@@ -140,6 +158,9 @@ def compute(db):
                 or it['class'] not in (2, 4)):
             continue
         shift = int(round(max(creatures[o]['shift'] for o in owners)))
+        # no drop asks for more than the dungeon's top level
+        if it['RequiredLevel']:
+            shift = min(shift, d['max_req'] - it['RequiredLevel'])
         if shift <= 0:
             continue
         scaled.append(scale_item(it, shift, [creatures[o]['name'] for o in owners]))
@@ -170,8 +191,8 @@ def scale_item(it, shift, bosses):
     return out
 
 
-def write_sql(creatures, ref_rows, scaled):
-    out = ['-- Zelda of Warcraft: Blackfathom Deeps as a level 30-35 dungeon (generated by build_blackfathom.py)\n',
+def write_sql(d, creatures, ref_rows, scaled):
+    out = ['-- Zelda of Warcraft: %s as a level %s dungeon (generated by build_dungeons.py)\n' % (d['name'], d['range']),
            '-- Applied by the server at startup; every value is absolute, so it is safe to apply again.\n\n']
     for e, c in sorted(creatures.items()):
         out.append("UPDATE `creature_template` SET `MinLevel` = %d, `MaxLevel` = %d, `MinLootGold` = %d, `MaxLootGold` = %d "
@@ -182,13 +203,13 @@ def write_sql(creatures, ref_rows, scaled):
     out.append('INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`groupid`,`mincountOrRef`,`maxcount`,`condition_id`,`comments`) VALUES\n')
     out.append(',\n'.join("(%d,%d,%s,%d,%d,%d,%d,'%s')" % (r['entry'], r['item'], repr(float(r['ChanceOrQuestChance'])), r['groupid'],
                                                        r['mincountOrRef'], r['maxcount'], r['condition_id'],
-                                                       'Zelda: Blackfathom Deeps level 30-35 world drops')
+                                                       'Zelda: %s level %s world drops' % (d['name'], d['range']))
                           for r in ref_rows) + ';\n\n')
     for it in scaled:
         sets = ', '.join('`%s` = %s' % (k, v) for k, v in it.items() if k not in ('entry', 'name', 'bosses', '_old'))
         out.append('UPDATE `item_template` SET %s WHERE `entry` = %d; -- %s (%s)\n'
                    % (sets, it['entry'], it['name'], ', '.join(it['bosses'])))
-    path = os.path.join(HERE, 'zelda-sql', '009_blackfathom.sql')
+    path = os.path.join(HERE, 'zelda-sql', d['file'])
     with open(path, 'w', newline='\n') as f:
         f.write(''.join(out))
     print('wrote', path)
@@ -200,4 +221,6 @@ def write_sql(creatures, ref_rows, scaled):
 
 
 if __name__ == '__main__':
-    write_sql(*compute(load(sys.argv[1])))
+    world = load(sys.argv[1])
+    for dungeon in DUNGEONS:
+        write_sql(dungeon, *compute(world, dungeon))

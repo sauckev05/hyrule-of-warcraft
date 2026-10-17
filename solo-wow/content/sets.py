@@ -49,7 +49,7 @@ SETS = [
          bonuses=[(2, 'weapon', 5), (3, 'heal_on_kill', 5), (6, 'crit', 2), (6, 'crit_damage', 10), (6, 'knockback', 4)],
          pieces=[
              (190711, 'head', 'Zora Crest', 15290, 4421, 'Charlga Razorflank (Razorfen Kraul)'),
-             (190712, 'shoulder', 'Zora Fin Pauldrons', 25764, 4422, 'Agathelos the Raging (Razorfen Kraul)'),
+             (190712, 'shoulder', 'Zora Fin Pauldrons', 25764, 3654, 'Mutanus the Devourer (Wailing Caverns)'),
              (190713, 'chest', 'Zora Scale Hauberk', 25763, 7800, 'Mekgineer Thermaplugg (Gnomeregan)'),
              (190714, 'hands', 'Zora Grips', 25761, 6235, 'Electrocutioner 6000 (Gnomeregan)'),
              (190715, 'legs', 'Zora Scale Leggings', 12453, 4832, 'Twilight Lord Kelris (Blackfathom Deeps)'),

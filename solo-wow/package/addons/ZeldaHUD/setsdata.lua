@@ -7,7 +7,7 @@ ZELDA_SETS = {
   },
   [2] = {
     name = "Zora Scale",
-    items = { { 190711, "Zora Crest", "Charlga Razorflank (Razorfen Kraul)" }, { 190712, "Zora Fin Pauldrons", "Agathelos the Raging (Razorfen Kraul)" }, { 190713, "Zora Scale Hauberk", "Mekgineer Thermaplugg (Gnomeregan)" }, { 190714, "Zora Grips", "Electrocutioner 6000 (Gnomeregan)" }, { 190715, "Zora Scale Leggings", "Twilight Lord Kelris (Blackfathom Deeps)" }, { 190716, "Zora Treads", "Aku'mai (Blackfathom Deeps)" } },
+    items = { { 190711, "Zora Crest", "Charlga Razorflank (Razorfen Kraul)" }, { 190712, "Zora Fin Pauldrons", "Mutanus the Devourer (Wailing Caverns)" }, { 190713, "Zora Scale Hauberk", "Mekgineer Thermaplugg (Gnomeregan)" }, { 190714, "Zora Grips", "Electrocutioner 6000 (Gnomeregan)" }, { 190715, "Zora Scale Leggings", "Twilight Lord Kelris (Blackfathom Deeps)" }, { 190716, "Zora Treads", "Aku'mai (Blackfathom Deeps)" } },
     bonuses = { { 2, "(2) Set: Your weapon attacks deal 5% more damage." }, { 3, "(3) Set: Defeating an enemy restores 5% of your health." }, { 6, "(6) Set: Increases your chance to get a critical strike by 2%." }, { 6, "(6) Set: Your critical strikes deal 10% more damage." }, { 6, "(6) Set: Your melee hits have a 4% chance to knock the enemy back." } },
   },
   [3] = {
