@@ -63,6 +63,7 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   the new level, BFD-only boss drops raised by their boss's level change (009_blackfathom).
 - Zora Treads (190716) drop from Aku'mai instead of Bazil Thredd; copies in bags/bank were removed
   once at startup (marker `once:zora-treads-bfd` in characters.ai_playerbot_db_store).
+- Spin Attack always costs its full 50 rage: its own hits give no rage back (t_spinNoRage).
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)

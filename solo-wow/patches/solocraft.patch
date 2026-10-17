@@ -1301,10 +1301,10 @@ index 00fde0a85..c794795fe 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..be7350eb3
+index 000000000..7f5d684bb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1917 @@
+@@ -0,0 +1,1924 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1425,6 +1425,9 @@ index 000000000..be7350eb3
 +
 +    // Set while the spin attack's swings resolve; CalculateMeleeDamage reads it on the same thread.
 +    thread_local float t_meleeMultiplier = 1.0f;
++    // Set while the spin attack's swings resolve: its own hits give no rage back, so a spin always
++    // costs its full price.
++    thread_local bool t_spinNoRage = false;
 +    const uint32 DODGE_COOLDOWN_MS = 900;
 +    const uint32 DODGE_INVULN_MS = 450;
 +    const uint32 BOOMERANG_COOLDOWN_MS = 5000;
@@ -1599,6 +1602,8 @@ index 000000000..be7350eb3
 +int32 ZeldaRageGain(int32 gain)
 +{
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.RageGainRate", 0.5f));
++    if (gain > 0 && t_spinNoRage)
++        return 0;
 +    if (gain <= 0 || rate == 1.0f)
 +        return gain;
 +    // rage is stored x10, so a half of an odd amount keeps its tenth of a point on average
@@ -2476,8 +2481,10 @@ index 000000000..be7350eb3
 +    PlayWhirlwind(player, hitGuids);
 +    // two strikes per enemy, each worth three normal swings
 +    t_meleeMultiplier = SPIN_DAMAGE_MULTIPLIER;
++    t_spinNoRage = true;
 +    for (Unit* unit : victims)
 +        ZeldaSwing(player, unit, SPIN_STRIKES);
++    t_spinNoRage = false;
 +    t_meleeMultiplier = 1.0f;
 +    return true;
 +}
