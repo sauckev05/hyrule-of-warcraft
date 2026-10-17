@@ -1301,10 +1301,10 @@ index 00fde0a85..c794795fe 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..7f747b585
+index 000000000..b994ef1df
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1964 @@
+@@ -0,0 +1,1966 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1481,10 +1481,12 @@ index 000000000..7f747b585
 +    {
 +        switch (style)
 +        {
-+            case Style::TwoHanded: return { 7.0f, M_PI_F * 5.0f / 6.0f, 650, 9.5f, 3 }; // Biggoron's Sword
-+            case Style::DualWield: return { 5.5f, M_PI_F * 2.0f / 3.0f, 420, 7.5f, 2 };
-+            case Style::Unarmed:   return { 4.5f, M_PI_F / 2.0f, 380, 6.0f, 1 };
-+            default:               return { 5.5f, M_PI_F * 2.0f / 3.0f, 380, 7.5f, 2 }; // Kokiri/Master Sword
++            // reach in yards past the enemy's own size (halved from the first tuning: hits had
++            // landed from too far away)
++            case Style::TwoHanded: return { 3.5f, M_PI_F * 5.0f / 6.0f, 650, 4.75f, 3 }; // Biggoron's Sword
++            case Style::DualWield: return { 2.75f, M_PI_F * 2.0f / 3.0f, 420, 3.75f, 2 };
++            case Style::Unarmed:   return { 2.25f, M_PI_F / 2.0f, 380, 3.0f, 1 };
++            default:               return { 2.75f, M_PI_F * 2.0f / 3.0f, 380, 3.75f, 2 }; // Kokiri/Master Sword
 +        }
 +    }
 +
@@ -2453,7 +2455,7 @@ index 000000000..7f747b585
 +    bool const finisher = step == COMBO_STEPS;
 +
 +    std::list<Unit*> enemies;
-+    CollectEnemies(player, stats.slashRange + 2.0f, enemies);
++    CollectEnemies(player, stats.slashRange + 8.0f, enemies);
 +
 +    // Prefer the selected target if it is in reach, then everything else in the cone in front of us.
 +    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
@@ -2506,7 +2508,7 @@ index 000000000..7f747b585
 +
 +    StyleStats stats = StatsFor(StyleOf(player));
 +    std::list<Unit*> enemies;
-+    CollectEnemies(player, stats.spinRange + 2.0f, enemies);
++    CollectEnemies(player, stats.spinRange + 8.0f, enemies);
 +    std::vector<Unit*> victims;
 +    std::vector<ObjectGuid> hitGuids;
 +    for (Unit* unit : enemies)
