@@ -73,7 +73,10 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Two-handed swings take 1.5x as long. Flurry no longer hastes a hero's auto attack; instead every
   combo swing is its percentage faster (ZeldaFlurryPercent / the addon's FlurryPercent). Slash/spin
   reach halved. (Standing still while swinging was tried and removed.)
-- Enemy creatures' normal melee/ranged attacks on heroes hit 3x (Zelda.EnemyMeleeDamageRate).
+- Normal and rare (non-elite) enemy creatures' melee/ranged attacks on heroes hit 3x
+  (Zelda.EnemyMeleeDamageRate); elites/bosses unchanged. In dungeons SoloCraft's 0.55 still applies.
+- The red swing trail (a Heroic Strike SPELL_GO) is skipped for combo swings: its cast animation
+  replaced the client-played combo swing.
 - Charged attack by stance: Defensive Stance + shield = Shield Slam (spell 23922, damage = shield
   armor) on enemies in front + 2 s stun (Charge Stun 7922, duration overridden); Berserker Stance =
   Leaping Strike (custom spell 40008 in 006_mastery/patch-Z, melee class, damage 2x attack power) on

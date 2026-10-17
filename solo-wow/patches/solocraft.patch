@@ -1303,10 +1303,10 @@ index 00fde0a85..2ed202a0b 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..a76d68e20
+index 000000000..b0f2ef994
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,2111 @@
+@@ -0,0 +1,2116 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1571,7 +1571,9 @@ index 000000000..a76d68e20
 +void ZeldaSwingTrail(Player* player, Unit* victim)
 +{
 +    static bool const redTrail = sConfig.GetBoolDefault("Zelda.RedSwingTrail", true);
-+    if (!redTrail || !player || !victim || t_meleeMultiplier > 1.0f)   // the spin plays Whirlwind instead
++    // the spin plays Whirlwind instead; the sword combo's swings are animated by the client, and the
++    // trail's Heroic Strike cast would replace them with Heroic Strike's own swing
++    if (!redTrail || !player || !victim || t_meleeMultiplier > 1.0f || t_noSwingAnim)
 +        return;
 +    std::vector<ObjectGuid> hits;
 +    hits.push_back(victim->GetObjectGuid());
@@ -1647,10 +1649,13 @@ index 000000000..a76d68e20
 +
 +float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim)
 +{
-+    // enemies' normal melee and ranged attacks (not spells or effects) hit heroes harder
-+    // (Zelda.EnemyMeleeDamageRate, 3)
++    // normal (not elite) enemies' melee and ranged attacks - not spells or effects - hit heroes
++    // harder (Zelda.EnemyMeleeDamageRate, 3); elites, rare elites and bosses hit as before
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 3.0f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
++        return 1.0f;
++    uint32 const rank = static_cast<Creature const*>(attacker)->GetCreatureInfo()->Rank;
++    if (rank != CREATURE_ELITE_NORMAL && rank != CREATURE_ELITE_RARE)
 +        return 1.0f;
 +    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
 +        return 1.0f;
