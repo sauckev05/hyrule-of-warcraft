@@ -30,8 +30,12 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   `build_content.py`+`story.py` → 001_companions; `build_sets.py`+`sets.py` → 002_sets (+ ZeldaHUD
   setsdata.lua); `build_reagents.py` → 003; `build_vendors.py` → 004; 005_hosiery is now a
   removal script; `build_mastery.py` → 006_mastery (+ client patch-Z.MPQ);
-  `build_warrior_gear.py` → 007_warrior_gear. The server applies changed SQL files at startup.
+  `build_warrior_gear.py` → 007_warrior_gear; 008_teleporters is hand-written;
+  `build_blackfathom.py` → 009_blackfathom (needs a world dump without 009 applied).
+  The server applies changed SQL files at startup.
 - `solo-wow/tools/mpq.py`: pure-Python MPQ reader/writer used to build `patch-Z.MPQ`.
+  `build_mastery.py` can rebuild patch-Z.MPQ from the DBCs inside an existing patch-Z.MPQ (it also
+  clears Execute's target aura state so the client lets it be pressed on any target).
 
 ## The PC (Windows, GTX 1060 6 GB)
 
@@ -44,23 +48,22 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Accounts: PLAYER (normal), ADMINISTRATOR (GM). Characters on PLAYER: **Kale** (main),
   **Ruuka** (orc shaman), **Morwenna** (undead priest), **Lianne** (human priest),
   **Faelenna** (night elf druid) — the four become level 25 with class spells on first login.
-- Installed now: server build srv30 (mangosd md5 dc0c7df7...).
+- Installed now: the 2026-10-17 build (see "Update 2026-10-16 evening" below). srv30 is kept as
+  `server\mangosd.before-update.exe`.
 
-## Pending: not installed yet
+## Update 2026-10-16 evening (installed)
 
-`ZeldaUpdate.zip` (sent in the old chat; same files are in release azeroth-solo-latest):
-stop the server, extract it into `E:\wow\New folder`, run `ZeldaUpdate\INSTALL.bat`. It installs:
-
-1. **Sword of Mastery**: Linken's Sword of Mastery → epic *Unfinished Sword of Mastery*
-   (Quel'Serrar's blade with a blue glow); using it while carrying Quel'Serrar forges the
-   legendary *Sword of Mastery* (item 191001: Grand Marshal's Longsword look, 138-207 / 2.90,
-   +25 all stats, 2% hit and crit for melee and spells, holy strike + heal 150-300, ~15% two
-   extra attacks). Custom spells 40001-40007. Needs `patch-Z.MPQ` in the client's Data folder.
-2. **Warrior's world**: ~5,800 items no longer drop, sell, reward, get taught or appear on
-   the AH bot — raid-only items (Quel'Serrar kept), cloth (not cloaks/shirts) and leather,
-   mail from level 40, staves, wands, relics, other classes' gear. Owned copies stay.
-   Table `zelda_removed_item` holds the list.
-3. **Kokiri Spaulders / Leggings** now drop in the Stockade (Targorr the Dread, Kam Deepfury).
+- Rage gains halved from every source (`Zelda.RageGainRate`, 0.5; in Unit::ModifyPower).
+- Kills inside dungeons and raids give half experience (`Zelda.DungeonXPRate`, 0.5; Player::GiveXP).
+- Execute works on any target at full rage (`Zelda.FullRageExecute`); otherwise the server still
+  wants the target under 20% (Spell::CheckCast). The client side is patch-Z.MPQ (Spell.dbc field 17).
+- Two Kirin Tor portal mages (190670 Wizard's Sanctum basement, 190671 beside Archmage Ansirem
+  Runeweaver outside sealed Dalaran) teleport between the two (008_teleporters).
+- Blackfathom Deeps is level 30-35: enemies 30-34, bosses 31-35 (Aku'mai 35), world-drop tables of
+  the new level, BFD-only boss drops raised by their boss's level change (009_blackfathom).
+- Zora Treads (190716) drop from Aku'mai instead of Bazil Thredd; copies in bags/bank were removed
+  once at startup (marker `once:zora-treads-bfd` in characters.ai_playerbot_db_store).
+- Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)
 

@@ -53,7 +53,7 @@ SETS = [
              (190713, 'chest', 'Zora Scale Hauberk', 25763, 7800, 'Mekgineer Thermaplugg (Gnomeregan)'),
              (190714, 'hands', 'Zora Grips', 25761, 6235, 'Electrocutioner 6000 (Gnomeregan)'),
              (190715, 'legs', 'Zora Scale Leggings', 12453, 4832, 'Twilight Lord Kelris (Blackfathom Deeps)'),
-             (190716, 'feet', 'Zora Treads', 25760, 1716, 'Bazil Thredd (The Stockade)'),
+             (190716, 'feet', 'Zora Treads', 25760, 4829, "Aku'mai (Blackfathom Deeps)"),
          ]),
     dict(id=3, name='Battlegear of the Scarlet Crusade', level=40, subclass=4, material=6,
          bonuses=[(2, 'crit', 2), (3, 'knockback', 5), (3, 'spin_rage', 10), (6, 'extra_swing', 5),

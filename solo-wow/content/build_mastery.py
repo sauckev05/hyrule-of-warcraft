@@ -13,7 +13,11 @@ Writes
   - patch-Z.MPQ (when given the client's ItemDisplayInfo.dbc and Spell.dbc): the blue-glow look
     and the new spells' names and tooltips, for the client's Data folder (both clients load it)
 
+The client patch also clears the target aura state of Execute, so the client lets it be pressed on
+any target; the server still asks for the target under 20% health, or full rage (Zelda.FullRageExecute).
+
 usage: build_mastery.py [<ItemDisplayInfo.dbc> <Spell.dbc> <output patch-Z.MPQ>]
+  (the two .dbc files may come from the client's MPQs or from an existing patch-Z.MPQ)
 """
 
 import os
@@ -121,6 +125,8 @@ for _i, _g in enumerate(EFFECT_GROUPS[:-1]):
 for _k in (1, 2, 3):
     DBC_FIELD['DmgMultiplier%d' % _k] = 166 + _k
 DBC_NAME, DBC_RANK, DBC_DESCRIPTION, DBC_TOOLTIP = 120, 129, 138, 147
+DBC_TARGET_AURA_STATE = 17
+EXECUTE_RANKS = (5308, 20658, 20660, 20661, 20662)
 
 
 def sql_str(s):
@@ -231,8 +237,8 @@ def write_dbc(f, rows, strings):
 
 def patch_display(path):
     f, rows, strings = read_dbc(path)
+    rows = [r for r in rows if r[0] != UNFINISHED_LOOK]     # rebuilding from an older patch-Z.MPQ
     byid = {r[0]: r for r in rows}
-    assert UNFINISHED_LOOK not in byid
     row = list(byid[QUEL_SERRAR_LOOK])
     row[0] = UNFINISHED_LOOK
     row[22] = BLUE_GLOW
@@ -244,10 +250,15 @@ def patch_display(path):
 def patch_spells(path):
     f, rows, strings = read_dbc(path)
     assert f == 173, f
+    ours = {sp[0] for sp in SPELLS}
+    rows = [r for r in rows if r[0] not in ours]          # rebuilding from an older patch-Z.MPQ
     byid = {r[0]: r for r in rows}
     top = max(byid)
+    # Execute can be pressed on any target: the server allows it under 20% health or at full rage
+    for rank in EXECUTE_RANKS:
+        byid[rank][DBC_TARGET_AURA_STATE] = 0
     for sid, source, name, text, changes in SPELLS:
-        assert sid not in byid and sid > top, sid
+        assert sid > top, sid
         row = list(byid[source])
         row[0] = sid
         if changes.get('copy_effect1_to_2'):

@@ -59,7 +59,7 @@ INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`grou
 (7800,190713,100,0,1,1,0,'Zelda armor set: Zora Scale'),
 (6235,190714,100,0,1,1,0,'Zelda armor set: Zora Scale'),
 (4832,190715,100,0,1,1,0,'Zelda armor set: Zora Scale'),
-(1716,190716,100,0,1,1,0,'Zelda armor set: Zora Scale'),
+(4829,190716,100,0,1,1,0,'Zelda armor set: Zora Scale'),
 (4543,190721,100,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
 (3983,190722,100,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
 (6487,190723,100,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
