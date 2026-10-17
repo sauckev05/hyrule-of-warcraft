@@ -1,28 +1,29 @@
 -- Zelda of Warcraft: the innkeepers' "Tell me about dungeons I could explore" list (gossip menu
 -- 50238) sends you to the chosen dungeon's meeting stone instead of opening its page. Each spot is
--- a few yards from the stone, checked against the server's walkable ground (mmaps), facing it.
+-- a few yards from the stone, checked against the server's walkable ground (mmaps), facing it;
+-- you arrive about 3 yards up and drop the rest, so nobody lands inside a rock (no fall damage).
 -- The list keeps its level conditions. Applied by the server at startup; safe to apply again.
 DELETE FROM `dbscripts_on_gossip` WHERE `id` BETWEEN 900700 AND 900718;
 INSERT INTO `dbscripts_on_gossip` (`id`,`delay`,`priority`,`command`,`datalong`,`datalong2`,`datalong3`,`buddy_entry`,`search_radius`,`data_flags`,`dataint`,`dataint2`,`dataint3`,`dataint4`,`datafloat`,`x`,`y`,`z`,`o`,`speed`,`condition_id`,`comments`) VALUES
-(900700,0,0,6,1,0,0,0,0,0,0,0,0,0,0,1815.6,-4400.75,-16.34,5.83,0,0,'Zelda: teleport to the Ragefire meeting stone'),
-(900701,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-11091.33,1563.3,50.57,5.45,0,0,'Zelda: teleport to the Deadmines meeting stone'),
-(900702,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-796.26,-2135.14,94.31,6.13,0,0,'Zelda: teleport to the Wailing Caverns meeting stone'),
-(900703,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-247.44,1514.0,76.97,4.77,0,0,'Zelda: teleport to the Shadowfang Keep meeting stone'),
-(900704,0,0,6,1,0,0,0,0,0,0,0,0,0,0,4075.15,817.21,4.54,4.71,0,0,'Zelda: teleport to the Blackfathom Deeps meeting stone'),
-(900705,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-8813.49,797.75,99.75,0.1,0,0,'Zelda: teleport to the Stormwind Stockade meeting stone'),
-(900706,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-4468.66,-1807.51,88.54,0.14,0,0,'Zelda: teleport to the Razorfen Kraul meeting stone'),
-(900707,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-5204.74,608.97,412.86,5.14,0,0,'Zelda: teleport to the Gnomeregan meeting stone'),
-(900708,0,0,6,0,0,0,0,0,0,0,0,0,0,0,2658.22,-677.21,112.19,3.57,0,0,'Zelda: teleport to the Scarlet Monastery meeting stone'),
-(900709,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-4376.46,-1952.57,90.8,5.86,0,0,'Zelda: teleport to the Razorfen Downs meeting stone'),
-(900710,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-1415.92,2814.69,113.04,2.15,0,0,'Zelda: teleport to the Maraudon meeting stone'),
-(900711,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-6119.44,-3299.9,259.67,0.12,0,0,'Zelda: teleport to the Uldaman meeting stone'),
-(900712,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-6828.11,-2877.07,10.6,1.95,0,0,'Zelda: teleport to the Zul''Farrak meeting stone'),
-(900713,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-7593.02,-1140.69,261.68,0.38,0,0,'Zelda: teleport to the Blackrock Depths meeting stone'),
-(900714,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-10459.0,-3805.04,18.59,5.12,0,0,'Zelda: teleport to the Sunken Temple meeting stone'),
-(900715,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-7628.15,-1227.59,233.71,0.37,0,0,'Zelda: teleport to the Blackrock Spire meeting stone'),
-(900716,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-4430.07,1411.37,133.04,0.54,0,0,'Zelda: teleport to the Dire Maul meeting stone'),
-(900717,0,0,6,0,0,0,0,0,0,0,0,0,0,0,3369.47,-3379.32,145.57,6.18,0,0,'Zelda: teleport to the Stratholme meeting stone'),
-(900718,0,0,6,0,0,0,0,0,0,0,0,0,0,0,1231.81,-2574.73,91.6,1.43,0,0,'Zelda: teleport to the Scholomance meeting stone');
+(900700,0,0,6,1,0,0,0,0,0,0,0,0,0,0,1815.6,-4400.75,-13.84,5.83,0,0,'Zelda: teleport to the Ragefire meeting stone'),
+(900701,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-11091.33,1563.3,53.07,5.45,0,0,'Zelda: teleport to the Deadmines meeting stone'),
+(900702,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-796.26,-2135.14,96.81,6.13,0,0,'Zelda: teleport to the Wailing Caverns meeting stone'),
+(900703,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-247.44,1514.0,79.47,4.77,0,0,'Zelda: teleport to the Shadowfang Keep meeting stone'),
+(900704,0,0,6,1,0,0,0,0,0,0,0,0,0,0,4075.15,817.21,7.04,4.71,0,0,'Zelda: teleport to the Blackfathom Deeps meeting stone'),
+(900705,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-8813.49,797.75,102.25,0.1,0,0,'Zelda: teleport to the Stormwind Stockade meeting stone'),
+(900706,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-4468.66,-1807.51,91.04,0.14,0,0,'Zelda: teleport to the Razorfen Kraul meeting stone'),
+(900707,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-5204.74,608.97,415.36,5.14,0,0,'Zelda: teleport to the Gnomeregan meeting stone'),
+(900708,0,0,6,0,0,0,0,0,0,0,0,0,0,0,2658.22,-677.21,114.69,3.57,0,0,'Zelda: teleport to the Scarlet Monastery meeting stone'),
+(900709,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-4376.46,-1952.57,93.3,5.86,0,0,'Zelda: teleport to the Razorfen Downs meeting stone'),
+(900710,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-1415.92,2814.69,115.54,2.15,0,0,'Zelda: teleport to the Maraudon meeting stone'),
+(900711,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-6119.44,-3299.9,262.17,0.12,0,0,'Zelda: teleport to the Uldaman meeting stone'),
+(900712,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-6828.11,-2877.07,13.1,1.95,0,0,'Zelda: teleport to the Zul''Farrak meeting stone'),
+(900713,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-7593.02,-1140.69,264.18,0.38,0,0,'Zelda: teleport to the Blackrock Depths meeting stone'),
+(900714,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-10459.0,-3805.04,21.09,5.12,0,0,'Zelda: teleport to the Sunken Temple meeting stone'),
+(900715,0,0,6,0,0,0,0,0,0,0,0,0,0,0,-7628.15,-1227.59,236.21,0.37,0,0,'Zelda: teleport to the Blackrock Spire meeting stone'),
+(900716,0,0,6,1,0,0,0,0,0,0,0,0,0,0,-4430.07,1411.37,135.54,0.54,0,0,'Zelda: teleport to the Dire Maul meeting stone'),
+(900717,0,0,6,0,0,0,0,0,0,0,0,0,0,0,3369.47,-3379.32,148.07,6.18,0,0,'Zelda: teleport to the Stratholme meeting stone'),
+(900718,0,0,6,0,0,0,0,0,0,0,0,0,0,0,1231.81,-2574.73,94.1,1.43,0,0,'Zelda: teleport to the Scholomance meeting stone');
 UPDATE `gossip_menu_option` SET `option_icon` = 2, `action_menu_id` = -1, `action_script_id` = 900700 WHERE `menu_id` = 50238 AND `id` = 0; -- Ragefire
 UPDATE `gossip_menu_option` SET `option_icon` = 2, `action_menu_id` = -1, `action_script_id` = 900701 WHERE `menu_id` = 50238 AND `id` = 1; -- Deadmines
 UPDATE `gossip_menu_option` SET `option_icon` = 2, `action_menu_id` = -1, `action_script_id` = 900702 WHERE `menu_id` = 50238 AND `id` = 2; -- Wailing Caverns
