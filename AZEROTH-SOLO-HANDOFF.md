@@ -70,8 +70,11 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   lock silently and sends the hits with HITINFO_NOACTION when the client animates. Benilla plays
   the swing via the `ZeldaSwingAnim(step, seconds)` Lua global (creature_anim/zelda_swing.rs; its
   per-race right/left variation table was measured from the 1.12 character models).
-- Two-handed swings take 1.5x as long; the hero cannot move (turning allowed) while a swing plays
-  (Benilla: ZeldaSwingHold read as a root in player/controller.rs). Slash/spin reach halved.
+- Two-handed swings take 1.5x as long; swing time follows the hasted attack speed (Flurry speeds
+  every swing). Slash/spin reach halved. (Standing still while swinging was tried and removed.)
+- Enemy creatures' normal melee/ranged attacks on heroes hit 3x (Zelda.EnemyMeleeDamageRate).
+- Charged attack by stance: Defensive Stance + shield = Shield Slam (spell 23922, damage = shield
+  armor) on enemies in front + 2 s stun (Charge Stun 7922, duration overridden); otherwise Spin Attack.
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)

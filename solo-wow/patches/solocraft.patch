@@ -1301,10 +1301,10 @@ index 00fde0a85..c794795fe 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..80d1abd48
+index 000000000..9233eb440
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1970 @@
+@@ -0,0 +1,2031 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1441,7 +1441,9 @@ index 000000000..80d1abd48
 +    const uint32 SLASH_LOCK_TOLERANCE_MS = 100;      // network jitter between the two clocks
 +    uint32 SlashDurationMs(Player* player, uint32 step)
 +    {
-+        float const speed = float(player->GetAttackTime(BASE_ATTACK));   // ms, haste included
++        // ms, with haste (Flurry): the hasted field, which is also what the client's
++        // UnitAttackSpeed reads; GetAttackTime gives the unhasted weapon speed
++        float const speed = player->GetFloatValue(UNIT_FIELD_BASEATTACKTIME + BASE_ATTACK);
 +        if (step >= COMBO_STEPS)
 +            return uint32(std::min(1400.0f, std::max(400.0f, speed * 0.35f)));
 +        return uint32(std::min(1000.0f, std::max(300.0f, speed * 0.25f)));
@@ -1616,6 +1618,18 @@ index 000000000..80d1abd48
 +float ZeldaRangedDamageMultiplier()
 +{
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.RangedDamageRate", 2.0f));
++    return rate;
++}
++
++float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim)
++{
++    // enemies' normal melee and ranged attacks (not spells or effects) hit heroes harder
++    // (Zelda.EnemyMeleeDamageRate, 3)
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 3.0f));
++    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
++        return 1.0f;
++    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
++        return 1.0f;
 +    return rate;
 +}
 +
@@ -2483,6 +2497,42 @@ index 000000000..80d1abd48
 +    return true;
 +}
 +
++static void ZeldaShieldSlam(Player* player, Item* shield)
++{
++    const uint32 SHIELD_SLAM_SPELL = 23922;     // Shield Slam (rank 1): the shield-bash strike and look
++    const uint32 SLAM_STUN_SPELL = 7922;        // Charge Stun, held for 2 seconds
++    const int32 SLAM_STUN_MS = 2000;
++
++    StyleStats const reach = StatsFor(Style::OneHanded);
++    std::list<Unit*> enemies;
++    CollectEnemies(player, reach.slashRange + 8.0f, enemies);
++    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
++    // Shield Slam adds the block value itself, so the strike as a whole is the shield's armor
++    int32 const damage = std::max<int32>(1, int32(shield->GetProto()->Armor) - int32(player->GetShieldBlockValue()));
++    uint32 hit = 0;
++    for (Unit* unit : enemies)
++    {
++        if (!player->IsWithinDistInMap(unit, reach.slashRange + unit->GetCombatReach()))
++            continue;
++        if (!player->HasInArc(unit, reach.slashArc) && unit != selected)
++            continue;
++        player->CastCustomSpell(unit, SHIELD_SLAM_SPELL, nullptr, &damage, nullptr,
++                                TriggerCastFlags(TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS));
++        ++hit;
++        if (!unit->IsAlive())
++            continue;
++        player->CastSpell(unit, SLAM_STUN_SPELL, TRIGGERED_OLD_TRIGGERED);
++        if (SpellAuraHolder* holder = unit->GetSpellAuraHolder(SLAM_STUN_SPELL, player->GetObjectGuid()))
++        {
++            holder->SetAuraMaxDuration(SLAM_STUN_MS);
++            holder->SetAuraDuration(SLAM_STUN_MS);
++            holder->UpdateAuraDuration();
++        }
++    }
++    if (hit == 0)
++        PlaySpellVisual(player, SHIELD_SLAM_SPELL, {});   // the slam at the air
++}
++
 +bool ChatHandler::HandleZeldaSpinCommand(char* /*args*/)
 +{
 +    Player* player = m_session->GetPlayer();
@@ -2509,6 +2559,17 @@ index 000000000..80d1abd48
 +
 +    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
 +    state.comboCount = 0;
++
++    // Defensive Stance with a shield: the charged attack is a Shield Slam on the enemies in front
++    // instead of the spin - its damage is the shield's armor, and each is stunned for 2 seconds
++    if (player->GetShapeshiftForm() == FORM_DEFENSIVESTANCE)
++    {
++        if (Item* shield = player->GetShield(true))
++        {
++            ZeldaShieldSlam(player, shield);
++            return true;
++        }
++    }
 +
 +    StyleStats stats = StatsFor(StyleOf(player));
 +    std::list<Unit*> enemies;
@@ -3277,10 +3338,10 @@ index 000000000..80d1abd48
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..8ab843388
+index 000000000..876dbab7a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,154 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -3393,6 +3454,9 @@ index 000000000..8ab843388
 +// Zelda of Warcraft: damage factor for the hero's ranged weapon shots (Zelda.RangedDamageRate, 2).
 +float ZeldaRangedDamageMultiplier();
 +
++// Zelda of Warcraft: factor on an enemy creature's normal melee or ranged attack on a hero or
++// the hero's side (Zelda.EnemyMeleeDamageRate, 3); 1 otherwise.
++float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim);
 +// Zelda of Warcraft: extra SMSG_ATTACKERSTATEUPDATE hit-info bits for the swing being sent now
 +// (HITINFO_NOACTION while the client plays the sword combo's animation itself).
 +uint32 ZeldaSwingHitInfoFlags();
@@ -3850,7 +3914,7 @@ index 70b4e7d00..45ee880a1 100644
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..13b643ea5 100644
+index 00986af9e..d9fad7079 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -3872,17 +3936,20 @@ index 00986af9e..13b643ea5 100644
      // remove affects from attacker at any non-DoT damage (including 0 damage)
      if (damagetype != DOT && damagetype != INSTAKILL)
      {
-@@ -1933,6 +1938,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -1933,6 +1938,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
          // Add melee damage bonus
          subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
 +        // Zelda of Warcraft: the Spin Attack's strike
 +        if (GetTypeId() == TYPEID_PLAYER)
 +            subDamage->damage = uint32(subDamage->damage * ZeldaMeleeMultiplier(this));
++        // Zelda of Warcraft: enemies' normal attacks hit harder
++        else
++            subDamage->damage = uint32(subDamage->damage * ZeldaEnemyMeleeMultiplier(this, calcDamageInfo->target));
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2656,10 +2664,20 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2667,20 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -3903,7 +3970,7 @@ index 00986af9e..13b643ea5 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -3628,7 +3646,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3649,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -3913,7 +3980,7 @@ index 00986af9e..13b643ea5 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -4976,6 +4995,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +4998,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -3925,7 +3992,7 @@ index 00986af9e..13b643ea5 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6121,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6124,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -3934,7 +4001,7 @@ index 00986af9e..13b643ea5 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7074,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7077,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -3943,7 +4010,7 @@ index 00986af9e..13b643ea5 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -8095,6 +8119,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8122,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -3957,7 +4024,7 @@ index 00986af9e..13b643ea5 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8435,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8438,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {

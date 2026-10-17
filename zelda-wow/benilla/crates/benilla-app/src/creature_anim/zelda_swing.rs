@@ -17,11 +17,6 @@ use bevy::prelude::*;
 #[derive(Resource, Default)]
 pub(crate) struct ZeldaSwingRequests(pub(crate) Vec<(u8, f32)>);
 
-/// Seconds left on the swing playing now: like Link, the hero stands still until it ends (the
-/// movement input reads it as a root, so turning stays live).
-#[derive(Resource, Default)]
-pub(crate) struct ZeldaSwingHold(pub(crate) f32);
-
 /// Per `(race, gender)`: the `(right, left)` variation index, in file order, of AttackUnarmed
 /// (16), Attack1H (17), Attack2H (18) and Attack2HL (19).
 const VARIATIONS: [(u8, u8, [(u8, u8); 4]); 16] = [

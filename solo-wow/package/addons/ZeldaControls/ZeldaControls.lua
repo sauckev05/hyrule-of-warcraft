@@ -4,7 +4,7 @@
 -- Biggoron's Sword (slow, wide, long reach, no shield), or two weapons (both hands strike, no shield).
 
 BINDING_HEADER_ZELDA = "Zelda Controls"
-BINDING_NAME_ZELDA_ATTACK = "Sword (hold, then release for Spin Attack)"
+BINDING_NAME_ZELDA_ATTACK = "Sword (hold, then release for Spin Attack / Shield Slam in Defensive Stance)"
 BINDING_NAME_ZELDA_SHIELD = "Shield (hold)"
 BINDING_NAME_ZELDA_ROLL = "Roll forward"
 BINDING_NAME_ZELDA_ROLL_LEFT = "Roll left"
@@ -48,6 +48,25 @@ spinSpark:SetHeight(32)
 local spinText = spinBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 spinText:SetPoint("TOP", spinBar, "TOP", 0, 5)
 
+-- In Defensive Stance with a shield the charged attack is a Shield Slam (stuns the enemies in
+-- front for 2 seconds, damage = the shield's armor); in any other stance it is the Spin Attack.
+local function ChargedAttackName()
+	for i = 1, (GetNumShapeshiftForms and GetNumShapeshiftForms() or 0) do
+		local _, name, active = GetShapeshiftFormInfo(i)
+		if active and name == "Defensive Stance" then
+			local link = GetInventoryItemLink("player", 17)
+			local _, _, id = string.find(link or "", "item:(%d+)")
+			if id then
+				local _, _, _, _, _, _, _, equipLoc = GetItemInfo(tonumber(id))
+				if equipLoc == "INVTYPE_SHIELD" then
+					return "Shield Slam"
+				end
+			end
+		end
+	end
+	return "Spin Attack"
+end
+
 local function SpinRageShort()
 	return UnitPowerType("player") == 1 and UnitMana("player") < 50
 end
@@ -63,15 +82,15 @@ spinBar:SetScript("OnUpdate", function()
 	if held >= SPIN_HOLD then
 		if SpinRageShort() then
 			this:SetStatusBarColor(0.6, 0.6, 0.6)
-			spinText:SetText("Spin Attack - not enough rage")
+			spinText:SetText(ChargedAttackName() .. " - not enough rage")
 		else
 			this:SetStatusBarColor(0.0, 1.0, 0.0)
-			spinText:SetText("Spin Attack - release!")
+			spinText:SetText(ChargedAttackName() .. " - release!")
 		end
 		spinSpark:Hide()
 	else
 		this:SetStatusBarColor(1.0, 0.7, 0.0)
-		spinText:SetText("Spin Attack")
+		spinText:SetText(ChargedAttackName())
 		spinSpark:Show()
 	end
 end)
@@ -211,7 +230,7 @@ local DEFAULT_KEYS = {
 -- keys older versions used; freed if they still hold a Zelda move
 local OLD_KEYS = { "F", "G", "R", "V", "H", "Z", "SHIFT-W", "SHIFT-A", "SHIFT-D" }
 local KEYS_VERSION = 5
-local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack, 50 rage), 2 bow, 3 shield (hold), 4 boomerang, 5 roll, Shift+Q/E side roll, Shift+S backflip."
+local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack, or shield slam in Defensive Stance, 50 rage), 2 bow, 3 shield (hold), 4 boomerang, 5 roll, Shift+Q/E side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
