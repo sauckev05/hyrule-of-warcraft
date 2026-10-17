@@ -522,6 +522,9 @@ pub(crate) use gesture::{select_gesture, Gesture, GestureQueue};
 /// The Bevy systems that execute the state machine `select` picks.
 mod driver;
 pub(crate) use driver::oneshot_is_live;
+/// Zelda of Warcraft: the sword combo's swings, asked for by the ZeldaControls addon.
+mod zelda_swing;
+pub(crate) use zelda_swing::ZeldaSwingRequests;
 use driver::{drive_animations, drive_hand_grip};
 
 /// The model event-keyframe scanner.
@@ -631,6 +634,9 @@ pub(crate) struct AnimDriver {
     /// short kick, its mechanism open: the reference's blend source keeps running, so it stays
     /// scoped to the airborne cut.
     frozen: Option<bevy::animation::graph::AnimationNodeIndex>,
+    /// Zelda of Warcraft: the one-shot playing is a sword-combo swing, timed to the server's lock,
+    /// so a whiff does not slow it.
+    zelda_swing: bool,
 }
 
 impl AnimDriver {
@@ -709,6 +715,7 @@ impl Default for AnimDriver {
             mount_display: 0,
             last_special: None,
             frozen: None,
+            zelda_swing: false,
         }
     }
 }
@@ -779,6 +786,7 @@ impl Plugin for CreatureAnimPlugin {
             .add_message::<DefenseAnim>()
             .add_message::<SwingSlowdown>()
             .init_resource::<PendingImpacts>()
+            .init_resource::<ZeldaSwingRequests>()
             .init_resource::<PlaySeq>()
             .init_resource::<gesture::GestureQueue>()
             .add_message::<EmoteAnim>()

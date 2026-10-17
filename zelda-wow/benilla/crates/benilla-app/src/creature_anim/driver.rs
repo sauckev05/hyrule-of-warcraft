@@ -309,13 +309,16 @@ pub(super) fn drive_animations(
         // The open NPC session's unit (`[0xb4e2d0]`): its state emote is passed over when the
         // row's `EmoteFlags` carry `0x2000` (`0x5fd7e2`-`0x5fd7fd`).
         Option<Res<crate::ui_session::InteractNpc>>,
+        // Zelda of Warcraft: the sword-combo swings the ZeldaControls addon asked for.
+        Option<ResMut<super::ZeldaSwingRequests>>,
     ),
     // The variation roll's LCG, the reference's single CRT `_rand` stream shared by every play.
     mut rng: ResMut<benilla_assets::AnimRng>,
     // The last anim trace line per traced unit; the trace writes only on change.
     mut anim_trace_last: Local<std::collections::HashMap<Entity, String>>,
 ) {
-    let (emote_sounds, loot_kneel, time, names, mut recomputes, riders, interact) = aux;
+    let (emote_sounds, loot_kneel, time, names, mut recomputes, riders, interact, mut zelda_swings) =
+        aux;
     let dt = time.delta_secs();
     // This frame's one-shot plays per unit, replayed in the reference's call order (`PlaySeq`
     // stamps): a later call overwrites an earlier, and the combat fast path keys on what is playing
@@ -768,7 +771,9 @@ pub(super) fn drive_animations(
         });
         // In `PlaySeq` order, defense last: the reference plays it from the deferred impact scan,
         // after every message handler.
-        let mut requests: Vec<(u16, Option<u16>)> = pending
+        // The third field forces a play: Zelda's combo swing, its variation and its length in
+        // seconds, past the fast path and the dedup.
+        let mut requests: Vec<(u16, Option<u16>, Option<(usize, f32)>)> = pending
             .remove(&entity)
             .map(|mut v| {
                 v.sort_by_key(|&(_, seq)| seq);
@@ -784,21 +789,36 @@ pub(super) fn drive_animations(
                                 swing_anim_main(w.armed_main())
                             };
                             debug!("swing: unit {entity} anim {id} (hitInfo {hit_info:#x})");
-                            (id, None)
+                            (id, None, None)
                         }
                         // The armed-id test compares the record's own AnimID, before the play
                         // seam's unarmed remap.
-                        OneShotReq::Emote(id, via_player) => (id, via_player.then_some(id)),
+                        OneShotReq::Emote(id, via_player) => (id, via_player.then_some(id), None),
                     })
                     .collect()
             })
             .unwrap_or_default();
-        requests.extend(defense.map(|id| (id, None)));
+        requests.extend(defense.map(|id| (id, None, None)));
+        // Zelda of Warcraft: the hero's sword-combo swing, last in the frame so it wins.
+        if is_self {
+            if let Some(queue) = zelda_swings.as_deref_mut() {
+                if let Some(&(step, seconds)) = queue.0.last() {
+                    let w = wielded.copied().unwrap_or_default();
+                    let (race, gender) = store.map_or((0, 0), |s| {
+                        (s.0.unit_race().unwrap_or(0), s.0.unit_gender().unwrap_or(0))
+                    });
+                    let (id, variation) =
+                        super::zelda_swing::combo_clip(step, w.armed_main(), race, gender);
+                    requests.push((id, None, Some((variation, seconds))));
+                }
+                queue.0.clear();
+            }
+        }
         // At the play seam (`0x5fe2f0`), Special1H/2H with both hands empty becomes
         // SpecialUnarmed(118), for every request.
         {
             let w = wielded.copied().unwrap_or_default();
-            for (id, _) in &mut requests {
+            for (id, _, _) in &mut requests {
                 *id = select::unarmed_special(*id, w.armed_main(), w.armed_off());
             }
         }
@@ -810,9 +830,9 @@ pub(super) fn drive_animations(
             && !airborne_frozen
             && live_oneshot(&drv, &player, &tr, anims, catalog).is_none()
         {
-            requests.extend(drv.deferred.take().map(|id| (id, None)));
+            requests.extend(drv.deferred.take().map(|id| (id, None, None)));
         }
-        for (id, armed_test) in requests {
+        for (id, armed_test, forced) in requests {
             // The emote player's own test first (`0x5fcd56`): an id already armed on the key bone
             // or bone 0 plays nothing, ahead of the lock and the fast path in `0x5fe2f0`.
             if let Some(raw) = armed_test {
@@ -834,7 +854,9 @@ pub(super) fn drive_animations(
             // The combat fast path (`0x5fe43c`–`0x5fe48b`): a combat clip over a live combat clip
             // is not armed; the current clip's rate doubles (op6 2.0) and the request parks in
             // `+0xd60`.
-            if let Some((cur, node)) = live_oneshot(&drv, &player, &tr, anims, catalog) {
+            if let Some((cur, node)) = live_oneshot(&drv, &player, &tr, anims, catalog)
+                .filter(|_| forced.is_none())
+            {
                 if select::is_combat_anim(cur) && select::is_combat_anim(id) {
                     if let Some(active) = player.animation_mut(node) {
                         active.set_speed(2.0);
@@ -860,7 +882,7 @@ pub(super) fn drive_animations(
             });
             let base_live = matches!(drv.mode, Mode::Swing { id: m, .. } if m == id)
                 && !oneshot_finished(&player, anims, id, catalog);
-            if overlay_live || base_live {
+            if forced.is_none() && (overlay_live || base_live) {
                 if benilla_assets::trace::enabled() {
                     benilla_assets::trace::line(
                         "fct",
@@ -884,8 +906,27 @@ pub(super) fn drive_animations(
             };
             // Resolve to a clip this model has, roll its variation and its replay budget (a clamp
             // one-shot authored `(min,max)` plays R times).
-            let picked =
-                find_resolved(anims, id, catalog).map(|h| roll_oneshot(anims, h, &mut rng));
+            let picked = match forced {
+                // Zelda's combo names its variation and plays it once
+                Some((variation, _)) => find_resolved(anims, id, catalog).map(|h| {
+                    let c = anims
+                        .clips
+                        .iter()
+                        .filter(|c| c.anim_id == h.anim_id)
+                        .nth(variation)
+                        .unwrap_or(h);
+                    (c, bevy::animation::RepeatAnimation::Never)
+                }),
+                None => find_resolved(anims, id, catalog).map(|h| roll_oneshot(anims, h, &mut rng)),
+            };
+            // A combo swing runs at the rate that ends it in its seconds.
+            let rate = match (forced, picked) {
+                (Some((_, seconds)), Some((c, _))) if seconds > 0.0 => {
+                    (c.duration / seconds).clamp(0.25, 4.0)
+                }
+                _ => 1.0,
+            };
+            drv.zelda_swing = forced.is_some();
             // No split bone (`[+0xd5c] == -1`): a key-bone play arms nothing (`0x5fdcc4`).
             if masked
                 && match picked {
@@ -910,7 +951,7 @@ pub(super) fn drive_animations(
                 let active = player.play(node);
                 active.replay();
                 active.set_repeat(repeat); // a reused node keeps no stale count
-                active.set_speed(1.0); // nor a stale whiff slow-down
+                active.set_speed(rate); // nor a stale whiff slow-down
                 active.set_weight(0.0); // the fade upkeep raises it this same frame
                 drv.overlay = Some(Overlay {
                     node,
@@ -935,7 +976,7 @@ pub(super) fn drive_animations(
                     }
                 }
                 if let Some((c, repeat)) = picked {
-                    play_clip(&mut drv.base_lock, &mut tr, &mut player, c, repeat, 1.0);
+                    play_clip(&mut drv.base_lock, &mut tr, &mut player, c, repeat, rate);
                 }
                 drv.mode = Mode::Swing { id, under: special };
                 drv.gait = None;
@@ -956,7 +997,7 @@ pub(super) fn drive_animations(
         // 0.5. Deviation: the reference writes bone 0's rate blindly; we scope it to the swing's
         // own node, because a moving attacker's gait would otherwise slow too. The id is
         // re-checked, as `Mode::Swing` also holds non-swing one-shots.
-        if pending_slow.contains(&entity) {
+        if pending_slow.contains(&entity) && !drv.zelda_swing {
             let node = match drv.overlay {
                 Some(ov) if is_swing_id(ov.id) => Some(ov.node),
                 _ if matches!(drv.mode, Mode::Swing { id: m, .. } if is_swing_id(m)) => {

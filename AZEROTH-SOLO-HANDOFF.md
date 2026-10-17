@@ -64,6 +64,12 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Zora Treads (190716) drop from Aku'mai instead of Bazil Thredd; copies in bags/bank were removed
   once at startup (marker `once:zora-treads-bfd` in characters.ai_playerbot_db_store).
 - Spin Attack always costs its full 50 rage: its own hits give no rage back (t_spinNoRage).
+- Sword combo (Link's): right slash, left slash, special strike (Special1H/2H). The ZeldaControls
+  addon keeps the combo count and lock (ZeldaControls_SwingTime: weapon speed x0.25, finisher
+  x0.35) and sends `.zslash <step> <clientAnimates>`; the server (SlashDurationMs) enforces the same
+  lock silently and sends the hits with HITINFO_NOACTION when the client animates. Benilla plays
+  the swing via the `ZeldaSwingAnim(step, seconds)` Lua global (creature_anim/zelda_swing.rs; its
+  per-race right/left variation table was measured from the 1.12 character models).
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)

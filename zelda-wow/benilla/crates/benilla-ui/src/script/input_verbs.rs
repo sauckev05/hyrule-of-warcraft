@@ -350,6 +350,22 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
             Ok(())
         })?,
     )?;
+    // Zelda of Warcraft: `ZeldaSwingAnim(step, seconds)`, the sword combo's swing the ZeldaControls
+    // addon plays on the hero as it sends the slash.
+    g.set(
+        "ZeldaSwingAnim",
+        lua.create_function(|lua, (step, seconds): (Option<Value>, Option<Value>)| {
+            let num = |v: Option<Value>| match v {
+                Some(Value::Integer(n)) => n as f64,
+                Some(Value::Number(n)) => n,
+                _ => 0.0,
+            };
+            let step = num(step).clamp(1.0, 3.0) as u8;
+            let seconds = num(seconds).clamp(0.05, 5.0) as f32;
+            push_call(lua, ScriptCall::ZeldaSwing { step, seconds });
+            Ok(())
+        })?,
+    )?;
     // `TargetLastTarget()` (`0x489b00`) and `AttackTarget()` (`0x489b50`) read no argument.
     g.set(
         "TargetLastTarget",

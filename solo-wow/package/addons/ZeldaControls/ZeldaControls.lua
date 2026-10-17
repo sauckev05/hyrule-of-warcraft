@@ -84,10 +84,48 @@ spinWatch:SetScript("OnUpdate", function()
 	end
 end)
 
+-- The sword combo, as Link swings: a right slash, a left slash, then a special strike (Heroic
+-- Strike's). A swing locks the sword until its animation is done - pressing mid-swing does
+-- nothing - and how long that takes follows the weapon's speed. Keep in step with the server's
+-- SlashDurationMs (ZeldaCommands.cpp).
+local COMBO_STEPS = 3
+local COMBO_CHAIN = 1.1          -- seconds after a swing ends that the next one still continues the combo
+local swingReadyAt = 0
+local comboStep = 0
+
+function ZeldaControls_SwingTime(step)
+	local speed = UnitAttackSpeed("player") or 2.0
+	if step >= COMBO_STEPS then
+		return math.min(1.4, math.max(0.4, speed * 0.35))
+	end
+	return math.min(1.0, math.max(0.3, speed * 0.25))
+end
+
+function ZeldaControls_Slash()
+	local now = GetTime()
+	if now < swingReadyAt then
+		return
+	end
+	if now > swingReadyAt + COMBO_CHAIN or comboStep >= COMBO_STEPS then
+		comboStep = 0
+	end
+	comboStep = comboStep + 1
+	local duration = ZeldaControls_SwingTime(comboStep)
+	swingReadyAt = now + duration
+	-- the Zelda of Warcraft client (Benilla) plays the exact swing; the stock client gets the
+	-- server's usual swing animation
+	if ZeldaSwingAnim then
+		ZeldaSwingAnim(comboStep, duration)
+		ZeldaControls_Command(".zslash " .. comboStep .. " 1")
+	else
+		ZeldaControls_Command(".zslash " .. comboStep .. " 0")
+	end
+end
+
 function ZeldaControls_Attack(state)
 	if state == "down" then
 		attackDownAt = GetTime()
-		ZeldaControls_Command(".zslash")
+		ZeldaControls_Slash()
 	else
 		if attackDownAt and GetTime() - attackDownAt >= SPIN_HOLD then
 			ZeldaControls_Command(".zspin")

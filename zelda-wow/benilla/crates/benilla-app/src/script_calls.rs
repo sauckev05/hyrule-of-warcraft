@@ -32,7 +32,10 @@ pub(crate) fn apply_script_calls(
         crate::ui_pet::PetPress,
         crate::ui_action::AttackPress,
     )>,
-    mut zelda: Option<ResMut<crate::player::ZeldaLock>>,
+    mut zelda: (
+        Option<ResMut<crate::player::ZeldaLock>>,
+        Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
+    ),
 ) {
     let Some(mut script) = script else {
         return;
@@ -72,8 +75,13 @@ pub(crate) fn apply_script_calls(
             ScriptCall::PetAction(slot) => appliers.p6().press_slot(slot),
             ScriptCall::PetOrder(packed) => appliers.p6().order(packed),
             ScriptCall::ZeldaLock(mode) => {
-                if let Some(lock) = zelda.as_deref_mut() {
+                if let Some(lock) = zelda.0.as_deref_mut() {
                     lock.request(mode);
+                }
+            }
+            ScriptCall::ZeldaSwing { step, seconds } => {
+                if let Some(swings) = zelda.1.as_deref_mut() {
+                    swings.0.push((step, seconds));
                 }
             }
         }

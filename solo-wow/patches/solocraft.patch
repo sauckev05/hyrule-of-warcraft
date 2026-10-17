@@ -1301,10 +1301,10 @@ index 00fde0a85..c794795fe 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..7f5d684bb
+index 000000000..7f747b585
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,1924 @@
+@@ -0,0 +1,1964 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1376,6 +1376,7 @@ index 000000000..7f5d684bb
 +    {
 +        uint32 lastSlash = 0;
 +        uint32 comboCount = 0;
++        uint32 slashReadyAt = 0;                        // the sword swing playing now ends here
 +        uint32 spinReadyAt = 0;
 +        uint32 dodgeReadyAt = 0;
 +        uint32 invulnerableUntil = 0;
@@ -1428,6 +1429,23 @@ index 000000000..7f5d684bb
 +    // Set while the spin attack's swings resolve: its own hits give no rage back, so a spin always
 +    // costs its full price.
 +    thread_local bool t_spinNoRage = false;
++    // Set while sword swings resolve for a client that plays the combo animation itself (the
++    // Zelda of Warcraft client): the hits go out with HITINFO_NOACTION, so the server's own swing
++    // animation does not cut the combo's.
++    thread_local bool t_noSwingAnim = false;
++
++    // The sword combo: right slash, left slash, then a special strike. Each swing locks the sword
++    // until its animation is done; how long that is follows the weapon's speed. The ZeldaControls
++    // addon times the same way (ZeldaControls_SwingTime), so keep the two in step.
++    const uint32 COMBO_STEPS = 3;
++    const uint32 SLASH_LOCK_TOLERANCE_MS = 100;      // network jitter between the two clocks
++    uint32 SlashDurationMs(Player* player, uint32 step)
++    {
++        float const speed = float(player->GetAttackTime(BASE_ATTACK));   // ms, haste included
++        if (step >= COMBO_STEPS)
++            return uint32(std::min(1400.0f, std::max(400.0f, speed * 0.35f)));
++        return uint32(std::min(1000.0f, std::max(300.0f, speed * 0.25f)));
++    }
 +    const uint32 DODGE_COOLDOWN_MS = 900;
 +    const uint32 DODGE_INVULN_MS = 450;
 +    const uint32 BOOMERANG_COOLDOWN_MS = 5000;
@@ -1597,6 +1615,11 @@ index 000000000..7f5d684bb
 +{
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.RangedDamageRate", 2.0f));
 +    return rate;
++}
++
++uint32 ZeldaSwingHitInfoFlags()
++{
++    return t_noSwingAnim ? 0x00010000 : 0;          // HITINFO_NOACTION
 +}
 +
 +int32 ZeldaRageGain(int32 gain)
@@ -2395,24 +2418,39 @@ index 000000000..7f5d684bb
 +    return damage;
 +}
 +
-+bool ChatHandler::HandleZeldaSlashCommand(char* /*args*/)
++bool ChatHandler::HandleZeldaSlashCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
 +    if (!CanAct(player))
 +        return true;
 +
++    // ".zslash <step> <animates>": the ZeldaControls addon keeps the combo's count and timing and
++    // says which swing this is, and whether the client plays its animation itself. Without them
++    // the server counts on its own.
++    uint32 step = 0, clientAnimates = 0;
++    if (args && *args)
++    {
++        ExtractUInt32(&args, step);
++        ExtractUInt32(&args, clientAnimates);
++    }
++
 +    ZeldaState& state = StateFor(player);
 +    Style style = StyleOf(player);
 +    StyleStats stats = StatsFor(style);
 +    uint32 now = WorldTimer::getMSTime();
-+    if (now - state.lastSlash < stats.slashGapMs)
++    // mid-swing presses do nothing, quietly
++    if (now + SLASH_LOCK_TOLERANCE_MS < state.slashReadyAt)
 +        return true;
 +
-+    state.comboCount = (now - state.lastSlash <= COMBO_WINDOW_MS) ? state.comboCount + 1 : 1;
++    if (step < 1 || step > COMBO_STEPS)
++    {
++        bool const chained = state.slashReadyAt && now <= state.slashReadyAt + COMBO_WINDOW_MS;
++        step = chained ? state.comboCount % COMBO_STEPS + 1 : 1;
++    }
++    state.comboCount = step;
 +    state.lastSlash = now;
-+    bool finisher = state.comboCount >= 3;
-+    if (finisher)
-+        state.comboCount = 0;
++    state.slashReadyAt = now + SlashDurationMs(player, step);
++    bool const finisher = step == COMBO_STEPS;
 +
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, stats.slashRange + 2.0f, enemies);
@@ -2420,6 +2458,7 @@ index 000000000..7f5d684bb
 +    // Prefer the selected target if it is in reach, then everything else in the cone in front of us.
 +    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
 +    uint32 hit = 0;
++    t_noSwingAnim = clientAnimates != 0;
 +    for (Unit* unit : enemies)
 +    {
 +        bool inReach = player->IsWithinDistInMap(unit, stats.slashRange + unit->GetCombatReach());
@@ -2431,9 +2470,10 @@ index 000000000..7f5d684bb
 +            player->AttackerStateUpdate(unit, OFF_ATTACK, true);
 +        ++hit;
 +    }
++    t_noSwingAnim = false;
 +
-+    if (hit == 0)
-+        player->HandleEmoteCommand(EMOTE_ONESHOT_ATTACK1H); // swing at the air
++    if (hit == 0 && !clientAnimates)
++        player->HandleEmoteCommand(finisher ? EMOTE_ONESHOT_SPECIALATTACK1H : EMOTE_ONESHOT_ATTACK1H); // swing at the air
 +    return true;
 +}
 +
@@ -3231,10 +3271,10 @@ index 000000000..7f5d684bb
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..6121d7bc8
+index 000000000..8ab843388
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,148 @@
+@@ -0,0 +1,151 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -3347,6 +3387,9 @@ index 000000000..6121d7bc8
 +// Zelda of Warcraft: damage factor for the hero's ranged weapon shots (Zelda.RangedDamageRate, 2).
 +float ZeldaRangedDamageMultiplier();
 +
++// Zelda of Warcraft: extra SMSG_ATTACKERSTATEUPDATE hit-info bits for the swing being sent now
++// (HITINFO_NOACTION while the client plays the sword combo's animation itself).
++uint32 ZeldaSwingHitInfoFlags();
 +// Zelda of Warcraft: rage a hero gains, scaled by Zelda.RageGainRate (0.5: half from every source).
 +int32 ZeldaRageGain(int32 gain);
 +// Zelda of Warcraft: experience for a kill inside a dungeon or raid, scaled by Zelda.DungeonXPRate (0.5).
@@ -3801,7 +3844,7 @@ index 70b4e7d00..45ee880a1 100644
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..33b8dff1a 100644
+index 00986af9e..13b643ea5 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -3876,6 +3919,15 @@ index 00986af9e..33b8dff1a 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
+@@ -6097,7 +6121,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+ 
+     WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
+ 
+-    data << uint32(calcDamageInfo->HitInfo);
++    data << uint32(calcDamageInfo->HitInfo | ZeldaSwingHitInfoFlags());
+     data << calcDamageInfo->attacker->GetPackGUID();
+     data << calcDamageInfo->target->GetPackGUID();
+     data << uint32(calcDamageInfo->totalDamage);                // Total damage
 @@ -7050,7 +7074,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
