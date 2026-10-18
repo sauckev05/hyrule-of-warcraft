@@ -63,6 +63,117 @@ index 20bcff241..a6c8243df 100644
      }
      return true;
  }
+diff --git a/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.cpp b/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.cpp
+index fd9b32e77..8991a8384 100644
+--- a/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.cpp
+@@ -25,6 +25,7 @@ EndScriptData
+ 
+ #include "AI/ScriptDevAI/include/sc_common.h"
+ #include "wailing_caverns.h"
++#include "Chat/Chat.h"
+ 
+ instance_wailing_caverns::instance_wailing_caverns(Map* pMap) : ScriptedInstance(pMap)
+ {
+@@ -90,12 +91,12 @@ void instance_wailing_caverns::SetData(uint32 uiType, uint32 uiData)
+     // Set to special in order to start the escort event; only if all four bosses are done
+     if (m_auiEncounter[0] == DONE && m_auiEncounter[1] == DONE && m_auiEncounter[2] == DONE && m_auiEncounter[3] == DONE && (m_auiEncounter[4] == NOT_STARTED || m_auiEncounter[4] == FAIL))
+     {
+-        // Yell intro text; only the first time
+-        if (m_auiEncounter[4] == NOT_STARTED)
+-        {
+-            if (Creature* pDisciple = GetSingleCreatureFromStorage(NPC_DISCIPLE))
+-                DoBroadcastText(SAY_INTRO, pDisciple);
+-        }
++        // Intro text. The Disciple's JustRespawned marks his event FAIL as soon as he spawns, so
++        // this used to stay silent; his line is also only a /say at the cave entrance, far from
++        // the last Fanglord, so every player in the dungeon is told where to go as well.
++        if (Creature* pDisciple = GetSingleCreatureFromStorage(NPC_DISCIPLE, true))
++            DoBroadcastText(SAY_INTRO, pDisciple);
++        TellPlayers("All four Fanglords are slain! Return to the Disciple of Naralex at the cave entrance to awaken Naralex.");
+ 
+         m_auiEncounter[4] = SPECIAL;
+     }
+@@ -115,6 +116,46 @@ void instance_wailing_caverns::SetData(uint32 uiType, uint32 uiData)
+     }
+ }
+ 
++void instance_wailing_caverns::OnCreatureDeath(Creature* pCreature)
++{
++    // The Fanglords' EventAI death scripts set these too; counting here as well keeps the event
++    // from hanging on a missed script.
++    uint32 type;
++    switch (pCreature->GetEntry())
++    {
++        case NPC_ANACONDRA: type = TYPE_ANACONDRA; break;
++        case NPC_COBRAHN:   type = TYPE_COBRAHN;   break;
++        case NPC_PYTHAS:    type = TYPE_PYTHAS;    break;
++        case NPC_SERPENTIS: type = TYPE_SERPENTIS; break;
++        default: return;
++    }
++    if (m_auiEncounter[type] != DONE)
++        SetData(type, DONE);
++
++    uint32 slain = 0;
++    for (uint32 i = TYPE_ANACONDRA; i <= TYPE_SERPENTIS; ++i)
++        if (m_auiEncounter[i] == DONE)
++            ++slain;
++    if (slain < 4)
++    {
++        char text[96];
++        snprintf(text, sizeof(text), "Fanglords slain: %u of 4", slain);
++        TellPlayers(text);
++    }
++}
++
++void instance_wailing_caverns::TellPlayers(const char* text) const
++{
++    for (const auto& ref : instance->GetPlayers())
++    {
++        if (Player* player = ref.getSource())
++        {
++            player->GetSession()->SendAreaTriggerMessage("%s", text);
++            ChatHandler(player).PSendSysMessage("|cff33ff99%s|r", text);
++        }
++    }
++}
++
+ void instance_wailing_caverns::Load(const char* chrIn)
+ {
+     if (!chrIn)
+diff --git a/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.h b/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.h
+index 75c30f094..6873b2e00 100644
+--- a/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.h
++++ b/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.h
+@@ -16,6 +16,10 @@ enum
+     TYPE_DISCIPLE   = 4,
+     TYPE_MUTANUS    = 5,
+ 
++    NPC_ANACONDRA   = 3671,
++    NPC_COBRAHN     = 3669,
++    NPC_PYTHAS      = 3670,
++    NPC_SERPENTIS   = 3673,
+     NPC_NARALEX     = 3679,
+     NPC_DISCIPLE    = 3678,
+ 
+@@ -37,6 +41,7 @@ class instance_wailing_caverns : public ScriptedInstance
+         void OnPlayerEnter(Player* pPlayer) override;
+         void OnCreatureCreate(Creature* pCreature) override;
+         void OnObjectCreate(GameObject* pGo) override;
++        void OnCreatureDeath(Creature* pCreature) override;
+ 
+         void SetData(uint32 uiType, uint32 uiData) override;
+         uint32 GetData(uint32 uiType) const override;
+@@ -46,6 +51,9 @@ class instance_wailing_caverns : public ScriptedInstance
+ 
+         void DespawnAll(); // after naralex leaves
+ 
++    private:
++        void TellPlayers(const char* text) const;
++
+     protected:
+         uint32 m_auiEncounter[MAX_ENCOUNTER];
+         std::string m_strInstData;
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
 index 000000000..f88a63bdd

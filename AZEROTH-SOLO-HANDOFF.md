@@ -87,6 +87,7 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Innkeeper dungeon list (gossip menu 50238): each entry teleports to that dungeon's meeting
   stone (dbscripts_on_gossip 900700-900718); WC/BFD list conditions follow their new levels.
 - Wailing Caverns is level 28-33 (Mutanus 33), loot scaled; Zora Fin Pauldrons drop from Mutanus
+- Wailing Caverns event fix (core, wailing_caverns.cpp): the Disciple's JustRespawned marks his event FAIL on spawn, so the intro (a /say at the entrance) never played; now each Fanglord death shows "Fanglords slain: N of 4" and the fourth tells every player to return to the Disciple at the entrance. The instance script also counts Fanglord deaths itself (OnCreatureDeath) besides their EventAI.
   (moved from Agathelos, Razorfen Kraul).
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
