@@ -97,7 +97,7 @@ pub(in crate::minimap) fn emit_quest_dots(
         let tint = if grey { 0xb0 as f32 / 255.0 } else { 1.0 };
         let rect = Rect::from_center_size(
             ctx.center + ctx.offset(w),
-            Vec2::splat(ctx.side * (QUEST_DOT_PX / BLIP_BASIS_PX)),
+            Vec2::splat(ctx.icon_side * (QUEST_DOT_PX / BLIP_BASIS_PX)),
         );
         quads.overlays.push(UiQuad {
             rect,
@@ -190,7 +190,7 @@ pub(in crate::minimap) fn emit_tracking_dots(
         let tint = if grey { 0xb0 as f32 / 255.0 } else { 1.0 };
         let rect = Rect::from_center_size(
             ctx.center + ctx.offset(w),
-            Vec2::splat(ctx.side * (QUEST_DOT_PX / BLIP_BASIS_PX)),
+            Vec2::splat(ctx.icon_side * (QUEST_DOT_PX / BLIP_BASIS_PX)),
         );
         quads.overlays.push(UiQuad {
             rect,
@@ -279,7 +279,7 @@ pub(in crate::minimap) fn emit_party_dots(
         quads.overlays.push(UiQuad {
             rect: Rect::from_center_size(
                 ctx.center + ctx.offset([x, y, 0.0]),
-                Vec2::splat(ctx.side * (PARTY_DOT_PX / BLIP_BASIS_PX)),
+                Vec2::splat(ctx.icon_side * (PARTY_DOT_PX / BLIP_BASIS_PX)),
             ),
             z_key: ctx.z,
             texture: Some(icons.clone()),

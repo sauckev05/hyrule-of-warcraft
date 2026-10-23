@@ -88,6 +88,9 @@ pub(super) fn route_anim_events(
         }
     };
     for ev in events.read() {
+        if super::zelda_silent(units.get(ev.entity).ok().and_then(|(s, _)| s)) {
+            continue;
+        }
         match &ev.ident {
             // `$DSL` (`0x69521d`) starts no sound: it registers the doodad as one emitter of its
             // id in the pool at `0xb06dd8` (`0x461d80`). Re-crossing the marker only repositions

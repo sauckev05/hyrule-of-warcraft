@@ -87,8 +87,32 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Innkeeper dungeon list (gossip menu 50238): each entry teleports to that dungeon's meeting
   stone (dbscripts_on_gossip 900700-900718); WC/BFD list conditions follow their new levels.
 - Wailing Caverns is level 28-33 (Mutanus 33), loot scaled; Zora Fin Pauldrons drop from Mutanus
-- Wailing Caverns event fix (core, wailing_caverns.cpp): the Disciple's JustRespawned marks his event FAIL on spawn, so the intro (a /say at the entrance) never played; now each Fanglord death shows "Fanglords slain: N of 4" and the fourth tells every player to return to the Disciple at the entrance. The instance script also counts Fanglord deaths itself (OnCreatureDeath) besides their EventAI.
   (moved from Agathelos, Razorfen Kraul).
+- Wailing Caverns event fix (core, wailing_caverns.cpp): the Disciple's JustRespawned marks his event FAIL on spawn, so the intro (a /say at the entrance) never played; now each Fanglord death shows "Fanglords slain: N of 4" and the fourth tells every player to return to the Disciple at the entrance. The instance script also counts Fanglord deaths itself (OnCreatureDeath) besides their EventAI.
+- Dungeon clears (core ZeldaClear*, content shards.py -> 012_dungeon_clears.sql + patch-Z): every
+  dungeon/raid (SM and Dire Maul per wing, by position boxes in `zelda_dungeon_clear`) counts the
+  hostile DB-spawned creatures it actually spawned (all its grids are force-loaded at instance
+  creation; dead-on-load ones from saved respawn times). Killed creatures never respawn there
+  (Zelda.DungeonNoRespawn, 30-day respawn). A counted enemy despawned alive counts as beaten.
+  The client gets "ZDUNGEON:killed;total;name;raid" (hidden), ZeldaHUD dungeon.lua draws the bar
+  under the minimap; click = `.zdungeon left` (nearest enemies still standing). 100% gives
+  "Crystal Shard of <name>" (items 191100-191130, rare for dungeons, epic for raids, icons
+  INV_Zelda_Shard_N in patch-Z, mail from Navi when bags are full), once per character
+  (ai_playerbot_db_store key shard:<item>). One-time `once:retro-shards` mailed DM, Stockade,
+  SFK, BFD, WC, RFK and Gnomeregan shards to the PLAYER account's non-hero characters.
+- Dungeon map: inside a dungeon/raid, M (ToggleWorldMap, overridden in dungeon.lua) opens a big
+  square map: a second Minimap frame (ZeldaDungeonMapView) and the Lua call ZeldaDungeonMap(on,
+  zoom) put Benilla's minimap renderer in big mode (minimap/mod.rs ZeldaBigMap: radius 320/220/
+  150/100 yd indoors, 1024 composite target, square mask, portal flood limited to the hero's
+  floor, blips at corner-map size). MinimapCluster is hidden while it is open.
+- Stances (warriors, Zelda.StanceWeapons): Berserker Stance Passive 7381 is +10% crit (006 +
+  patch-Z). Taking Berserker Stance equips the best two-hander from the bags (or empties the
+  hands); Defensive takes the best one-hander + shield (keeps a one-hander when there is no
+  shield). Player::CanEquipItem refuses other weapons/shields in those stances
+  (ZeldaStanceEquipBlocked). Leaping Strike now hits every enemy in front.
+- Dual wield: the main hand deals half damage too (Zelda.DualWieldDamage, in
+  Player::CalculateMinMaxDamage); the off hand keeps vanilla's 50%.
+- Navi (190601) makes no creature sounds in Benilla (sound/mod.rs ZELDA_SILENT_ENTRIES).
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)

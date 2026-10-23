@@ -183,6 +183,7 @@ mod tests {
             side,
             px_per_yd: (side * 0.5) / radius,
             radius_yd: radius,
+            icon_side: side,
             z: 0,
             alpha: 1.0,
             wx: 0.0,

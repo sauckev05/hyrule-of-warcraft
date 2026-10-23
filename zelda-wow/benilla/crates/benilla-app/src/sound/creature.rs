@@ -390,7 +390,7 @@ fn creature_body_loops(
         // `0x623800`'s gate: raw health (`0x623817`), absent read as 0 so a unit awaiting its
         // snapshot stays silent, and `UNIT_DYNFLAG_DEAD` (`0x62381e`, re-evaluated at `0x60053c`).
         let alive = store.0.unit_health().unwrap_or(0) > 0 && !store.0.unit_reads_dead();
-        let desired = if alive { kit } else { 0 };
+        let desired = if alive && !super::zelda_silent(Some(store)) { kit } else { 0 };
         // Stop a superseded loop: death, or a mount swap that changed the row.
         if let Some(&prev) = armed.get(&entity) {
             if prev != desired && source_kit_playing(&out, entity, prev) {
@@ -440,7 +440,7 @@ fn creature_body_loops(
 fn creature_anim_vocals(
     mut events: MessageReader<AnimSoundEvent>,
     // GlobalTransform: the mount child's local Transform is seat-relative.
-    units: Query<(&NetEntity, &GlobalTransform, Has<SelfPlayer>)>,
+    units: Query<(&NetEntity, &GlobalTransform, Has<SelfPlayer>, Option<&ObjectStore>)>,
     // The class-5 window: one timestamp for the whole world, the reference's `[0xc4e0e4]`.
     mut stand_window: Local<Option<std::time::Duration>>,
     time: Res<Time>,
@@ -460,9 +460,12 @@ fn creature_anim_vocals(
     let listener = listener.pos;
     let now = time.elapsed();
     for ev in events.read() {
-        let Ok((net, transform, is_self)) = units.get(ev.entity) else {
+        let Ok((net, transform, is_self, store)) = units.get(ev.entity) else {
             continue;
         };
+        if super::zelda_silent(store) {
+            continue;
+        }
         let Some(voice) = net.display_id.and_then(|d| voices.0.for_display(d)) else {
             continue;
         };

@@ -58,6 +58,27 @@ const ZOOM_CHUNKS: [f32; 6] = [14.0, 12.0, 10.0, 8.0, 6.0, 4.0];
 /// `0x6d98f5` writes `radiusTable[indoorZoom]` into it whenever the zoom or indoor state changes.
 const INTERIOR_ZOOM_RADIUS: [f32; 6] = [150.0, 120.0, 90.0, 60.0, 40.0, 25.0];
 
+/// Zelda of Warcraft: the big dungeon map. While `on`, the Minimap widget (the ZeldaHUD addon's
+/// own, centred on screen) draws square, zoomed far out and sharper, so a whole dungeon floor reads
+/// at a glance; `zoom` 0..3 picks the reach, widest first.
+#[derive(Resource, Default)]
+pub(crate) struct ZeldaBigMap {
+    pub(crate) on: bool,
+    pub(crate) zoom: u8,
+}
+
+/// The big map's reach in yards, indoors and out, by its zoom.
+const BIG_INTERIOR_RADIUS: [f32; 4] = [320.0, 220.0, 150.0, 100.0];
+const BIG_OUTDOOR_RADIUS: [f32; 4] = [900.0, 600.0, 400.0, 260.0];
+/// The big map's composite target edge, in texels.
+const BIG_RT_SIZE: u32 = 1024;
+/// The big map's floor filter: the portal flood stays within this many yards below and above the
+/// hero, so the storeys over and under the current floor do not paint over it.
+const BIG_FLOOR_BELOW_YD: f32 = 30.0;
+const BIG_FLOOR_ABOVE_YD: f32 = 22.0;
+/// The blips and arrow keep the corner map's size on the big map.
+const BIG_ICON_SIDE_PX: f32 = 170.0;
+
 /// How far the map reaches, in yards; both branches of [`emit_minimap`] and the ping read it here.
 fn view_radius_yd(zoom: u8, inside_zoom: u8, inside: bool) -> f32 {
     let clamp = |z: u8| usize::from(z.min(5));
@@ -220,6 +241,8 @@ struct MinimapAssets {
     rim_arrows: blips::RimArrowArt,
     /// The unit-blip atlas (`Interface\Minimap\ObjectIcons`, five 32-px dot cells).
     object_icons: Option<Handle<Image>>,
+    /// A plain square mask, the big dungeon map's.
+    square_mask: Option<Handle<Image>>,
     /// `SpellShapeshiftForm.dbc`, the tracking dots' creature-type override (a cat-form druid is a
     /// Beast).
     forms: Option<HashMap<u32, benilla_formats::ShapeshiftForm>>,
@@ -260,6 +283,7 @@ fn setup_minimap(
             }
             let object_icons =
                 assets.sprite_texture("Interface\\Minimap\\ObjectIcons", &mut images);
+            let square_mask = assets.mask_texture("Interface\\Buttons\\WHITE8X8", &mut images);
             if mask.is_none() {
                 warn!("minimap: MinimapMask.blp missing — the map will draw square");
             }
@@ -280,6 +304,7 @@ fn setup_minimap(
                 poi,
                 rim_arrows,
                 object_icons,
+                square_mask,
                 forms,
             });
         }
@@ -339,7 +364,7 @@ fn emit_minimap(
     wmos: Res<Assets<WmoModel>>,
     world: benilla_world::world_point::WorldPoint,
     asset_server: Res<AssetServer>,
-    death_net: Res<crate::death::DeathNet>,
+    (death_net, big_map): (Res<crate::death::DeathNet>, Res<ZeldaBigMap>),
     blip_inputs: blips::BlipInputs,
     mut composite: ResMut<composite::MinimapComposite>,
     rig: Option<Res<composite::CompositeRig>>,
@@ -398,16 +423,37 @@ fn emit_minimap(
     // The drawn family's world-to-px scale, for the point blips drawn after the tiles.
     let mut blip_px_per_yd = 0.0_f32;
 
-    let mask = assets.mask.as_ref().map(|m| UiQuadMask {
+    let big = big_map.on;
+    let mask_art = if big {
+        assets.square_mask.as_ref()
+    } else {
+        assets.mask.as_ref()
+    };
+    let mask = mask_art.map(|m| UiQuadMask {
         texture: m.clone(),
         rect: slot.rect,
     });
+    // The blips' and arrow's size basis: the widget, or the corner map's size on the big map.
+    let icon_side = if big { side.min(BIG_ICON_SIDE_PX) } else { side };
+    let rt_texels = if big { BIG_RT_SIZE } else { composite::RT_SIZE };
+    composite.rt_size = rt_texels;
+    #[allow(clippy::cast_precision_loss)] // 1024 is exact in f32
+    let rt_size = rt_texels as f32;
 
     let interior = minimap_interior(&player, &instances, &wmos, &world, &asset_server);
 
     // For the dots' indoor test; the branch below consumes `interior`.
     let player_indoors = interior.is_some();
-    let view_radius = view_radius_yd(zoom, inside_zoom, player_indoors);
+    let view_radius = if big {
+        let z = usize::from(big_map.zoom.min(3));
+        if player_indoors {
+            BIG_INTERIOR_RADIUS[z]
+        } else {
+            BIG_OUTDOOR_RADIUS[z]
+        }
+    } else {
+        view_radius_yd(zoom, inside_zoom, player_indoors)
+    };
     if let Some((world_from_local, model, stem, in_group)) = interior {
         // Interior: the WMO's own per-group tiles, drawn white. They are baked in the model frame
         // (north = model +X), so each sits at its model-space centre through the placement and the
@@ -423,8 +469,7 @@ fn emit_minimap(
         // The tiles go into the reference's 256² target (`composite`), not the screen. Target
         // space: y-up, origin at the player, `RT_HALF_EXTENT_SCALE · radius` yd to an edge.
         #[allow(clippy::cast_precision_loss)] // 256 is exact in f32
-        let units_per_yd =
-            (composite::RT_SIZE as f32 * 0.5) / (composite::RT_HALF_EXTENT_SCALE * radius);
+        let units_per_yd = (rt_size * 0.5) / (composite::RT_HALF_EXTENT_SCALE * radius);
         // A model point to its north-up target position: placement to world, then up = +X north,
         // left = +Y west.
         let to_target = |m: [f32; 3]| {
@@ -436,13 +481,20 @@ fn emit_minimap(
         let x_axis = to_target([1.0, 0.0, 0.0]) - to_target([0.0, 0.0, 0.0]);
         let rotation = (-x_axis.y).atan2(x_axis.x);
         #[allow(clippy::cast_precision_loss)]
-        let rt_half = composite::RT_SIZE as f32 * 0.5;
+        let rt_half = rt_size * 0.5;
         composite.active = true;
 
         // The portal flood-fill from the player's group (`0x6a5020`). Its query box uses the draw
         // radius (`0x6d96b6`), so zooming in also tightens the box's Z extent.
-        let drawable =
-            interior_group_selection(model, &world_from_local, player.pos, radius, in_group);
+        let floor = big.then_some((BIG_FLOOR_BELOW_YD, BIG_FLOOR_ABOVE_YD));
+        let drawable = interior_group_selection(
+            model,
+            &world_from_local,
+            player.pos,
+            radius,
+            in_group,
+            floor,
+        );
         // Draw order (`0x4ebeb0`, keyed at `0x6d9e30`): ascending by `Zmidpoint − playerZ`, the
         // player's own group keyed `FLT_MAX`, so it draws last and no storey covers the room.
         let player_z = bevy_to_wow(world_from_local.inverse().transform_point3(player.pos))[2];
@@ -630,6 +682,7 @@ fn emit_minimap(
             side,
             px_per_yd: blip_px_per_yd,
             radius_yd: (side * 0.5) / blip_px_per_yd,
+            icon_side,
             z: slot.z,
             alpha: slot.alpha,
             wx: (wx / q).round() * q,
@@ -683,10 +736,10 @@ fn emit_minimap(
     if let Some(arrow) = &assets.arrow {
         // `blips::PLAYER_ARROW_QUAD_PX`: MinimapArrow.m2's single quad at 1280 px/unit on the
         // 140.8 basis, its authored centre offset rotating with the facing.
-        let s = side * (blips::PLAYER_ARROW_QUAD_PX / blips::BLIP_BASIS_PX);
+        let s = icon_side * (blips::PLAYER_ARROW_QUAD_PX / blips::BLIP_BASIS_PX);
         let rotation = -player.facing();
         let (sin, cos) = rotation.sin_cos();
-        let off = blips::PLAYER_ARROW_OFFSET_PX * (side / blips::BLIP_BASIS_PX);
+        let off = blips::PLAYER_ARROW_OFFSET_PX * (icon_side / blips::BLIP_BASIS_PX);
         let off = Vec2::new(off.x * cos - off.y * sin, off.x * sin + off.y * cos);
         let rect = Rect::from_center_size(center + off, Vec2::splat(s));
         quads.overlays.push(UiQuad {
@@ -747,7 +800,7 @@ fn emit_minimap(
                 -(cp.position[0] - wx) * blip_px_per_yd,
             );
             if off.length() <= side * 0.5 * 0.8 {
-                let s = side * CORPSE_BLIP_FRACTION;
+                let s = icon_side * CORPSE_BLIP_FRACTION;
                 let rect = Rect::from_center_size(center + off, Vec2::splat(s));
                 quads.overlays.push(UiQuad {
                     rect,
@@ -875,6 +928,7 @@ impl Plugin for MinimapPlugin {
             .init_resource::<MinimapInside>()
             .init_resource::<MinimapPing>()
             .init_resource::<composite::MinimapComposite>()
+            .init_resource::<ZeldaBigMap>()
             .add_systems(Startup, setup_minimap.after(AssetSet::Open))
             .add_systems(Startup, composite::setup_composite)
             .add_systems(

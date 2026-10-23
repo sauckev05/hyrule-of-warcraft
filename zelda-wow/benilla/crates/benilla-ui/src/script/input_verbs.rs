@@ -366,6 +366,26 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
             Ok(())
         })?,
     )?;
+    // Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)`, the ZeldaHUD addon's big dungeon map.
+    g.set(
+        "ZeldaDungeonMap",
+        lua.create_function(|lua, (on, zoom): (Option<Value>, Option<Value>)| {
+            let on = match on {
+                Some(Value::Boolean(b)) => b,
+                Some(Value::Integer(n)) => n != 0,
+                Some(Value::Number(n)) => n != 0.0,
+                _ => false,
+            };
+            let zoom = match zoom {
+                Some(Value::Integer(n)) => n as f64,
+                Some(Value::Number(n)) => n,
+                _ => 1.0,
+            }
+            .clamp(0.0, 3.0) as u8;
+            push_call(lua, ScriptCall::ZeldaDungeonMap { on, zoom });
+            Ok(())
+        })?,
+    )?;
     // `TargetLastTarget()` (`0x489b00`) and `AttackTarget()` (`0x489b50`) read no argument.
     g.set(
         "TargetLastTarget",

@@ -1372,16 +1372,17 @@ index 811d227d9..cfd7b4d1d 100644
              if (iterator != m_itemData.end() && iterator->second.Value == 0)
                  continue; // item is blacklisted
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba3d..1d3fb3f8c 100644
+index ffa25ba3d..daaa4d9fd 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,15 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,16 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
 +        { "zslash",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaSlashCommand,          "", nullptr },
 +        { "zspin",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaSpinCommand,           "", nullptr },
 +        { "zstats",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaStatsCommand,          "", nullptr },
++        { "zdungeon",       SEC_PLAYER,         false, &ChatHandler::HandleZeldaDungeonCommand,        "", nullptr },
 +        { "zroll",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaRollCommand,           "", nullptr },
 +        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
 +        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
@@ -1392,10 +1393,10 @@ index ffa25ba3d..1d3fb3f8c 100644
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a85..2ed202a0b 100644
+index 00fde0a85..9edda0956 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,16 @@ class ChatHandler
+@@ -679,6 +679,17 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
@@ -1403,6 +1404,7 @@ index 00fde0a85..2ed202a0b 100644
 +        bool HandleZeldaSlashCommand(char* args);
 +        bool HandleZeldaSpinCommand(char* args);
 +        bool HandleZeldaStatsCommand(char* args);
++        bool HandleZeldaDungeonCommand(char* args);
 +        bool HandleZeldaRollCommand(char* args);
 +        bool HandleZeldaFlipCommand(char* args);
 +        bool HandleZeldaShieldCommand(char* args);
@@ -1414,10 +1416,10 @@ index 00fde0a85..2ed202a0b 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..b0f2ef994
+index 000000000..3f63696c4
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,2116 @@
+@@ -0,0 +1,2775 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1467,6 +1469,8 @@ index 000000000..b0f2ef994
 +#include "World/World.h"
 +#include "Util/Util.h"
 +#include "Spells/SpellMgr.h"
++#include "Mails/Mail.h"
++#include "Entities/Bag.h"
 +#include <array>
 +#include <cctype>
 +#include <filesystem>
@@ -1519,6 +1523,13 @@ index 000000000..b0f2ef994
 +        float setBonus[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 +        float appliedCrit = 0.0f;
 +        Player const* setsAppliedFor = nullptr;
++        // a warrior's stance the weapons were last fitted to, and when a refused equip was last told
++        uint8 lastForm = 0xFF;
++        uint32 stanceNoticeAt = 0;
++        int8 dualWielding = -1;                         // the main hand's damage was last set for this
++        // the dungeon clear progress last sent to the client ("killed;total;section")
++        std::string lastClearReport;
++        uint32 clearCheckIn = 0;
 +    };
 +
 +    // Commands run on the session's thread and damage on map threads, so the table is locked.
@@ -1530,6 +1541,12 @@ index 000000000..b0f2ef994
 +        std::lock_guard<std::mutex> guard(s_statesLock);
 +        return s_states[player->GetGUIDLow()]; // references stay valid: unordered_map never moves nodes
 +    }
++}
++
++static void SendClearReport(Player* player, ZeldaState& state, bool force);
++
++namespace
++{
 +
 +    const uint32 COMBO_WINDOW_MS = 1100;
 +    const uint32 SPIN_COOLDOWN_MS = 2500;
@@ -2108,6 +2125,190 @@ index 000000000..b0f2ef994
 +    }
 +}
 +
++namespace
++{
++    // ---------------------------------------------------------------- stance weapons
++    // Berserker Stance fights with a two-hander only; Defensive Stance with a one-hander and a
++    // shield. Taking up either stance fits the hands from the bags, and while in it the other
++    // weapons cannot be equipped. Battle Stance takes anything.
++    bool IsTwoHander(ItemPrototype const* p)
++    {
++        return p && p->Class == ITEM_CLASS_WEAPON && p->InventoryType == INVTYPE_2HWEAPON;
++    }
++
++    bool IsMainHandOneHander(ItemPrototype const* p)
++    {
++        return p && p->Class == ITEM_CLASS_WEAPON &&
++               (p->InventoryType == INVTYPE_WEAPON || p->InventoryType == INVTYPE_WEAPONMAINHAND);
++    }
++
++    bool IsShield(ItemPrototype const* p)
++    {
++        return p && p->InventoryType == INVTYPE_SHIELD;
++    }
++
++    bool StanceAllows(uint32 form, uint8 slot, ItemPrototype const* p)
++    {
++        if (slot != EQUIPMENT_SLOT_MAINHAND && slot != EQUIPMENT_SLOT_OFFHAND)
++            return true;
++        switch (form)
++        {
++            case FORM_BERSERKERSTANCE:
++                return slot == EQUIPMENT_SLOT_MAINHAND && IsTwoHander(p);
++            case FORM_DEFENSIVESTANCE:
++                return slot == EQUIPMENT_SLOT_MAINHAND ? IsMainHandOneHander(p) : IsShield(p);
++            default:
++                return true;
++        }
++    }
++
++    bool StanceRulesOn(Player const* player)
++    {
++        static bool const enabled = sConfig.GetBoolDefault("Zelda.StanceWeapons", true);
++        return enabled && player->getClass() == CLASS_WARRIOR;
++    }
++
++    float WeaponScore(ItemPrototype const* p)
++    {
++        float const dps = p->Delay ? (p->Damage[0].DamageMin + p->Damage[0].DamageMax) * 500.0f / p->Delay : 0.0f;
++        return p->ItemLevel * 1000.0f + p->Quality * 100.0f + dps + p->Armor * 0.01f;
++    }
++
++    // the best item in the backpack and bags the hero can use that passes `fits`
++    template <class Fits>
++    Item* BestInBags(Player* player, Fits fits)
++    {
++        Item* best = nullptr;
++        auto consider = [&](Item* item)
++        {
++            if (!item || !fits(item->GetProto()) || player->CanUseItem(item, false) != EQUIP_ERR_OK)
++                return;
++            if (!best || WeaponScore(item->GetProto()) > WeaponScore(best->GetProto()))
++                best = item;
++        };
++        for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
++            consider(player->GetItemByPos(INVENTORY_SLOT_BAG_0, i));
++        for (uint8 b = INVENTORY_SLOT_BAG_START; b < INVENTORY_SLOT_BAG_END; ++b)
++            if (Bag* bag = (Bag*)player->GetItemByPos(INVENTORY_SLOT_BAG_0, b))
++                for (uint32 j = 0; j < bag->GetBagSize(); ++j)
++                    consider(bag->GetItemByPos(j));
++        return best;
++    }
++
++    // take an equipped weapon or shield off into the bags; with no room it goes by mail
++    void UnequipToBags(Player* player, uint8 slot)
++    {
++        Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
++        if (!item)
++            return;
++        ItemPosCountVec dest;
++        uint8 bagSlot = 0;
++        if (player->CanStoreItem(NULL_BAG, NULL_SLOT, dest, item, bagSlot, false) == EQUIP_ERR_OK)
++        {
++            player->RemoveItem(INVENTORY_SLOT_BAG_0, slot, true);
++            player->StoreItem(dest, item, true);
++            return;
++        }
++        player->MoveItemFromInventory(INVENTORY_SLOT_BAG_0, slot, true);
++        CharacterDatabase.BeginTransaction();
++        item->DeleteFromInventoryDB();
++        item->SaveToDB();
++        CharacterDatabase.CommitTransaction();
++        MailDraft("Your bags were full", "Your stance had no room for this in your bags, so it was sent here.")
++            .AddItem(item).SendMailTo(player, MailSender(player, MAIL_STATIONERY_GM), MAIL_CHECK_MASK_COPIED);
++        ChatHandler(player).PSendSysMessage("|cffffd000%s was sent to your mailbox: your bags are full.|r", item->GetProto()->Name1);
++    }
++
++    Item* TakeFromBags(Player* player, Item* item)
++    {
++        if (item)
++            player->RemoveItem(item->GetBagSlot(), item->GetSlot(), true);
++        return item;
++    }
++
++    void EquipTaken(Player* player, Item* item, uint8 slot)
++    {
++        if (item)
++            player->EquipItem((uint16(INVENTORY_SLOT_BAG_0) << 8) | slot, item, true);
++    }
++
++    void FitStanceWeapons(Player* player, uint32 form)
++    {
++        Item* mh = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
++        Item* oh = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
++        ChatHandler chat(player);
++        if (form == FORM_BERSERKERSTANCE)
++        {
++            if (mh && IsTwoHander(mh->GetProto()))
++            {
++                UnequipToBags(player, EQUIPMENT_SLOT_OFFHAND);
++                return;
++            }
++            Item* twoHander = TakeFromBags(player, BestInBags(player, IsTwoHander));
++            UnequipToBags(player, EQUIPMENT_SLOT_MAINHAND);
++            UnequipToBags(player, EQUIPMENT_SLOT_OFFHAND);
++            EquipTaken(player, twoHander, EQUIPMENT_SLOT_MAINHAND);
++            if (twoHander)
++                chat.PSendSysMessage("|cffff7020Berserker Stance: you take up %s.|r", twoHander->GetProto()->Name1);
++            else
++                chat.SendSysMessage("|cffff7020Berserker Stance: you carry no two-handed weapon, so you fight bare-handed.|r");
++        }
++        else if (form == FORM_DEFENSIVESTANCE)
++        {
++            bool const mhOk = mh && IsMainHandOneHander(mh->GetProto());
++            bool const ohOk = oh && IsShield(oh->GetProto());
++            if (mhOk && ohOk)
++                return;
++            if (!ohOk)
++                UnequipToBags(player, EQUIPMENT_SLOT_OFFHAND);
++            if (!mhOk)
++                UnequipToBags(player, EQUIPMENT_SLOT_MAINHAND);
++            Item* weapon = mhOk ? nullptr : TakeFromBags(player, BestInBags(player, IsMainHandOneHander));
++            Item* shield = ohOk ? nullptr : TakeFromBags(player, BestInBags(player, IsShield));
++            EquipTaken(player, weapon, EQUIPMENT_SLOT_MAINHAND);
++            EquipTaken(player, shield, EQUIPMENT_SLOT_OFFHAND);
++            std::string taken;
++            if (weapon)
++                taken = weapon->GetProto()->Name1;
++            if (shield)
++                taken += (taken.empty() ? "" : " and ") + std::string(shield->GetProto()->Name1);
++            if (!taken.empty())
++                chat.PSendSysMessage("|cff4080ffDefensive Stance: you take up %s.|r", taken.c_str());
++            if (!ohOk && !shield)
++                chat.SendSysMessage("|cff4080ffDefensive Stance: you carry no shield.|r");
++        }
++    }
++}
++
++float ZeldaDualWieldFactor(Player const* player)
++{
++    static float const factor = std::max(0.0f, sConfig.GetFloatDefault("Zelda.DualWieldDamage", 0.5f));
++    if (!player || !player->IsPlayer())
++        return 1.0f;
++    Item* off = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
++    return off && off->GetProto()->Class == ITEM_CLASS_WEAPON ? factor : 1.0f;
++}
++
++uint32 ZeldaStanceEquipBlocked(Player const* player, ItemPrototype const* proto, uint8 slot)
++{
++    if (!player || !proto || !StanceRulesOn(player))
++        return EQUIP_ERR_OK;
++    uint32 const form = player->GetShapeshiftForm();
++    if (StanceAllows(form, slot, proto))
++        return EQUIP_ERR_OK;
++    Player* hero = const_cast<Player*>(player);
++    ZeldaState& state = StateFor(hero);
++    uint32 const now = WorldTimer::getMSTime();
++    if (now - state.stanceNoticeAt > 1000)
++    {
++        state.stanceNoticeAt = now;
++        hero->GetSession()->SendNotification(form == FORM_BERSERKERSTANCE
++            ? "Berserker Stance: two-handed weapons only"
++            : "Defensive Stance: a one-handed weapon and a shield only");
++    }
++    return EQUIP_ERR_CANT_DO_RIGHT_NOW;
++}
++
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
 +    if (!player)
@@ -2122,6 +2323,38 @@ index 000000000..b0f2ef994
 +        player->UpdateSpeed(MOVE_RUN, true);
 +        ApplyCrossFaction(player);
 +        ZeldaHeroFirstLogin(player);
++    }
++
++    // the dungeon clear bar under the minimap: sent when it changes, looked at twice a second
++    if (player->IsInWorld() && !player->IsBeingTeleported())
++    {
++        state.clearCheckIn = state.clearCheckIn > diff ? state.clearCheckIn - diff : 0;
++        if (!state.clearCheckIn)
++        {
++            state.clearCheckIn = 500;
++            SendClearReport(player, state, false);
++        }
++    }
++
++    // two weapons halve the main hand's damage too: refresh it when the off hand changes
++    {
++        int8 const dual = ZeldaDualWieldFactor(player) != 1.0f ? 1 : 0;
++        if (dual != state.dualWielding)
++        {
++            state.dualWielding = dual;
++            player->UpdateDamagePhysical(BASE_ATTACK);
++        }
++    }
++
++    // a warrior taking up Berserker or Defensive Stance takes up the weapons it fights with
++    if (StanceRulesOn(player) && player->IsInWorld() && player->IsAlive() && !player->IsBeingTeleported())
++    {
++        uint8 const form = uint8(player->GetShapeshiftForm());
++        if (form != state.lastForm)
++        {
++            state.lastForm = form;
++            FitStanceWeapons(player, form);
++        }
 +    }
 +
 +    // running without stopping for a while turns into a sprint; stopping ends it
@@ -2680,31 +2913,22 @@ index 000000000..b0f2ef994
 +// it crits like a melee hit and never glances. The Zelda client plays the leap (Special2H) itself.
 +static void ZeldaLeapingStrike(Player* player, bool clientAnimates)
 +{
++    // every enemy in front of the hero, within a two-hander's reach and arc, takes attack power x2
 +    const uint32 LEAPING_STRIKE_SPELL = 40008;
 +    StyleStats const reach = StatsFor(Style::TwoHanded);
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, reach.slashRange + 8.0f, enemies);
-+    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
-+    Unit* target = nullptr;
-+    for (Unit* unit : enemies)
-+    {
-+        if (!player->IsWithinDistInMap(unit, reach.slashRange + unit->GetCombatReach()) || !player->HasInArc(unit, reach.slashArc))
-+            continue;
-+        if (unit == selected)
-+        {
-+            target = unit;
-+            break;
-+        }
-+        if (!target || player->GetDistance(unit) < player->GetDistance(target))
-+            target = unit;
-+    }
 +    if (!clientAnimates)
 +        player->HandleEmoteCommand(EMOTE_ONESHOT_SPECIALATTACK1H);
-+    if (!target)
-+        return;
 +    int32 const damage = std::max<int32>(1, int32(player->GetTotalAttackPowerValue(BASE_ATTACK) * 2.0f));
-+    player->CastCustomSpell(target, LEAPING_STRIKE_SPELL, &damage, nullptr, nullptr,
-+                            TriggerCastFlags(TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS));
++    for (Unit* unit : enemies)
++    {
++        if (!unit->IsAlive() || !player->IsWithinDistInMap(unit, reach.slashRange + unit->GetCombatReach()) ||
++            !player->HasInArc(unit, reach.slashArc))
++            continue;
++        player->CastCustomSpell(unit, LEAPING_STRIKE_SPELL, &damage, nullptr, nullptr,
++                                TriggerCastFlags(TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS));
++    }
 +}
 +
 +bool ChatHandler::HandleZeldaStatsCommand(char* /*args*/)
@@ -2748,7 +2972,7 @@ index 000000000..b0f2ef994
 +    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
 +    state.comboCount = 0;
 +
-+    // Berserker Stance: a leaping strike on one enemy (".zspin 1" when the client animates it)
++    // Berserker Stance: a leaping strike on every enemy in front (".zspin 1" when the client animates it)
 +    if (player->GetShapeshiftForm() == FORM_BERSERKERSTANCE)
 +    {
 +        uint32 clientAnimates = 0;
@@ -3477,11 +3701,448 @@ index 000000000..b0f2ef994
 +    }
 +}
 +
++
++// ---------------------------------------------------------------- dungeon clears
++// Every dungeon and raid (or wing, for the ones with separate entrances) counts the enemies it
++// was spawned with. Killed ones stay dead, a bar under the minimap shows how many have fallen,
++// and clearing all of them gives the hero that dungeon's Crystal Shard (zelda_dungeon_clear).
++namespace
++{
++    struct ClearSection
++    {
++        uint32 map;
++        uint32 section;
++        std::string name;
++        uint32 item;
++        bool raid;
++        float minX, maxX, minY, maxY;
++    };
++
++    struct ClearCount
++    {
++        uint16 section;                 // index into s_clearSections
++        uint8 hostileTo;                // bit 0: Alliance heroes, bit 1: Horde heroes
++        bool killed;
++    };
++
++    struct ClearTracker
++    {
++        std::unordered_map<uint32, ClearCount> counted;   // by spawn (db guid)
++        std::set<uint16> awarded;                         // sections whose shard was handed out
++    };
++
++    std::vector<ClearSection> s_clearSections;
++    std::unordered_map<uint32, std::vector<std::pair<float, float>>> s_clearGrids;  // a point in each grid with spawns
++    std::unordered_map<uint32, std::vector<uint32>> s_clearSpawns;                  // the map's db guids
++    std::unordered_map<Map const*, ClearTracker> s_clearTrackers;
++    std::mutex s_clearLock;
++
++    uint32 const CLEAR_MAIL_SENDER = 190601;          // Navi
++    uint32 const RESPAWN_NEVER = 30 * DAY;
++
++    bool ClearMapTracked(uint32 mapId)
++    {
++        for (ClearSection const& c : s_clearSections)
++            if (c.map == mapId)
++                return true;
++        return false;
++    }
++
++    int32 ClearSectionAt(uint32 mapId, float x, float y)
++    {
++        for (size_t i = 0; i < s_clearSections.size(); ++i)
++        {
++            ClearSection const& c = s_clearSections[i];
++            if (c.map == mapId && x >= c.minX && x < c.maxX && y >= c.minY && y < c.maxY)
++                return int32(i);
++        }
++        return -1;
++    }
++
++    uint8 HostileMask(uint32 factionTemplate)
++    {
++        FactionTemplateEntry const* ft = sFactionTemplateStore.LookupEntry(factionTemplate);
++        FactionTemplateEntry const* alliance = sFactionTemplateStore.LookupEntry(1);   // human player
++        FactionTemplateEntry const* horde = sFactionTemplateStore.LookupEntry(2);      // orc player
++        if (!ft || !alliance || !horde)
++            return 0;
++        return uint8((ft->IsHostileTo(*alliance) ? 1 : 0) | (ft->IsHostileTo(*horde) ? 2 : 0));
++    }
++
++    bool TemplateCounts(CreatureInfo const* info)
++    {
++        if (!info || info->CreatureType == CREATURE_TYPE_CRITTER)
++            return false;
++        if (info->ExtraFlags & (CREATURE_EXTRA_FLAG_INVISIBLE | CREATURE_EXTRA_FLAG_CIVILIAN))
++            return false;
++        if (info->UnitFlags & (UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_UNTARGETABLE | UNIT_FLAG_UNINTERACTIBLE))
++            return false;
++        std::string const name = info->Name ? info->Name : "";
++        for (char const* skip : { "Trigger", "Invisible", "Bunny", "Dummy", "(DND)" })
++            if (name.find(skip) != std::string::npos)
++                return false;
++        return true;
++    }
++
++    uint8 TeamBit(Player const* player)
++    {
++        return player->GetTeam() == HORDE ? 2 : 1;
++    }
++
++    void ClearProgress(ClearTracker const& t, uint16 section, uint8 team, uint32& killed, uint32& total)
++    {
++        killed = total = 0;
++        for (auto const& kv : t.counted)
++        {
++            if (kv.second.section != section || !(kv.second.hostileTo & team))
++                continue;
++            ++total;
++            if (kv.second.killed)
++                ++killed;
++        }
++    }
++
++    void GiveShard(Player* player, ClearSection const& c)
++    {
++        if (!c.item)
++            return;
++        std::string const key = "shard:" + std::to_string(c.item);
++        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
++                                     player->GetGUIDLow(), key.c_str()) || player->HasItemCount(c.item, 1, true))
++            return;
++        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
++                                   player->GetGUIDLow(), key.c_str());
++        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(c.item);
++        char const* itemName = proto ? proto->Name1 : "Crystal Shard";
++        ChatHandler(player).PSendSysMessage("|cff33ff99Every foe in %s has fallen!|r", c.name.c_str());
++        player->GetSession()->SendAreaTriggerMessage("%s cleared!", c.name.c_str());
++        ItemPosCountVec dest;
++        if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, c.item, 1) == EQUIP_ERR_OK)
++        {
++            if (Item* item = player->StoreNewItem(dest, c.item, true))
++                player->SendNewItem(item, 1, true, false);
++            return;
++        }
++        if (Item* item = Item::CreateItem(c.item, 1, player))
++        {
++            CharacterDatabase.BeginTransaction();
++            item->SaveToDB();
++            CharacterDatabase.CommitTransaction();
++            MailDraft(itemName, "Your bags were full, so I kept this safe for you. Hey! Listen! You did it!")
++                .AddItem(item).SendMailTo(player, MailSender(MAIL_CREATURE, CLEAR_MAIL_SENDER), MAIL_CHECK_MASK_COPIED);
++            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: the %s was sent to your mailbox.|r", itemName);
++        }
++    }
++
++    // after a kill or a despawn: hand out the shard of every section now fully cleared
++    void CheckClears(Map* map, ClearTracker& t)
++    {
++        for (auto const& ref : map->GetPlayers())
++        {
++            Player* player = ref.getSource();
++            if (!player || player->IsGameMaster())
++                continue;
++            uint8 const team = TeamBit(player);
++            std::set<uint16> sections;
++            for (auto const& kv : t.counted)
++                if (kv.second.hostileTo & team)
++                    sections.insert(kv.second.section);
++            for (uint16 section : sections)
++            {
++                if (t.awarded.count(section))
++                    continue;
++                uint32 killed, total;
++                ClearProgress(t, section, team, killed, total);
++                if (total && killed == total)
++                {
++                    t.awarded.insert(section);
++                    GiveShard(player, s_clearSections[section]);
++                }
++            }
++        }
++    }
++}
++
++void ZeldaLoadDungeonClears()
++{
++    s_clearSections.clear();
++    s_clearGrids.clear();
++    s_clearSpawns.clear();
++    auto result = WorldDatabase.Query("SELECT `map`, `section`, `name`, `item`, `raid`, `min_x`, `max_x`, `min_y`, `max_y` FROM `zelda_dungeon_clear` ORDER BY `map`, `section`");
++    if (!result)
++        return;
++    do
++    {
++        Field* f = result->Fetch();
++        s_clearSections.push_back({ f[0].GetUInt32(), f[1].GetUInt32(), f[2].GetCppString(), f[3].GetUInt32(), f[4].GetUInt32() != 0,
++                                    f[5].GetFloat(), f[6].GetFloat(), f[7].GetFloat(), f[8].GetFloat() });
++    }
++    while (result->NextRow());
++
++    struct Collect
++    {
++        bool operator()(std::pair<uint32 const, CreatureData> const& kv)
++        {
++            CreatureData const& d = kv.second;
++            if (!ClearMapTracked(d.mapid))
++                return false;
++            s_clearSpawns[d.mapid].push_back(kv.first);
++            GridPair const g = MaNGOS::ComputeGridPair(d.posX, d.posY);
++            uint32 const key = (d.mapid << 16) | (g.x_coord << 8) | g.y_coord;
++            if (seen.insert(key).second)
++                s_clearGrids[d.mapid].push_back({ d.posX, d.posY });
++            return false;
++        }
++        std::set<uint32> seen;
++    } collect;
++    sObjectMgr.DoCreatureData(collect);
++    sLog.outString(">> Zelda: %u dungeon clears", uint32(s_clearSections.size()));
++}
++
++uint32 ZeldaInstanceRespawnDelay(Creature const* creature, uint32 delay)
++{
++    static bool const never = sConfig.GetBoolDefault("Zelda.DungeonNoRespawn", true);
++    if (!never || !creature->GetMap()->IsDungeon() || !creature->HasStaticDBSpawnData() || !ClearMapTracked(creature->GetMapId()))
++        return delay;
++    return RESPAWN_NEVER;
++}
++
++void ZeldaClearMapInit(Map* map)
++{
++    if (!map->IsDungeon() || !ClearMapTracked(map->GetId()))
++        return;
++    {
++        std::lock_guard<std::mutex> guard(s_clearLock);
++        ClearTracker& t = s_clearTrackers[map];
++        // the ones already dead in a saved instance (a raid lockout, a server restart)
++        time_t const now = time(nullptr);
++        auto spawns = s_clearSpawns.find(map->GetId());
++        for (uint32 guid : spawns != s_clearSpawns.end() ? spawns->second : std::vector<uint32>())
++        {
++            if (map->GetPersistentState()->GetCreatureRespawnTime(guid) <= now)
++                continue;
++            CreatureData const* d = sObjectMgr.GetCreatureData(guid);
++            if (!d)
++                continue;
++            int32 const section = ClearSectionAt(map->GetId(), d->posX, d->posY);
++            if (section < 0)
++                continue;
++            CreatureInfo const* info = d->id ? ObjectMgr::GetCreatureTemplate(d->id) : nullptr;
++            if (d->id && !TemplateCounts(info))
++                continue;
++            uint8 const mask = info ? HostileMask(info->Faction) : 3;
++            if (mask)
++                t.counted[guid] = { uint16(section), mask, true };
++        }
++    }
++    // every grid with spawns comes alive with the instance, so the count is whole from the start
++    auto grids = s_clearGrids.find(map->GetId());          // filled once at startup, read-only after
++    if (grids != s_clearGrids.end())
++        for (auto const& pt : grids->second)
++            map->ForceLoadGrid(pt.first, pt.second);
++}
++
++void ZeldaClearMapGone(Map* map)
++{
++    std::lock_guard<std::mutex> guard(s_clearLock);
++    s_clearTrackers.erase(map);
++}
++
++void ZeldaClearCreatureAdded(Creature* creature)
++{
++    if (!creature->HasStaticDBSpawnData() || creature->IsPet() || creature->IsTotem() || creature->IsTemporarySummon() ||
++        !creature->IsAlive())
++        return;
++    Map* map = creature->GetMap();
++    std::lock_guard<std::mutex> guard(s_clearLock);
++    auto it = s_clearTrackers.find(map);
++    if (it == s_clearTrackers.end())
++        return;
++    CreatureData const* d = sObjectMgr.GetCreatureData(creature->GetDbGuid());
++    float const x = d ? d->posX : creature->GetPositionX();
++    float const y = d ? d->posY : creature->GetPositionY();
++    int32 const section = ClearSectionAt(map->GetId(), x, y);
++    if (section < 0 || !TemplateCounts(creature->GetCreatureInfo()) ||
++        creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_UNTARGETABLE | UNIT_FLAG_UNINTERACTIBLE))
++        return;
++    uint8 const mask = HostileMask(creature->GetFaction());
++    if (!mask)
++        return;
++    it->second.counted[creature->GetDbGuid()] = { uint16(section), mask, false };
++}
++
++static void ClearMarkGone(Creature* creature)
++{
++    Map* map = creature->GetMap();
++    if (map->GetPlayers().isEmpty())
++        return;                                             // the instance is closing, not a fight
++    std::lock_guard<std::mutex> guard(s_clearLock);
++    auto it = s_clearTrackers.find(map);
++    if (it == s_clearTrackers.end())
++        return;
++    auto c = it->second.counted.find(creature->GetDbGuid());
++    if (c == it->second.counted.end() || c->second.killed)
++        return;
++    c->second.killed = true;
++    CheckClears(map, it->second);
++}
++
++void ZeldaClearCreatureDied(Creature* creature)
++{
++    if (creature->HasStaticDBSpawnData())
++        ClearMarkGone(creature);
++}
++
++void ZeldaClearCreatureRemoved(Creature* creature)
++{
++    // a counted enemy a script sends away alive is as good as beaten
++    if (creature->HasStaticDBSpawnData() && creature->IsAlive())
++        ClearMarkGone(creature);
++}
++
++// "killed;total;name" of the dungeon section the hero stands in, "" outside one
++static std::string ClearReport(Player* player)
++{
++    Map* map = player->GetMap();
++    if (!map->IsDungeon())
++        return "";
++    std::lock_guard<std::mutex> guard(s_clearLock);
++    auto it = s_clearTrackers.find(map);
++    if (it == s_clearTrackers.end())
++        return "";
++    int32 const section = ClearSectionAt(map->GetId(), player->GetPositionX(), player->GetPositionY());
++    if (section < 0)
++        return "";
++    uint32 killed, total;
++    ClearProgress(it->second, uint16(section), TeamBit(player), killed, total);
++    return std::to_string(killed) + ";" + std::to_string(total) + ";" + s_clearSections[section].name + ";" +
++           (s_clearSections[section].raid ? "1" : "0");
++}
++
++static void SendClearReport(Player* player, ZeldaState& state, bool force)
++{
++    std::string const report = ClearReport(player);
++    if (!force && report == state.lastClearReport)
++        return;
++    state.lastClearReport = report;
++    ChatHandler(player).PSendSysMessage("ZDUNGEON:%s", report.c_str());
++}
++
++bool ChatHandler::HandleZeldaDungeonCommand(char* args)
++{
++    Player* player = m_session->GetPlayer();
++    std::string const arg = args ? args : "";
++    if (arg.find("left") == std::string::npos)
++    {
++        SendClearReport(player, StateFor(player), true);
++        return true;
++    }
++    // the enemies still standing in this section, nearest first
++    Map* map = player->GetMap();
++    std::vector<std::pair<float, std::string>> left;
++    {
++        std::lock_guard<std::mutex> guard(s_clearLock);
++        auto it = s_clearTrackers.find(map);
++        int32 const section = ClearSectionAt(map->GetId(), player->GetPositionX(), player->GetPositionY());
++        if (it == s_clearTrackers.end() || section < 0)
++        {
++            SendSysMessage("You are not in a dungeon.");
++            return true;
++        }
++        uint8 const team = TeamBit(player);
++        for (auto const& kv : it->second.counted)
++        {
++            if (kv.second.killed || kv.second.section != uint16(section) || !(kv.second.hostileTo & team))
++                continue;
++            Creature* c = map->GetCreature(kv.first);
++            float dx, dy;
++            std::string name;
++            if (c)
++            {
++                dx = c->GetPositionX() - player->GetPositionX();
++                dy = c->GetPositionY() - player->GetPositionY();
++                name = c->GetName();
++            }
++            else if (CreatureData const* d = sObjectMgr.GetCreatureData(kv.first))
++            {
++                dx = d->posX - player->GetPositionX();
++                dy = d->posY - player->GetPositionY();
++                CreatureInfo const* info = ObjectMgr::GetCreatureTemplate(d->id);
++                name = info && info->Name ? info->Name : "an enemy";
++            }
++            else
++                continue;
++            float const dist = std::sqrt(dx * dx + dy * dy);
++            static char const* const dirs[] = { "north", "north-west", "west", "south-west", "south", "south-east", "east", "north-east" };
++            float const angle = std::atan2(dy, dx);             // +x is north, +y is west
++            int const octant = (int(std::floor(angle / (M_PI_F / 4.0f) + 0.5f)) + 8) % 8;
++            char line[160];
++            snprintf(line, sizeof(line), "%s - %u yd %s", name.c_str(), uint32(dist), dirs[octant]);
++            left.emplace_back(dist, line);
++        }
++    }
++    std::sort(left.begin(), left.end());
++    PSendSysMessage("|cff33ff99%u enemies left here:|r", uint32(left.size()));
++    for (size_t i = 0; i < left.size() && i < 12; ++i)
++        PSendSysMessage("  %s", left[i].second.c_str());
++    return true;
++}
++
++namespace
++{
++    // the shards of the dungeons a hero had already finished before clears were counted, by mail
++    void RetroactiveShards()
++    {
++        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = 0 AND `preset` = 'zelda' AND `key` = 'once:retro-shards'"))
++            return;
++        CharacterDatabase.DirectExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (0, 'zelda', 'once:retro-shards', '1')");
++        std::string const shardList = sConfig.GetStringDefault("Zelda.RetroShards", "191102 191105 191103 191104 191101 191107 191106");
++        std::string const accountName = sConfig.GetStringDefault("Zelda.HeroAccount", "PLAYER");
++        uint32 const accountId = sAccountMgr.GetId(accountName);
++        if (!accountId)
++            return;
++        std::vector<uint32> shards;
++        std::istringstream in(shardList);
++        for (uint32 id; in >> id;)
++            if (sObjectMgr.GetItemPrototype(id))
++                shards.push_back(id);
++        auto chars = CharacterDatabase.PQuery("SELECT `guid`, `name` FROM `characters` WHERE `account` = '%u'", accountId);
++        if (!chars)
++            return;
++        do
++        {
++            uint32 const guid = (*chars)[0].GetUInt32();
++            std::string const name = (*chars)[1].GetCppString();
++            bool hero = false;
++            for (ZeldaHero const& def : ZELDA_HEROES)
++                hero = hero || name == def.name;
++            if (hero)
++                continue;
++            for (uint32 id : shards)
++            {
++                Item* item = Item::CreateItem(id, 1, nullptr);
++                if (!item)
++                    continue;
++                CharacterDatabase.BeginTransaction();
++                item->SaveToDB();
++                CharacterDatabase.CommitTransaction();
++                // the mail owns the item from here (an offline receiver's copy is freed by it)
++                MailDraft(item->GetProto()->Name1, "You already cleared this one before anyone was counting. Here is its shard! Hey! Listen!")
++                    .AddItem(item).SendMailTo(MailReceiver(ObjectGuid(HIGHGUID_PLAYER, guid)), MailSender(MAIL_CREATURE, CLEAR_MAIL_SENDER), MAIL_CHECK_MASK_COPIED);
++                CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', 'shard:%u', '1')", guid, id);
++            }
++            sLog.outString("Zelda: mailed %u crystal shards to %s", uint32(shards.size()), name.c_str());
++        }
++        while (chars->NextRow());
++    }
++}
++
 +void ZeldaStartupCharacters()
 +{
 +    RemoveRetiredContent();
 +    OneTimeCharacterChanges();
 +    EnsureHeroes();
++    RetroactiveShards();
 +}
 +
 +void ZeldaHeroFirstLogin(Player* player)
@@ -3536,10 +4197,10 @@ index 000000000..b0f2ef994
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..78e354a4d
+index 000000000..3330127b8
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,176 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -3668,6 +4329,24 @@ index 000000000..78e354a4d
 +uint32 ZeldaDungeonXP(uint32 xp);
 +// Zelda of Warcraft: Execute needs the target under 20% health unless the warrior's rage is full
 +// (Zelda.FullRageExecute = 1). True when this cast must be refused.
++// Zelda of Warcraft: dungeon clears (zelda_dungeon_clear): enemies stay dead, the bar under the
++// minimap counts them, and a cleared dungeon gives its Crystal Shard
++class Map;
++void ZeldaLoadDungeonClears();
++uint32 ZeldaInstanceRespawnDelay(Creature const* creature, uint32 delay);
++void ZeldaClearMapInit(Map* map);
++void ZeldaClearMapGone(Map* map);
++void ZeldaClearCreatureAdded(Creature* creature);
++void ZeldaClearCreatureDied(Creature* creature);
++void ZeldaClearCreatureRemoved(Creature* creature);
++
++// Zelda of Warcraft: the main hand's damage factor, 0.5 while dual wielding (Zelda.DualWieldDamage)
++float ZeldaDualWieldFactor(Player const* player);
++
++// Zelda of Warcraft: a warrior's Berserker and Defensive stances take only their own weapons
++// returns an InventoryResult, EQUIP_ERR_OK (0) when allowed
++uint32 ZeldaStanceEquipBlocked(Player const* player, ItemPrototype const* proto, uint8 slot);
++
 +bool ZeldaExecuteBlocked(Unit const* caster, SpellEntry const* spell, Unit const* target);
 +
 +// Zelda of Warcraft - the companions (scripts/world/zelda_companions.cpp) and their story.
@@ -3723,7 +4402,7 @@ index 06567441e..40ccbe604 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb08..8bb5d020c 100644
+index a10fdbb08..cd6b64501 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -3743,7 +4422,29 @@ index a10fdbb08..8bb5d020c 100644
  
  // apply implementation of the singletons
  #include "Policies/Singleton.h"
-@@ -1086,6 +1089,14 @@ void Creature::PrepareBodyLootState(Unit* killer)
+@@ -207,6 +210,10 @@ void Creature::AddToWorld()
+ 
+     if (m_countSpawns)
+         GetMap()->AddToSpawnCount(GetObjectGuid());
++
++    // Zelda of Warcraft: count the dungeon's enemies
++    if (GetMap()->IsDungeon())
++        ZeldaClearCreatureAdded(this);
+ }
+ 
+ void Creature::RemoveFromWorld()
+@@ -214,6 +221,10 @@ void Creature::RemoveFromWorld()
+     ///- Remove the creature from the accessor
+     if (IsInWorld())
+     {
++        // Zelda of Warcraft: a dungeon enemy sent away alive counts as beaten
++        if (GetMap()->IsDungeon())
++            ZeldaClearCreatureRemoved(this);
++
+         if (IsUnit())
+             GetMap()->GetObjectsStore().erase<Creature>(GetObjectGuid(), (Creature*)nullptr);
+         if (GetDbGuid())
+@@ -1086,6 +1097,14 @@ void Creature::PrepareBodyLootState(Unit* killer)
  
          if (looter || GetSettings().HasFlag(CreatureStaticFlags::CAN_WIELD_LOOT))
              m_loot = new Loot(looter, this, LOOT_CORPSE);
@@ -3758,7 +4459,7 @@ index a10fdbb08..8bb5d020c 100644
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1273,42 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1281,42 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -3801,7 +4502,7 @@ index a10fdbb08..8bb5d020c 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1352,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1360,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -3810,7 +4511,7 @@ index a10fdbb08..8bb5d020c 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1461,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1469,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -3819,7 +4520,17 @@ index a10fdbb08..8bb5d020c 100644
      if (health < 1)
          health = 1;
  
-@@ -2125,6 +2172,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -1875,6 +1930,9 @@ void Creature::SetDeathState(DeathState s)
+         else if (m_respawnOverrideOnce)
+             m_respawnOverriden = false;
+ 
++        // Zelda of Warcraft: what falls in a dungeon or raid stays dead
++        m_respawnDelay = ZeldaInstanceRespawnDelay(this, m_respawnDelay);
++
+         if (m_settings.HasFlag(CreatureStaticFlags3::FOREVER_CORPSE_DURATION))
+             m_corpseExpirationTime = GetMap()->GetCurrentClockTime() + std::chrono::hours(24*7);
+         else
+@@ -2125,6 +2183,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
@@ -3938,7 +4649,7 @@ index 60cf414d8..c86aa0006 100644
      GetPlayer()->RemovePet(PET_SAVE_REAGENTS);
      GetPlayer()->BuildPlayerRepop();
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..f4dae16ba 100644
+index 4d8e9160a..c462e2f45 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -4010,7 +4721,19 @@ index 4d8e9160a..f4dae16ba 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -18082,9 +18098,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -9515,6 +9531,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
+ 
+             uint32 type = pProto->InventoryType;
+ 
++            // Zelda of Warcraft: Berserker and Defensive Stance take only their own weapons
++            if (direct_action)
++                if (uint32 zeldaRes = ZeldaStanceEquipBlocked(this, pProto, eslot))
++                    return InventoryResult(zeldaRes);
++
+             if (eslot == EQUIPMENT_SLOT_OFFHAND)
+             {
+                 if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
+@@ -18082,9 +18103,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -4025,7 +4748,7 @@ index 4d8e9160a..f4dae16ba 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19684,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19689,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -4053,7 +4776,7 @@ index 4d8e9160a..f4dae16ba 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20072,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20077,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -4062,7 +4785,7 @@ index 4d8e9160a..f4dae16ba 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20261,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20266,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -4086,7 +4809,7 @@ index 010b0034f..9c00f68eb 100644
          uint32 EnvironmentalDamage(EnvironmentalDamageType type, uint32 damage);
  
 diff --git a/src/game/Entities/StatSystem.cpp b/src/game/Entities/StatSystem.cpp
-index 70b4e7d00..45ee880a1 100644
+index 70b4e7d00..1362adf32 100644
 --- a/src/game/Entities/StatSystem.cpp
 +++ b/src/game/Entities/StatSystem.cpp
 @@ -21,6 +21,7 @@
@@ -4115,8 +4838,24 @@ index 70b4e7d00..45ee880a1 100644
          {
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
+@@ -360,6 +361,15 @@ void Player::CalculateMinMaxDamage(WeaponAttackType attType, bool normalized, fl
+ 
+     min_damage = ((base_value + weapon_mindamage) * base_pct + total_value) * total_pct;
+     max_damage = ((base_value + weapon_maxdamage) * base_pct + total_value) * total_pct;
++
++    // Zelda of Warcraft: with two weapons every slash strikes with both, so the main hand deals half
++    // its damage too (the off hand already does)
++    if (attType == BASE_ATTACK)
++    {
++        float const factor = ZeldaDualWieldFactor(this);
++        min_damage *= factor;
++        max_damage *= factor;
++    }
+ }
+ 
+ void Player::UpdateDamagePhysical(WeaponAttackType attType)
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..d9fad7079 100644
+index 00986af9e..7a335db21 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -4138,7 +4877,18 @@ index 00986af9e..d9fad7079 100644
      // remove affects from attacker at any non-DoT damage (including 0 damage)
      if (damagetype != DOT && damagetype != INSTAKILL)
      {
-@@ -1933,6 +1938,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -1376,6 +1381,10 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
+     if (InstanceData* mapInstance = victim->GetInstanceData())
+         mapInstance->OnCreatureDeath(victim);
+ 
++    // Zelda of Warcraft: the dungeon clear count
++    if (victim->GetMap()->IsDungeon())
++        ZeldaClearCreatureDied(victim);
++
+     if (responsiblePlayer)                                  // killedby Player, inform BG
+         if (BattleGround* bg = responsiblePlayer->GetBattleGround())
+             bg->HandleKillUnit(victim, responsiblePlayer);
+@@ -1933,6 +1942,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
          // Add melee damage bonus
          subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
@@ -4151,7 +4901,7 @@ index 00986af9e..d9fad7079 100644
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2656,10 +2667,20 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2671,20 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -4172,7 +4922,7 @@ index 00986af9e..d9fad7079 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -3628,7 +3649,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3653,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -4182,7 +4932,7 @@ index 00986af9e..d9fad7079 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -4976,6 +4998,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5002,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -4194,7 +4944,7 @@ index 00986af9e..d9fad7079 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6124,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6128,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -4203,7 +4953,7 @@ index 00986af9e..d9fad7079 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7077,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7081,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -4212,7 +4962,7 @@ index 00986af9e..d9fad7079 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -8095,6 +8122,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8126,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -4226,7 +4976,7 @@ index 00986af9e..d9fad7079 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8438,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8442,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
@@ -4356,6 +5106,36 @@ index 2375fd9e1..917034e1a 100644
          void SendReleaseFor(ObjectGuid const& guid);
          void SendReleaseFor(Player* plr);
          void SendReleaseForAll();
+diff --git a/src/game/Maps/Map.cpp b/src/game/Maps/Map.cpp
+index 13896f973..c574abdfb 100644
+--- a/src/game/Maps/Map.cpp
++++ b/src/game/Maps/Map.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Maps/Map.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Maps/MapManager.h"
+ #include "Entities/Player.h"
+ #include "Grids/GridNotifiers.h"
+@@ -53,6 +54,7 @@
+ 
+ Map::~Map()
+ {
++    ZeldaClearMapGone(this);
+     UnloadAll(true);
+ 
+     if (m_persistentState)
+@@ -225,6 +227,9 @@ void Map::Initialize(std::mutex* mmapMutex, bool loadInstanceData /*= true*/)
+             break;
+         }
+     }
++
++    // Zelda of Warcraft: a dungeon loads whole, so its enemies can be counted
++    ZeldaClearMapInit(this);
+ }
+ 
+ void Map::InitVisibilityDistance()
 diff --git a/src/game/MotionGenerators/MotionMaster.cpp b/src/game/MotionGenerators/MotionMaster.cpp
 index 68dc674d6..d91ad2bff 100644
 --- a/src/game/MotionGenerators/MotionMaster.cpp
@@ -4540,7 +5320,7 @@ index 330ad8fea..3916c50e5 100644
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
 diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
-index e344c52c1..4c5223398 100644
+index e344c52c1..c0508b7b5 100644
 --- a/src/game/World/World.cpp
 +++ b/src/game/World/World.cpp
 @@ -21,6 +21,7 @@
@@ -4561,7 +5341,7 @@ index e344c52c1..4c5223398 100644
      ///- Loading strings. Getting no records means core load has to be canceled because no error message can be output.
      sLog.outString("Loading MaNGOS strings...");
      if (!sObjectMgr.LoadMangosStrings())
-@@ -1100,6 +1104,12 @@ void World::SetInitialWorldSettings()
+@@ -1100,6 +1104,13 @@ void World::SetInitialWorldSettings()
      sLog.outString("Loading Quests...");
      sObjectMgr.LoadQuests();                                // must be loaded after DBCs, creature_template, item_template, gameobject tables
  
@@ -4570,11 +5350,12 @@ index e344c52c1..4c5223398 100644
 +    ZeldaLoadItemSets();
 +    ZeldaLoadWaivedReagents();
 +    ZeldaLoadRemovedItems();
++    ZeldaLoadDungeonClears();
 +
      sLog.outString("Loading Quests Relations...");
      sObjectMgr.LoadQuestRelations();                        // must be after quest load
      sLog.outString(">>> Quests Relations loaded");
-@@ -1442,6 +1452,8 @@ void World::SetInitialWorldSettings()
+@@ -1442,6 +1453,8 @@ void World::SetInitialWorldSettings()
      PlayerbotMgr::SetInitialWorldSettings();
  #endif
  
@@ -4583,7 +5364,7 @@ index e344c52c1..4c5223398 100644
  #ifdef ENABLE_PLAYERBOTS
      sPlayerbotAIConfig.Initialize();
  #ifndef BUILD_AHBOT
-@@ -2173,7 +2185,12 @@ void World::UpdateSessions(uint32 diff)
+@@ -2173,7 +2186,12 @@ void World::UpdateSessions(uint32 diff)
              delete pSession;
          }
          else

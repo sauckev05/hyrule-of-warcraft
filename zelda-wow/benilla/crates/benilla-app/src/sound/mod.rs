@@ -8,6 +8,17 @@ use crate::player::{head_height, CameraPivot, Player};
 use benilla_world::schedule::WorldStage;
 use benilla_world::view::WorldCamera;
 
+/// Zelda of Warcraft: creature templates that make no sound of their own (Navi, the wisp
+/// companion, whose ghostly body loop and fidget sounds would follow the hero everywhere).
+pub(crate) const ZELDA_SILENT_ENTRIES: [u32; 1] = [190601];
+
+/// Is this unit one of [`ZELDA_SILENT_ENTRIES`]?
+pub(crate) fn zelda_silent(store: Option<&crate::net::ObjectStore>) -> bool {
+    store
+        .and_then(|s| s.0.object_entry())
+        .is_some_and(|e| ZELDA_SILENT_ENTRIES.contains(&e))
+}
+
 mod anim_events;
 mod cinematic;
 mod combat;

@@ -16,7 +16,8 @@ Writes
 The client patch also clears the target aura state of Execute, so the client lets it be pressed on
 any target; the server still asks for the target under 20% health, or full rage (Zelda.FullRageExecute).
 
-usage: build_mastery.py [<ItemDisplayInfo.dbc> <Spell.dbc> <output patch-Z.MPQ>]
+usage: build_mastery.py [<ItemDisplayInfo.dbc> <Spell.dbc> <output patch-Z.MPQ> [<shard icon .blp>]]
+  (the shard icon is Interface\\Icons\\INV_Enchant_ShardGlimmeringLarge.blp from interface.MPQ)
   (the two .dbc files may come from the client's MPQs or from an existing patch-Z.MPQ)
 """
 
@@ -61,8 +62,13 @@ SPELLS = [
     (40007, 25914, 'Light of Linken', '', dict(EffectBasePoints1=74, EffectDieSides1=76, EffectBaseDice1=1)),
     # Berserker Stance's charged attack (ZeldaCommands.cpp, ZeldaLeapingStrike): a plain melee-class
     # physical strike whose damage the server sets (twice the attack power); it crits like melee
-    (40008, 2816, 'Leaping Strike', 'Leaps at the enemy in front, striking for twice your attack power.', {}),
+    (40008, 2816, 'Leaping Strike', 'Leaps forward, striking every enemy in front of you for twice your attack power.', {}),
 ]
+
+# stock spells changed in place: {spell id: {spell_template column: value}}
+SPELL_EDITS = {
+    7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
+}
 
 EFFECT_GROUPS = ['Effect', 'EffectDieSides', 'EffectBaseDice', 'EffectDicePerLevel', 'EffectRealPointsPerLevel',
                  'EffectBasePoints', 'EffectMechanic', 'EffectImplicitTargetA', 'EffectImplicitTargetB',
@@ -154,6 +160,9 @@ def spell_sql():
             sets += ['`%s2` = `%s1`' % (g, g) for g in EFFECT_GROUPS]
         sets += ['`%s` = %d' % (k, v) for k, v in changes.items() if k != 'copy_effect1_to_2']
         out.append('UPDATE `spell_template` SET %s WHERE `Id` = %d;\n' % (', '.join(sets), sid))
+    for sid, changes in SPELL_EDITS.items():
+        out.append('UPDATE `spell_template` SET %s WHERE `Id` = %d;\n'
+                   % (', '.join('`%s` = %d' % kv for kv in changes.items()), sid))
     return ''.join(out)
 
 
@@ -246,6 +255,9 @@ def patch_display(path):
     row[0] = UNFINISHED_LOOK
     row[22] = BLUE_GLOW
     rows.append(row)
+    # the dungeon clears' Crystal Shards (shards.py)
+    import shards
+    shards.add_displays(rows, lambda text: add_string(strings, text))
     rows.sort(key=lambda r: r[0])
     return write_dbc(f, rows, strings)
 
@@ -260,6 +272,9 @@ def patch_spells(path):
     # Execute can be pressed on any target: the server allows it under 20% health or at full rage
     for rank in EXECUTE_RANKS:
         byid[rank][DBC_TARGET_AURA_STATE] = 0
+    for sid, changes in SPELL_EDITS.items():
+        for k, v in changes.items():
+            byid[sid][DBC_FIELD[k]] = v
     for sid, source, name, text, changes in SPELLS:
         assert sid > top, sid
         row = list(byid[source])
@@ -279,15 +294,18 @@ def patch_spells(path):
     return write_dbc(f, rows, strings)
 
 
-def build_patch(display_dbc, spell_dbc, out_mpq):
+def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None):
     import mpq
+    import shards
     files = {'DBFilesClient\\ItemDisplayInfo.dbc': patch_display(display_dbc),
              'DBFilesClient\\Spell.dbc': patch_spells(spell_dbc)}
+    if shard_icon:
+        files.update(shards.icon_files(open(shard_icon, 'rb').read()))
     mpq.write_archive(out_mpq, files)
     print('wrote', out_mpq, os.path.getsize(out_mpq), 'bytes')
 
 
 if __name__ == '__main__':
     write_sql()
-    if len(sys.argv) == 4:
+    if len(sys.argv) in (4, 5):
         build_patch(*sys.argv[1:])

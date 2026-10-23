@@ -34,6 +34,9 @@ pub(super) fn interior_group_selection(
     player_pos: Vec3,
     radius: f32,
     seed: usize,
+    // Zelda of Warcraft's big dungeon map: `(below, above)` yards of Z around the hero instead of
+    // the reference's radius-scaled extent, so one floor shows at a wide reach.
+    floor: Option<(f32, f32)>,
 ) -> Vec<bool> {
     let n = model.group_nav.len();
     let mut drawable = vec![false; n];
@@ -42,8 +45,9 @@ pub(super) fn interior_group_selection(
     }
     let pw = bevy_to_wow(player_pos);
     let c = radius;
-    let box_min = [pw[0] - 2.0 * c, pw[1] - 2.0 * c, pw[2] - 1.5 * c];
-    let box_max = [pw[0] + 2.0 * c, pw[1] + 2.0 * c, pw[2] + c];
+    let (below, above) = floor.unwrap_or((1.5 * c, c));
+    let box_min = [pw[0] - 2.0 * c, pw[1] - 2.0 * c, pw[2] - below];
+    let box_max = [pw[0] + 2.0 * c, pw[1] + 2.0 * c, pw[2] + above];
 
     // A model point to world (WoW axes), the query box's frame.
     let to_world = |m: [f32; 3]| bevy_to_wow(world_from_local.transform_point3(wow_to_bevy(m)));
@@ -221,7 +225,7 @@ mod tests {
             doodad_groups: Default::default(),
         };
 
-        let drawable = interior_group_selection(&model, &Affine3A::IDENTITY, Vec3::ZERO, 25.0, 0);
+        let drawable = interior_group_selection(&model, &Affine3A::IDENTITY, Vec3::ZERO, 25.0, 0, None);
         assert!(drawable[0], "the player's own group draws");
         assert!(
             drawable[1],
@@ -309,7 +313,7 @@ mod tests {
             doodad_groups: Default::default(),
         };
 
-        let drawable = interior_group_selection(&model, &Affine3A::IDENTITY, Vec3::ZERO, 25.0, 0);
+        let drawable = interior_group_selection(&model, &Affine3A::IDENTITY, Vec3::ZERO, 25.0, 0, None);
         assert!(drawable[0]);
         assert!(
             !drawable[1],

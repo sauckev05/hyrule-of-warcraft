@@ -58,6 +58,9 @@ pub enum ScriptCall {
     /// (1 right slash, 2 left slash, 3 special strike, 4 Berserker Stance's leaping strike) on the
     /// hero, finishing in `seconds`.
     ZeldaSwing { step: u8, seconds: f32 },
+    /// Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)` turns the Minimap into the big dungeon map
+    /// (square, zoomed out to `zoom` 0..3, widest first) or back into the corner disc.
+    ZeldaDungeonMap { on: bool, zoom: u8 },
 }
 
 /// The mode the four `TargetNearest*` shims hand the TAB cycler `0x493f60`, the only byte that

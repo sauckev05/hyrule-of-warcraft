@@ -192,6 +192,9 @@ pub(super) struct BlipCtx {
     pub(super) px_per_yd: f32,
     /// The live view radius in yards: the in-range split's denominator and the dot cull.
     pub(super) radius_yd: f32,
+    /// The size basis of the blips and rim arrows: the widget side, or the corner map's size on
+    /// the Zelda big dungeon map.
+    pub(super) icon_side: f32,
     pub(super) z: u64,
     pub(super) alpha: f32,
     pub(super) wx: f32,
@@ -296,7 +299,7 @@ pub(super) fn emit_landmarks(
             };
             let rect = Rect::from_center_size(
                 ctx.center + ctx.offset(poi.pos),
-                Vec2::splat(ctx.side * (POI_ICON_PX / BLIP_BASIS_PX)),
+                Vec2::splat(ctx.icon_side * (POI_ICON_PX / BLIP_BASIS_PX)),
             );
             quads.overlays.push(UiQuad {
                 rect,
@@ -338,7 +341,10 @@ fn push_rim_arrow(
     let pos = ctx.center + dir * (ctx.side * 0.5 * BLIP_EDGE_RATIO);
     // Quad rotation is clockwise on a y-down screen and the art points up at zero.
     let rotation = dir.x.atan2(-dir.y);
-    let rect = Rect::from_center_size(pos, Vec2::splat(ctx.side * (ARROW_QUAD_PX / BLIP_BASIS_PX)));
+    let rect = Rect::from_center_size(
+        pos,
+        Vec2::splat(ctx.icon_side * (ARROW_QUAD_PX / BLIP_BASIS_PX)),
+    );
     quads.overlays.push(UiQuad {
         rect,
         z_key: ctx.z,

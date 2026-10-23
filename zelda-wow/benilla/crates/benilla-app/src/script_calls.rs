@@ -35,6 +35,7 @@ pub(crate) fn apply_script_calls(
     mut zelda: (
         Option<ResMut<crate::player::ZeldaLock>>,
         Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
+        Option<ResMut<crate::minimap::ZeldaBigMap>>,
     ),
 ) {
     let Some(mut script) = script else {
@@ -82,6 +83,12 @@ pub(crate) fn apply_script_calls(
             ScriptCall::ZeldaSwing { step, seconds } => {
                 if let Some(swings) = zelda.1.as_deref_mut() {
                     swings.0.push((step, seconds));
+                }
+            }
+            ScriptCall::ZeldaDungeonMap { on, zoom } => {
+                if let Some(big) = zelda.2.as_deref_mut() {
+                    big.on = on;
+                    big.zoom = zoom;
                 }
             }
         }

@@ -48,6 +48,9 @@ pub(super) struct MinimapComposite {
     /// `false` outdoors or with no minimap widget: the camera is off and the pool empties.
     pub(super) active: bool,
     pub(super) tiles: Vec<CompositeTile>,
+    /// The target edge this frame's tiles were placed for: [`RT_SIZE`], or larger for the Zelda
+    /// big dungeon map; [`drive_composite`] resizes the target to match.
+    pub(super) rt_size: u32,
 }
 
 /// The composite's durable pieces: target, camera, shared quad, material cache and entity pool.
@@ -60,6 +63,8 @@ pub(super) struct CompositeRig {
     /// Materials by tile texture; a building's tile set is small, so this fills once per building.
     materials: bevy::platform::collections::HashMap<AssetId<Image>, Handle<UiQuadMaterial>>,
     pool: Vec<Entity>,
+    /// The target's current edge in texels.
+    size: u32,
 }
 
 /// Build the target, its camera and the shared quad once, at startup.
@@ -128,6 +133,7 @@ pub(super) fn setup_composite(
         quad,
         materials: bevy::platform::collections::HashMap::default(),
         pool: Vec::new(),
+        size: RT_SIZE,
     });
 }
 
@@ -138,10 +144,34 @@ pub(super) fn drive_composite(
     rig: Option<ResMut<CompositeRig>>,
     mut commands: Commands,
     mut materials: ResMut<Assets<UiQuadMaterial>>,
-    mut cameras: Query<&mut Camera>,
+    mut cameras: Query<(&mut Camera, &mut Projection)>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     let Some(mut rig) = rig else { return };
-    if let Ok(mut cam) = cameras.get_mut(rig.camera) {
+    // The Zelda big dungeon map draws into a larger target; resize on the switch.
+    let want_size = if composite.rt_size == 0 { RT_SIZE } else { composite.rt_size };
+    if composite.active && want_size != rig.size {
+        rig.size = want_size;
+        if let Some(image) = images.get_mut(&rig.image) {
+            image.resize(Extent3d {
+                width: want_size,
+                height: want_size,
+                depth_or_array_layers: 1,
+            });
+        }
+        if let Ok((_, mut projection)) = cameras.get_mut(rig.camera) {
+            #[allow(clippy::cast_precision_loss)]
+            let edge = want_size as f32;
+            *projection = Projection::Orthographic(OrthographicProjection {
+                scaling_mode: ScalingMode::Fixed {
+                    width: edge,
+                    height: edge,
+                },
+                ..OrthographicProjection::default_2d()
+            });
+        }
+    }
+    if let Ok((mut cam, _)) = cameras.get_mut(rig.camera) {
         let want = composite.active;
         if cam.is_active != want {
             cam.is_active = want;
