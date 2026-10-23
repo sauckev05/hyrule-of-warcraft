@@ -113,6 +113,8 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Dual wield: the main hand deals half damage too (Zelda.DualWieldDamage, in
   Player::CalculateMinMaxDamage); the off hand keeps vanilla's 50%.
 - Navi (190601) makes no creature sounds in Benilla (sound/mod.rs ZELDA_SILENT_ENTRIES).
+- Installed 2026-10-23 (commit 31e5df44): benilla.exe, mangosd.exe, patch-Z.MPQ (2,038,192 bytes),
+  ZeldaHUD dungeon.lua/toc, zelda-sql 006 + 012; backups *.before-clears.exe.
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
 
 ## What the Zelda layer does (current features)
