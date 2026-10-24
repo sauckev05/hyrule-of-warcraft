@@ -33,14 +33,26 @@ f:SetScript("OnEvent", function()
 end)
 
 -- The stock designer lets only a guild master accept. A hero without a guild may always design
--- her own crest: enable Accept for her whenever the client says a save can go out.
-local origTabardFrameUpdate = TabardFrame_Update
-TabardFrame_Update = function()
-	if origTabardFrameUpdate then
-		origTabardFrameUpdate()
-	end
-	if not IsInGuild() and TabardModel and TabardModel.CanSaveTabardNow and TabardModel:CanSaveTabardNow() then
-		TabardFrameGreetingText:SetText("Design a crest of your own. Wear a Universal Tabard to show it.")
-		TabardFrameAcceptButton:Enable()
-	end
+-- her own crest: while the designer is open, Accept stays enabled for her. (Checked every frame: the stock TabardFrame_Update re-greys the button
+-- on every change, and it may be defined after this addon loads.)
+local CREST_GREETING = "Design a crest of your own. Wear a Universal Tabard to show it."
+
+local function CanSaveOwnCrest()
+	-- the client still checks the design and the money when Accept is pressed
+	return not IsInGuild() and TabardModel ~= nil
 end
+
+local watcher = CreateFrame("Frame", "ZeldaCrestWatcher", UIParent)
+watcher:SetScript("OnUpdate", function()
+	if not TabardFrame or not TabardFrame:IsVisible() then
+		return
+	end
+	if CanSaveOwnCrest() then
+		if TabardFrameGreetingText:GetText() ~= CREST_GREETING then
+			TabardFrameGreetingText:SetText(CREST_GREETING)
+		end
+		if not TabardFrameAcceptButton:IsEnabled() or TabardFrameAcceptButton:IsEnabled() == 0 then
+			TabardFrameAcceptButton:Enable()
+		end
+	end
+end)
