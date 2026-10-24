@@ -1,3 +1,26 @@
+diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/gnomeregan/boss_thermaplugg.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/gnomeregan/boss_thermaplugg.cpp
+index 45ea9cdba..14876ddd0 100644
+--- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/gnomeregan/boss_thermaplugg.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/gnomeregan/boss_thermaplugg.cpp
+@@ -252,10 +252,16 @@ struct ActivateBombThermaplugg : public SpellScript
+ {
+     void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+     {
+-        Unit* target = spell->GetUnitTarget();
++        // The spell's effect aims at a database location (target 17), so it has no unit target:
++        // reading the instance through it crashed the server. The caster is in the same instance.
++        WorldObject* source = spell->GetUnitTarget();
++        if (!source)
++            source = spell->GetCaster();
++        if (!source)
++            return;
+         // This spell should select a random Bomb-Face and activate it if needed
+         // meant to cast commented out spells at random
+-        if (instance_gnomeregan* instance = dynamic_cast<instance_gnomeregan*>(target->GetInstanceData()))
++        if (instance_gnomeregan* instance = dynamic_cast<instance_gnomeregan*>(source->GetInstanceData()))
+             instance->DoActivateBombFace(urand(0, MAX_GNOME_FACES - 1));
+     }
+ };
 diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/stormwind_city.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/stormwind_city.cpp
 index 20bcff241..a6c8243df 100644
 --- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/stormwind_city.cpp
