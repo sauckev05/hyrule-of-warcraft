@@ -61,6 +61,9 @@ pub enum ScriptCall {
     /// Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)` turns the Minimap into the big dungeon map
     /// (square, zoomed out to `zoom` 0..3, widest first) or back into the corner disc.
     ZeldaDungeonMap { on: bool, zoom: u8 },
+    /// Zelda of Warcraft: `ZeldaSetCrest(emblem, emblemColor, border, borderColor, background)`,
+    /// the guildless hero's own crest (all -1 for none), which her Universal Tabard shows.
+    ZeldaCrest([i32; 5]),
 }
 
 /// The mode the four `TargetNearest*` shims hand the TAB cycler `0x493f60`, the only byte that

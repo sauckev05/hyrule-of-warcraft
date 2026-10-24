@@ -1395,10 +1395,10 @@ index 811d227d9..cfd7b4d1d 100644
              if (iterator != m_itemData.end() && iterator->second.Value == 0)
                  continue; // item is blacklisted
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba3d..daaa4d9fd 100644
+index ffa25ba3d..d07f7eeaf 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,16 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,17 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
@@ -1406,6 +1406,7 @@ index ffa25ba3d..daaa4d9fd 100644
 +        { "zspin",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaSpinCommand,           "", nullptr },
 +        { "zstats",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaStatsCommand,          "", nullptr },
 +        { "zdungeon",       SEC_PLAYER,         false, &ChatHandler::HandleZeldaDungeonCommand,        "", nullptr },
++        { "zcrest",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaCrestCommand,          "", nullptr },
 +        { "zroll",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaRollCommand,           "", nullptr },
 +        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
 +        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
@@ -1416,10 +1417,10 @@ index ffa25ba3d..daaa4d9fd 100644
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a85..9edda0956 100644
+index 00fde0a85..0b4eea0fb 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,17 @@ class ChatHandler
+@@ -679,6 +679,18 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
@@ -1428,6 +1429,7 @@ index 00fde0a85..9edda0956 100644
 +        bool HandleZeldaSpinCommand(char* args);
 +        bool HandleZeldaStatsCommand(char* args);
 +        bool HandleZeldaDungeonCommand(char* args);
++        bool HandleZeldaCrestCommand(char* args);
 +        bool HandleZeldaRollCommand(char* args);
 +        bool HandleZeldaFlipCommand(char* args);
 +        bool HandleZeldaShieldCommand(char* args);
@@ -1439,10 +1441,10 @@ index 00fde0a85..9edda0956 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..3f63696c4
+index 000000000..59438a35f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,2775 @@
+@@ -0,0 +1,2807 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4111,6 +4113,38 @@ index 000000000..3f63696c4
 +    return true;
 +}
 +
++// ---------------------------------------------------------------- personal crest
++// A hero without a guild designs a crest of her own at a tabard vendor; the Universal Tabard
++// (the old Guild Tabard) shows it. The client is told with a hidden "ZCREST:a;b;c;d;e" line
++// (all -1 for none); the ZeldaHUD addon asks with .zcrest on entering the world.
++static void SendPersonalCrest(Player* player)
++{
++    std::string crest = "-1;-1;-1;-1;-1";
++    if (auto result = CharacterDatabase.PQuery("SELECT `value` FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = 'crest'",
++                                               player->GetGUIDLow()))
++        crest = (*result)[0].GetCppString();
++    ChatHandler(player).PSendSysMessage("ZCREST:%s", crest.c_str());
++}
++
++void ZeldaSetPersonalCrest(Player* player, uint32 emblemStyle, uint32 emblemColor, uint32 borderStyle,
++                           uint32 borderColor, uint32 backgroundColor)
++{
++    char value[64];
++    snprintf(value, sizeof(value), "%u;%u;%u;%u;%u", emblemStyle, emblemColor, borderStyle, borderColor, backgroundColor);
++    CharacterDatabase.PExecute("DELETE FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = 'crest'",
++                               player->GetGUIDLow());
++    CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', 'crest', '%s')",
++                               player->GetGUIDLow(), value);
++    ChatHandler(player).PSendSysMessage("ZCREST:%s", value);
++    ChatHandler(player).SendSysMessage("|cff33ff99Your crest is made. Wear a Universal Tabard to show it.|r");
++}
++
++bool ChatHandler::HandleZeldaCrestCommand(char* /*args*/)
++{
++    SendPersonalCrest(m_session->GetPlayer());
++    return true;
++}
++
 +namespace
 +{
 +    // the shards of the dungeons a hero had already finished before clears were counted, by mail
@@ -4220,10 +4254,10 @@ index 000000000..3f63696c4
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..3330127b8
+index 000000000..9017afd92
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,180 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -4362,6 +4396,10 @@ index 000000000..3330127b8
 +void ZeldaClearCreatureAdded(Creature* creature);
 +void ZeldaClearCreatureDied(Creature* creature);
 +void ZeldaClearCreatureRemoved(Creature* creature);
++
++// Zelda of Warcraft: a crest of one's own, designed at a tabard vendor without a guild
++void ZeldaSetPersonalCrest(Player* player, uint32 emblemStyle, uint32 emblemColor, uint32 borderStyle,
++                           uint32 borderColor, uint32 backgroundColor);
 +
 +// Zelda of Warcraft: the main hand's damage factor, 0.5 while dual wielding (Zelda.DualWieldDamage)
 +float ZeldaDualWieldFactor(Player const* player);
@@ -5009,6 +5047,36 @@ index 00986af9e..7a335db21 100644
          if (GetDeathState() == CORPSE)
              speed *= sWorld.getConfig(((Player*)this)->InBattleGround() ? CONFIG_FLOAT_GHOST_RUN_SPEED_BG : CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD);
      }
+diff --git a/src/game/Guilds/GuildHandler.cpp b/src/game/Guilds/GuildHandler.cpp
+index 0bde155d8..3e7dbf632 100644
+--- a/src/game/Guilds/GuildHandler.cpp
++++ b/src/game/Guilds/GuildHandler.cpp
+@@ -16,6 +16,7 @@
+  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+  */
+ 
++#include "Chat/ZeldaCommands.h"
+ #include "Common.h"
+ #include "Server/WorldPacket.h"
+ #include "Server/WorldSession.h"
+@@ -735,8 +736,15 @@ void WorldSession::HandleSaveGuildEmblemOpcode(WorldPacket& recvPacket)
+     Guild* guild = sGuildMgr.GetGuildById(GetPlayer()->GetGuildId());
+     if (!guild)
+     {
+-        //"You are not part of a guild!";
+-        SendSaveGuildEmblem(ERR_GUILDEMBLEM_NOGUILD);
++        // Zelda of Warcraft: a crest of one's own, no guild needed; the Universal Tabard wears it
++        if (GetPlayer()->GetMoney() < 10 * GOLD)
++        {
++            SendSaveGuildEmblem(ERR_GUILDEMBLEM_NOTENOUGHMONEY);
++            return;
++        }
++        GetPlayer()->ModifyMoney(-10 * GOLD);
++        ZeldaSetPersonalCrest(GetPlayer(), EmblemStyle, EmblemColor, BorderStyle, BorderColor, BackgroundColor);
++        SendSaveGuildEmblem(ERR_GUILDEMBLEM_SUCCESS);
+         return;
+     }
+ 
 diff --git a/src/game/Loot/LootMgr.cpp b/src/game/Loot/LootMgr.cpp
 index 79b26641b..29de7bb00 100644
 --- a/src/game/Loot/LootMgr.cpp

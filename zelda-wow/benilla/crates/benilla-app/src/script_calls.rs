@@ -36,6 +36,7 @@ pub(crate) fn apply_script_calls(
         Option<ResMut<crate::player::ZeldaLock>>,
         Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
         Option<ResMut<crate::minimap::ZeldaBigMap>>,
+        Option<ResMut<crate::ui_tabard::TabardDesign>>,
     ),
 ) {
     let Some(mut script) = script else {
@@ -83,6 +84,11 @@ pub(crate) fn apply_script_calls(
             ScriptCall::ZeldaSwing { step, seconds } => {
                 if let Some(swings) = zelda.1.as_deref_mut() {
                     swings.0.push((step, seconds));
+                }
+            }
+            ScriptCall::ZeldaCrest(crest) => {
+                if let Some(design) = zelda.3.as_deref_mut() {
+                    design.set_crest(crest);
                 }
             }
             ScriptCall::ZeldaDungeonMap { on, zoom } => {

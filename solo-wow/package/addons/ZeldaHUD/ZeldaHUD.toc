@@ -1,6 +1,6 @@
 ## Interface: 11200
 ## Title: Zelda HUD
-## Notes: Ocarina of Time style hearts and magic meter, equipped-gear comparison, Zelda armor set tooltips, all bags in one window, combat stats (crit, hit, dodge...) beside the character sheet, and dungeon clears with a dungeon map.
+## Notes: Ocarina of Time style hearts and magic meter, equipped-gear comparison, Zelda armor set tooltips, all bags in one window, combat stats (crit, hit, dodge...) beside the character sheet, dungeon clears with a dungeon map, and a crest of your own for the Universal Tabard.
 ## Author: Zelda of Warcraft
 ## SavedVariablesPerCharacter: ZeldaHUDDB
 hud.lua
@@ -10,3 +10,4 @@ sets.lua
 bags.lua
 stats.lua
 dungeon.lua
+crest.lua

@@ -73,11 +73,46 @@ impl NpcSession for TabardOpen {
     }
 }
 
-/// The design our own body wears while the frame is open.
-#[derive(Resource, Default)]
-pub(crate) struct TabardDesign(Option<[i32; 5]>);
+/// The design our own body wears while the frame is open; and, Zelda of Warcraft, the crest a
+/// guildless hero designed for herself (`-1` each when none), which her Universal Tabard shows.
+#[derive(Resource)]
+pub(crate) struct TabardDesign(Option<[i32; 5]>, [i32; 5]);
+
+impl Default for TabardDesign {
+    fn default() -> Self {
+        Self(None, [-1; 5])
+    }
+}
 
 impl TabardDesign {
+    /// The crest a guildless hero wears: `None` until designed.
+    pub(crate) fn personal_crest(&self) -> Option<GuildEmblem> {
+        let c = self.1;
+        let e = GuildEmblem {
+            emblem_style: c[0],
+            emblem_color: c[1],
+            border_style: c[2],
+            border_color: c[3],
+            background_color: c[4],
+        };
+        e.is_designed().then_some(e)
+    }
+
+    pub(crate) fn set_crest(&mut self, crest: [i32; 5]) {
+        if self.1 != crest {
+            self.1 = crest;
+        }
+    }
+
+    /// The designer's record: the guild's, or with no guild the hero's own crest.
+    fn record(&self, guild_id: u32, guilds: &GuildState, commands: &NetCommands) -> Option<[i32; 5]> {
+        if guild_id == 0 {
+            Some(self.1)
+        } else {
+            guilds.own_emblem_record(guild_id, commands)
+        }
+    }
+
     pub(crate) fn preview(&self) -> Option<GuildEmblem> {
         self.0.map(|d| GuildEmblem {
             emblem_style: d[0],
@@ -141,7 +176,7 @@ fn feed_tabard(
     // Our guild's cached record (a miss sends the query) and the latch, pushed on change.
     let guild_id = self_q.iter().next().map_or(0, |s| s.0.player_guild_id());
     let host = TabardHost {
-        guild_record: guilds.own_emblem_record(guild_id, &commands),
+        guild_record: design.record(guild_id, &guilds, &commands),
         save_pending: open.save_pending,
     };
     let last = last_host.get(&script);
@@ -193,6 +228,7 @@ fn feed_tabard(
 fn drain_tabard(
     script: Option<NonSendMut<UiScript>>,
     mut open: ResMut<TabardOpen>,
+    design: Res<TabardDesign>,
     guilds: Res<GuildState>,
     self_q: Query<&ObjectStore, With<SelfPlayer>>,
     commands: Res<NetCommands>,
@@ -212,7 +248,7 @@ fn drain_tabard(
                 };
                 let store = self_q.iter().next();
                 let guild_id = store.map_or(0, |s| s.0.player_guild_id());
-                let record = guilds.own_emblem_record(guild_id, &commands);
+                let record = design.record(guild_id, &guilds, &commands);
                 let rank = store.map_or(0, |s| s.0.player_guild_rank());
                 let purse = store.and_then(|s| s.0.player_money()).unwrap_or(0);
                 match preflight(design, record, rank, purse) {

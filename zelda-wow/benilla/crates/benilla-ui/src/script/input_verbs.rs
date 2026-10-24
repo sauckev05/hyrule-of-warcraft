@@ -366,6 +366,23 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
             Ok(())
         })?,
     )?;
+    // Zelda of Warcraft: `ZeldaSetCrest(emblem, emblemColor, border, borderColor, background)`,
+    // the guildless hero's crest as the server keeps it (the ZeldaHUD addon relays it).
+    g.set(
+        "ZeldaSetCrest",
+        lua.create_function(|lua, args: MultiValue| {
+            let mut crest = [-1_i32; 5];
+            for (slot, v) in crest.iter_mut().zip(args.into_iter()) {
+                *slot = match v {
+                    Value::Integer(n) => n as i32,
+                    Value::Number(n) => n as i32,
+                    _ => -1,
+                };
+            }
+            push_call(lua, ScriptCall::ZeldaCrest(crest));
+            Ok(())
+        })?,
+    )?;
     // Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)`, the ZeldaHUD addon's big dungeon map.
     g.set(
         "ZeldaDungeonMap",

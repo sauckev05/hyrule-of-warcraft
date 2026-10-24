@@ -252,6 +252,10 @@ pub(in crate::entities) fn resolve_equipment(
             eq.emblem = guilds
                 .as_deref_mut()
                 .and_then(|g| crate::ui_guild::unit_guild_emblem(s, g, &net));
+            // Zelda of Warcraft: a guildless hero's own crest, on her Universal Tabard.
+            if is_self && eq.emblem.is_none() {
+                eq.emblem = tabard_design.as_deref().and_then(|d| d.personal_crest());
+            }
             // The designer's preview, our own body only (`[cc+0xc]`, the `0x47a610` install).
             if is_self {
                 if let Some(design) = tabard_design.as_deref().and_then(|d| d.preview()) {

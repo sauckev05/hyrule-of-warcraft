@@ -113,6 +113,11 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Dual wield: the main hand deals half damage too (Zelda.DualWieldDamage, in
   Player::CalculateMinMaxDamage); the off hand keeps vanilla's 50%.
 - Navi (190601) makes no creature sounds in Benilla (sound/mod.rs ZELDA_SILENT_ENTRIES).
+- Personal crest (013_crest.sql, GuildHandler.cpp, ZeldaSetPersonalCrest, ZeldaHUD crest.lua, Benilla
+  ui_tabard.rs TabardDesign.1): tabard vendors' option reads "Create crest."; without a guild the
+  designer saves (10 g) a crest of one's own (ai_playerbot_db_store key 'crest'), sent to the client
+  as hidden "ZCREST:a;b;c;d;e" (also on `.zcrest`, asked at world entry); Benilla paints it on our
+  own tabard when we have no guild emblem. Guild Tabard 5976 is the Universal Tabard, 250 g.
 - Installed 2026-10-23 (commit 31e5df44): benilla.exe, mangosd.exe, patch-Z.MPQ (2,038,192 bytes),
   ZeldaHUD dungeon.lua/toc, zelda-sql 006 + 012; backups *.before-clears.exe.
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
