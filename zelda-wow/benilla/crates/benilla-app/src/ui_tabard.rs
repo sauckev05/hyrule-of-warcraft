@@ -228,7 +228,7 @@ fn feed_tabard(
 fn drain_tabard(
     script: Option<NonSendMut<UiScript>>,
     mut open: ResMut<TabardOpen>,
-    design: Res<TabardDesign>,
+    own: Res<TabardDesign>,
     guilds: Res<GuildState>,
     self_q: Query<&ObjectStore, With<SelfPlayer>>,
     commands: Res<NetCommands>,
@@ -248,7 +248,7 @@ fn drain_tabard(
                 };
                 let store = self_q.iter().next();
                 let guild_id = store.map_or(0, |s| s.0.player_guild_id());
-                let record = design.record(guild_id, &guilds, &commands);
+                let record = own.record(guild_id, &guilds, &commands);
                 let rank = store.map_or(0, |s| s.0.player_guild_rank());
                 let purse = store.and_then(|s| s.0.player_money()).unwrap_or(0);
                 match preflight(design, record, rank, purse) {
