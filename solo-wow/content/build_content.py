@@ -4,7 +4,7 @@ quests, quest items, drops and dialogue. The server applies zelda-sql/*.sql by i
 (ZeldaApplyContentSql), and CI loads the file into a real database to check it."""
 import json
 import os
-from story import (STORY_NPCS, COMPANIONS, RETIRED_ENTRIES, QUEST_ITEMS, Q, KATRANA_TEXTS, CAPTIVE_TEXT, NAVI, NAVI_ITEMS,
+from story import (STORY_NPCS, COMPANIONS, RETIRED_ENTRIES, RETIRED_QUESTS, QUEST_ITEMS, Q, KATRANA_TEXTS, CAPTIVE_TEXT, NAVI, NAVI_ITEMS,
                    LINKEN_SWORD_ENTRY, LINKEN_FINAL_QUEST)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -125,7 +125,7 @@ def main():
 
     entries = [n[0] for n in STORY_NPCS] + [s[0] for c in COMPANIONS.values() for s in c['stages']] + [NAVI['entry']] + RETIRED_ENTRIES
     entry_list = ','.join(map(str, entries))
-    quest_list = ','.join(str(q['id']) for q in Q)
+    quest_list = ','.join([str(q['id']) for q in Q] + [str(r) for r in RETIRED_QUESTS])
     reward_items, navi_rewards = navi_reward_items()
     item_list = ','.join([str(i[0]) for i in QUEST_ITEMS] + [str(i['entry']) for i in NAVI_ITEMS] +
                          [str(r['entry']) for r in reward_items])
@@ -273,6 +273,7 @@ def main():
         for n, item in enumerate(navi_rewards.get(qid, REWARDS.get(qid, [])), start=1):
             row['RewChoiceItemId%d' % n] = item
             row['RewChoiceItemCount%d' % n] = 1
+        row['RewSpellCast'] = q.get('rew_spell_cast', 0)
         row['RewItemId1'] = q.get('reward_item', 0)
         row['RewItemCount1'] = 1 if q.get('reward_item') else 0
         faction, value = q.get('rep', (0, 0))

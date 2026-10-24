@@ -1441,10 +1441,10 @@ index 00fde0a85..0b4eea0fb 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..59438a35f
+index 000000000..db6c44d53
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,2807 @@
+@@ -0,0 +1,3130 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1555,6 +1555,19 @@ index 000000000..59438a35f
 +        // the dungeon clear progress last sent to the client ("killed;total;section")
 +        std::string lastClearReport;
 +        uint32 clearCheckIn = 0;
++        // the Arena Grand Master's shield rises by itself near death, then rests until this time
++        time_t grandMasterReadyAt = 0;
++        // the Gurubashi Arena challenge this hero is running
++        uint8 arenaPhase = 0;                           // ArenaPhase
++        uint8 arenaStage = 0;                           // 1..12
++        int32 arenaTimer = 0;                           // ms left in the countdown / before the next batch
++        uint8 arenaShown = 0;                           // the countdown number last shown
++        uint8 arenaToSpawn = 0;                         // fighters of this stage still to come
++        bool arenaBossSpawned = false;
++        uint32 arenaTrinkets = 0;                       // Arena Masters carried when the chest appeared
++        uint32 arenaNoticeAt = 0;
++        std::vector<ObjectGuid> arenaFighters;
++        ObjectGuid arenaChest;
 +    };
 +
 +    // Commands run on the session's thread and damage on map threads, so the table is locked.
@@ -2152,6 +2165,296 @@ index 000000000..59438a35f
 +
 +namespace
 +{
++    // ---------------------------------------------------------------- the Gurubashi Arena challenge
++    // Walk into the pit of the Gurubashi Arena and challengers pour in through the gates; beat them
++    // all and an Arena Treasure Chest (with an Arena Master) appears in the middle. The first
++    // challenge is open to anyone without a trinket; the other eleven come once Short John Mithril's
++    // Arena Grandmaster is taken, each harder than the last, a 10 second countdown between them.
++    // Leaving the arena or dying ends the current challenge; the trinkets carried say where to resume.
++    enum ArenaPhase : uint8 { ARENA_IDLE, ARENA_COUNTDOWN, ARENA_FIGHT, ARENA_CHEST };
++
++    float const ARENA_X = -13202.0f, ARENA_Y = 276.0f, ARENA_Z = 21.9f;
++    float const ARENA_PIT_RADIUS = 30.0f, ARENA_LEAVE_RADIUS = 90.0f;
++    uint32 const ARENA_MASTER = 18706, QUEST_ARENA_GRANDMASTER = 7838, ARENA_TREASURE = 179697;
++    uint32 const ARENA_STAGES = 12;
++    int32 const ARENA_COUNTDOWN_MS = 10000, ARENA_BATCH_DELAY_MS = 2500;
++
++    struct ArenaStage
++    {
++        uint8 fighters;     // ordinary challengers, in batches
++        uint8 batch;        // at most this many at once
++        uint32 boss;        // a champion who enters after them (0: none)
++        float health;       // health and damage multipliers for this stage
++        float damage;
++        uint8 levelBonus;   // levels above the hero's
++    };
++
++    ArenaStage const ARENA_STAGE_DEFS[ARENA_STAGES] =
++    {
++        { 3, 2, 0,      1.6f, 1.00f, 0 },
++        { 4, 2, 0,      1.7f, 1.05f, 0 },
++        { 5, 3, 0,      1.8f, 1.10f, 0 },
++        { 4, 2, 190970, 1.9f, 1.15f, 1 },   // Gash'tor the Pit Champion
++        { 6, 3, 0,      2.0f, 1.20f, 1 },
++        { 7, 3, 0,      2.1f, 1.25f, 1 },
++        { 8, 3, 190971, 2.2f, 1.30f, 1 },   // Grimtusk the Ogre Lord
++        { 7, 3, 0,      2.3f, 1.35f, 2 },
++        { 9, 4, 190972, 2.4f, 1.40f, 2 },   // Captain Vexa Bloodsail
++        { 10, 4, 0,     2.5f, 1.45f, 2 },
++        { 9, 4, 190970, 2.6f, 1.50f, 2 },   // Gash'tor, back for more
++        { 10, 4, 190973, 2.8f, 1.60f, 3 },  // Grand Champion Zul'gor
++    };
++
++    // pit fighter, duelist, brute, stalker, axe thrower, shadowcaster
++    uint32 const ARENA_FIGHTERS[] = { 190960, 190961, 190962, 190963, 190964, 190965 };
++
++    float ArenaDistance(Player const* player)
++    {
++        float const dx = player->GetPositionX() - ARENA_X, dy = player->GetPositionY() - ARENA_Y;
++        return std::sqrt(dx * dx + dy * dy);
++    }
++
++    void ArenaNotice(Player* player, char const* text)
++    {
++        player->GetSession()->SendAreaTriggerMessage("%s", text);
++        ChatHandler(player).PSendSysMessage("|cffffd000%s|r", text);
++    }
++
++    // the next challenge this hero may fight: 0 when none
++    uint32 ArenaNextStage(Player* player, bool& needsQuest)
++    {
++        needsQuest = false;
++        if (player->GetQuestRewardStatus(QUEST_ARENA_GRANDMASTER))
++            return 0;
++        uint32 const trinkets = player->GetItemCount(ARENA_MASTER);
++        if (trinkets >= ARENA_STAGES)
++            return 0;
++        if (trinkets == 0)
++            return 1;
++        QuestStatus const status = player->GetQuestStatus(QUEST_ARENA_GRANDMASTER);
++        if (status != QUEST_STATUS_INCOMPLETE && status != QUEST_STATUS_COMPLETE)
++        {
++            needsQuest = true;
++            return 0;
++        }
++        return trinkets + 1;
++    }
++
++    void ArenaClear(Player* player, ZeldaState& st)
++    {
++        if (player->IsInWorld())
++        {
++            for (ObjectGuid const& guid : st.arenaFighters)
++                if (Creature* c = player->GetMap()->GetCreature(guid))
++                    if (c->IsAlive())
++                        c->ForcedDespawn();
++        }
++        st.arenaFighters.clear();
++        st.arenaPhase = ARENA_IDLE;
++        st.arenaTimer = 0;
++        st.arenaToSpawn = 0;
++        st.arenaBossSpawned = false;
++    }
++
++    void ArenaSpawn(Player* player, ZeldaState& st, uint32 entry, bool boss, uint32 index)
++    {
++        ArenaStage const& def = ARENA_STAGE_DEFS[st.arenaStage - 1];
++        // through the four gates, a little apart
++        float const gate = float(index % 4) * M_PI_F * 0.5f + M_PI_F * 0.25f;
++        float const angle = gate + (float(index / 4) - 0.5f) * 0.15f;
++        float const x = ARENA_X + 24.0f * std::cos(angle), y = ARENA_Y + 24.0f * std::sin(angle);
++        Creature* c = player->SummonCreature(entry, x, y, ARENA_Z, angle + M_PI_F, TEMPSPAWN_CORPSE_TIMED_DESPAWN, 20000);
++        if (!c)
++            return;
++        uint32 const level = std::min<uint32>(63, player->GetLevel() + def.levelBonus + (boss ? 1 : 0));
++        c->SelectLevel(level);
++        float const health = def.health * (boss ? 4.0f : 1.0f);
++        c->SetMaxHealth(uint32(c->GetMaxHealth() * health));
++        c->SetHealth(c->GetMaxHealth());
++        float const damage = def.damage * (boss ? 1.3f : 1.0f);
++        c->HandleStatModifier(UNIT_MOD_DAMAGE_MAINHAND, TOTAL_PCT, (damage - 1.0f) * 100.0f, true);
++        if (c->AI())
++            c->AI()->AttackStart(player);
++        st.arenaFighters.push_back(c->GetObjectGuid());
++        if (boss)
++        {
++            char text[160];
++            snprintf(text, sizeof(text), "%s enters the arena!", c->GetName());
++            ArenaNotice(player, text);
++        }
++    }
++
++    void ArenaSpawnBatch(Player* player, ZeldaState& st)
++    {
++        ArenaStage const& def = ARENA_STAGE_DEFS[st.arenaStage - 1];
++        uint32 const count = std::min<uint32>(def.batch, st.arenaToSpawn);
++        uint32 const done = def.fighters - st.arenaToSpawn;
++        for (uint32 i = 0; i < count; ++i)
++        {
++            uint32 const n = done + i;
++            uint32 const entry = ARENA_FIGHTERS[(n + st.arenaStage) % (sizeof(ARENA_FIGHTERS) / sizeof(ARENA_FIGHTERS[0]))];
++            ArenaSpawn(player, st, entry, false, n);
++        }
++        st.arenaToSpawn -= uint8(count);
++    }
++
++    void ArenaSpawnChest(Player* player, ZeldaState& st)
++    {
++        Map* map = player->GetMap();
++        GameObject* chest = GameObject::CreateGameObject(ARENA_TREASURE);
++        uint32 const low = map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT);
++        if (!chest->Create(low, low, ARENA_TREASURE, map, ARENA_X, ARENA_Y, ARENA_Z, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
++                           GO_ANIMPROGRESS_DEFAULT, GO_STATE_READY))
++        {
++            delete chest;
++            return;
++        }
++        chest->SetRespawnDelay(0);
++        map->Add(chest);
++        chest->AIM_Initialize();
++        st.arenaChest = chest->GetObjectGuid();
++    }
++
++    void ArenaUpdate(Player* player, ZeldaState& st, uint32 diff)
++    {
++        static bool const enabled = sConfig.GetBoolDefault("Zelda.ArenaChallenge", true);
++        if (!enabled || !player->IsInWorld() || player->IsBeingTeleported() || player->IsGameMaster())
++            return;
++        bool const onMap = player->GetMapId() == 0;
++        float const distance = onMap ? ArenaDistance(player) : 1e9f;
++        bool const inPit = onMap && player->IsAlive() && distance < ARENA_PIT_RADIUS && player->GetPositionZ() < ARENA_Z + 8.0f;
++
++        if (st.arenaPhase != ARENA_IDLE && (!player->IsAlive() || distance > ARENA_LEAVE_RADIUS))
++        {
++            ArenaClear(player, st);
++            ArenaNotice(player, player->IsAlive() ? "You left the arena. The challenge is over - come back to try again."
++                                                  : "The crowd roars as you fall. Come back to the arena to try again.");
++            return;
++        }
++
++        switch (st.arenaPhase)
++        {
++            case ARENA_IDLE:
++            {
++                if (!inPit)
++                    return;
++                bool needsQuest = false;
++                uint32 const next = ArenaNextStage(player, needsQuest);
++                if (!next)
++                {
++                    uint32 const now = WorldTimer::getMSTime();
++                    if (needsQuest && now - st.arenaNoticeAt > 15000)
++                    {
++                        st.arenaNoticeAt = now;
++                        ArenaNotice(player, "Take Short John Mithril's challenge, Arena Grandmaster, to fight on.");
++                    }
++                    return;
++                }
++                st.arenaStage = uint8(next);
++                st.arenaPhase = ARENA_COUNTDOWN;
++                st.arenaTimer = ARENA_COUNTDOWN_MS;
++                st.arenaShown = 0;
++                char text[96];
++                snprintf(text, sizeof(text), "Arena challenge %u of %u!", next, ARENA_STAGES);
++                ArenaNotice(player, text);
++                return;
++            }
++            case ARENA_COUNTDOWN:
++            {
++                st.arenaTimer -= int32(diff);
++                uint8 const secs = uint8(std::max(0, (st.arenaTimer + 999) / 1000));
++                if (st.arenaTimer > 0)
++                {
++                    if (secs != st.arenaShown)
++                    {
++                        st.arenaShown = secs;
++                        char text[32];
++                        snprintf(text, sizeof(text), "%u", secs);
++                        player->GetSession()->SendAreaTriggerMessage("%s", text);
++                    }
++                    return;
++                }
++                ArenaStage const& def = ARENA_STAGE_DEFS[st.arenaStage - 1];
++                st.arenaToSpawn = def.fighters;
++                st.arenaBossSpawned = def.boss == 0;
++                st.arenaFighters.clear();
++                st.arenaPhase = ARENA_FIGHT;
++                st.arenaTimer = 0;
++                ArenaNotice(player, "FIGHT!");
++                ArenaSpawnBatch(player, st);
++                return;
++            }
++            case ARENA_FIGHT:
++            {
++                // who is still standing
++                std::vector<ObjectGuid> alive;
++                for (ObjectGuid const& guid : st.arenaFighters)
++                    if (Creature* c = player->GetMap()->GetCreature(guid))
++                        if (c->IsAlive())
++                        {
++                            alive.push_back(guid);
++                            if (!c->IsInCombat() && c->AI())
++                                c->AI()->AttackStart(player);
++                        }
++                st.arenaFighters.swap(alive);
++                if (!st.arenaFighters.empty())
++                    return;
++                if (st.arenaTimer > 0)
++                {
++                    st.arenaTimer -= int32(diff);
++                    return;
++                }
++                if (st.arenaToSpawn)
++                {
++                    ArenaSpawnBatch(player, st);
++                    st.arenaTimer = st.arenaToSpawn || !st.arenaBossSpawned ? ARENA_BATCH_DELAY_MS : 0;
++                    return;
++                }
++                if (!st.arenaBossSpawned)
++                {
++                    st.arenaBossSpawned = true;
++                    ArenaSpawn(player, st, ARENA_STAGE_DEFS[st.arenaStage - 1].boss, true, 0);
++                    return;
++                }
++                // the challenge is won
++                st.arenaTrinkets = player->GetItemCount(ARENA_MASTER);
++                ArenaSpawnChest(player, st);
++                st.arenaPhase = ARENA_CHEST;
++                char text[120];
++                snprintf(text, sizeof(text), "Challenge %u won! Open the treasure chest in the middle of the arena.", st.arenaStage);
++                ArenaNotice(player, text);
++                return;
++            }
++            case ARENA_CHEST:
++            {
++                if (player->GetItemCount(ARENA_MASTER) <= st.arenaTrinkets)
++                    return;                                 // the chest has not been looted yet
++                bool needsQuest = false;
++                uint32 const next = ArenaNextStage(player, needsQuest);
++                if (!next)
++                {
++                    st.arenaPhase = ARENA_IDLE;
++                    if (player->GetItemCount(ARENA_MASTER) >= ARENA_STAGES)
++                        ArenaNotice(player, "Twelve Arena Masters! Short John Mithril has a reward for a true Grandmaster.");
++                    else if (needsQuest)
++                        ArenaNotice(player, "Take Short John Mithril's challenge, Arena Grandmaster, to fight on.");
++                    return;
++                }
++                st.arenaStage = uint8(next);
++                st.arenaPhase = ARENA_COUNTDOWN;
++                st.arenaTimer = ARENA_COUNTDOWN_MS;
++                st.arenaShown = 0;
++                char text[96];
++                snprintf(text, sizeof(text), "Arena challenge %u of %u begins in 10 seconds!", next, ARENA_STAGES);
++                ArenaNotice(player, text);
++                return;
++            }
++        }
++    }
++}
++
++namespace
++{
 +    // ---------------------------------------------------------------- stance weapons
 +    // Berserker Stance fights with a two-hander only; Defensive Stance with a one-hander and a
 +    // shield. Taking up either stance fits the hands from the bags, and while in it the other
@@ -2350,6 +2653,9 @@ index 000000000..59438a35f
 +        ZeldaHeroFirstLogin(player);
 +    }
 +
++    // the Gurubashi Arena challenge
++    ArenaUpdate(player, state, diff);
++
 +    // the dungeon clear bar under the minimap: sent when it changes, looked at twice a second
 +    if (player->IsInWorld() && !player->IsBeingTeleported())
 +    {
@@ -2478,7 +2784,7 @@ index 000000000..59438a35f
 +        int32(WorldTimer::getMSTime() - state.naviHealReadyAt) >= 0))
 +    {
 +        state.naviHealReadyAt = WorldTimer::getMSTime() + healEvery;
-+        static uint32 const healPct = sConfig.GetIntDefault("Zelda.NaviHealPercent", 25);
++        static uint32 const healPct = sConfig.GetIntDefault("Zelda.NaviHealPercent", 10);
 +        uint32 const amount = std::max<uint32>(1, player->GetMaxHealth() * healPct / 100);
 +        if (SpellEntry const* healInfo = sSpellTemplate.LookupEntry<SpellEntry>(NAVI_HEAL_VISUAL))
 +            player->DealHeal(player, amount, healInfo);
@@ -2540,13 +2846,9 @@ index 000000000..59438a35f
 +    if (navi)
 +        navi->MonsterSay("NO! Hey! LISTEN! You don't get to stop here! Take my light - get up!", LANG_UNIVERSAL, player);
 +
-+    // the soulstone's own self-resurrection, as strong as a warlock of the hero's level could make it
-+    uint32 const level = player->GetLevel();
-+    if (level >= 60) return 20761;
-+    if (level >= 50) return 20760;
-+    if (level >= 40) return 20759;
-+    if (level >= 30) return 20758;
-+    return 3026;
++    // Navi's Light (custom spell 40009, 006_mastery): back on your feet with 10% of your health, in
++    // a priest's resurrection light
++    return 40009;
 +}
 +
 +void ZeldaHeartPieceDrop(Player* looter, Creature* victim, Loot* loot)
@@ -2566,12 +2868,12 @@ index 000000000..59438a35f
 +
 +bool ZeldaAlternateQuestDone(Player const* player, uint32 requiredQuest)
 +{
-+    // the companions' chapters open the raids the old attunements open
++    // the companions' chapters open the raids the old attunements open. The Molten Core has no
++    // shortcut: Durza's story leads to Lothos Riftwaker and his own attunement (7848)
 +    switch (requiredQuest)
 +    {
 +        case 7761: return player->GetQuestRewardStatus(90110);   // Blackwing Lair: Lyra and Onyxia
-+        case 7848: return player->GetQuestRewardStatus(90305);   // Molten Core: Durza and Thaurissan
-+        case 9378: return player->GetQuestRewardStatus(90405);   // Naxxramas: Vesper and Rivendare
++        case 9378: return player->GetQuestRewardStatus(90417);   // Naxxramas: Vesper and Archmage Dosantos
 +        default:   return false;
 +    }
 +}
@@ -2827,7 +3129,28 @@ index 000000000..59438a35f
 +        return 0; // rolled through it
 +
 +    if (state.shield && attacker && attacker != victim && victim->HasInArc(attacker, M_PI_F * 2.0f / 3.0f))
-+        return damage / 5; // blocked with the shield: 80% less
++        damage = damage / 5; // blocked with the shield: 80% less
++
++    // the Arena Grand Master: a blow that leaves the hero under 10% raises its shield by itself
++    uint32 const health = victim->GetHealth();
++    if (damage >= health || health - damage <= victim->GetMaxHealth() / 10)
++    {
++        static uint32 const ARENA_GRAND_MASTER = 19024;
++        static uint32 const AURA_OF_PROTECTION = 23506;            // absorbs 750 damage for 20 sec
++        static time_t const cooldown = std::max(0, sConfig.GetIntDefault("Zelda.ArenaGrandMasterCooldown", 300));
++        if (victim->IsAlive() && victim->HasItemWithIdEquipped(ARENA_GRAND_MASTER, 1))
++        {
++            ZeldaState& live = StateFor(victim);
++            time_t const now = time(nullptr);
++            if (now >= live.grandMasterReadyAt)
++            {
++                live.grandMasterReadyAt = now + cooldown;
++                victim->CastSpell(victim, AURA_OF_PROTECTION, TRIGGERED_OLD_TRIGGERED);
++                damage -= std::min<uint32>(damage, 750);      // this blow is the first it stops
++                victim->GetSession()->SendAreaTriggerMessage("Arena Grand Master: the champion's shield saves you!");
++            }
++        }
++    }
 +
 +    return damage;
 +}

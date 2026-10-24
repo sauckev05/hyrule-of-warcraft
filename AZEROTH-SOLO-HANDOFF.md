@@ -121,12 +121,42 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Installed 2026-10-23 (commit 31e5df44): benilla.exe, mangosd.exe, patch-Z.MPQ (2,038,192 bytes),
   ZeldaHUD dungeon.lua/toc, zelda-sql 006 + 012; backups *.before-clears.exe.
 - Earlier ZeldaUpdate.zip (Sword of Mastery, warrior's world, Kokiri in the Stockade) is installed.
+- Arena challenge (core ArenaUpdate in ZeldaCommands.cpp, content build_arena.py -> 014_arena.sql):
+  Short John Mithril's Arena Grandmaster (7838) is twelve fights in the Gurubashi pit. Stage 1
+  starts when a hero with no Arena Master trinket steps into the pit; later stages need 7838 taken
+  (stage = trinkets + 1). Each stage spawns elite challengers (190960-190965, level = hero +
+  bonus, health/damage scaled per stage, in batches), with champions on stages 4/7/9/11
+  (190970-190972) and Grand Champion Zul'gor (190973) on 12. When all fall, the Arena Treasure
+  Chest (179697, its loot always has an Arena Master) appears in the middle; once the trinket is
+  looted a 10 s countdown starts the next stage. Leaving the pit or dying resets the run.
+- Arena Grand Master (19024) has no use effect any more: when a blow would leave its wearer under
+  10% health, Aura of Protection rises by itself and absorbs 750 (ZeldaModifyIncomingDamage,
+  Zelda.ArenaGrandMasterCooldown 300 s).
+- Navi heals 10% (Zelda.NaviHealPercent = 10) and her revive is custom spell 40009 "Navi's
+  Light" (006 + patch-Z: clone of Use Soulstone 3026, 10% health/mana, resurrection visual 41).
+- No chat window: ZeldaHUD chat.lua hides ChatFrame1-7, their tabs and the menu button, and
+  shows skill-ups, system lines (not the hidden Z*: lines), loot, money, XP, reputation,
+  whispers and NPC emotes in UIErrorsFrame in their chat colours. Enter still opens the chat box.
+- Companion story rework (story.py): each girl hands the hero to the next at 30/40/50, and each
+  chapter runs through her armor set's dungeons into raid attunements.
+  Lyra: Deadmines 90102 ... Gath'Ilzogg 90105, Stockade 90112, Shadowfang 90113, -> Faelin 90114
+  (30), Scarlet 90106, -> Helendis Riverhorn 90115 (50, starts the Onyxia chain 4182), LBRS 90107
+  and UBRS 90108 at Morgan's Vigil, 90109 after The Great Masquerade (6403), Onyxia 90110 after
+  Drakefire Amulet (6502), BWL 90111.
+  Faelin (Astranaar): WC 90208, BFD 90203, RFK 90209, Gnomeregan 90210, -> Vesper 90211 (40);
+  then Silithus 90205 (opens AQ) / AQ20 90206 / AQ40 90207 at Cenarion Hold. 90204 retired.
+  Vesper (Sepulcher): SM Graveyard 90412, Library 90413, Armory 90414, Cathedral 90415, RFD 90403,
+  -> Durza 90416 (50); Scholomance 90404, Stratholme 90405, -> Archmage Angela Dosantos 90417
+  (casts 28006: the real Naxxramas flag 9378), Naxx 90406.
+  Durza (Shadowprey): Uldaman 90309, ZF 90308, Maraudon 90303, Sunken Temple 90310, BRD 90304/90305
+  at Kargath, -> Lothos Riftwaker 90311 (then the real Attunement to the Core 7848), Ragnaros
+  90306. ZeldaAlternateQuestDone: BWL opens after 90110, Naxx after 90417, MC needs 7848.
 
 ## What the Zelda layer does (current features)
 
 Warrior-style combat for every class, Spin Attack with charge bar, boomerang, bow, shield
 raise, dodge roll; run 1.3x, sprint 2x after 15 s running; faster swimming that slows as breath
-runs out; Navi fairy companion (follows, 25% heal every 10 s in combat, self-revive every 5 min,
+runs out; Navi fairy companion (follows, 10% heal every 10 s in combat, self-revive at 10% every 5 min,
 level-gated errand quests 90501-90515 with scaling rewards); four story companions (Lyra,
 Faelin, Durza, Vesper) with quest chapters; four dungeon armor sets (levels 20/30/40/50,
 100% boss drops, 2/3/6-piece bonuses: crit, crit damage, weapon damage, knockback, extra swing,

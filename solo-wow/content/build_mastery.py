@@ -63,6 +63,10 @@ SPELLS = [
     # Berserker Stance's charged attack (ZeldaCommands.cpp, ZeldaLeapingStrike): a plain melee-class
     # physical strike whose damage the server sets (twice the attack power); it crits like melee
     (40008, 2816, 'Leaping Strike', 'Leaps forward, striking every enemy in front of you for twice your attack power.', {}),
+    # Navi's revive (ZeldaCommands.cpp, ZeldaNaviResurrection): a soulstone-style self resurrection that
+    # brings you back with 10% of your health and mana, in a priest's resurrection light
+    (40009, 3026, "Navi's Light", "Navi's light brings you back to life with 10% of your health and mana.",
+     dict(EffectBasePoints1=9, SpellVisual=41, SpellIconID=121)),
 ]
 
 # stock spells changed in place: {spell id: {spell_template column: value}}
@@ -127,7 +131,8 @@ ITEM_COLUMNS = ['entry', 'class', 'subclass', 'name', 'displayid', 'Quality', 'F
     'ScriptName', 'DisenchantID', 'FoodType', 'minMoneyLoot', 'maxMoneyLoot', 'Duration', 'ExtraFlags']
 
 # Spell.dbc (1.12.1, 173 fields): where the spell_template columns sit
-DBC_FIELD = {'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51}
+DBC_FIELD = {'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
+             'SpellIconID': 117}
 for _i, _g in enumerate(EFFECT_GROUPS[:-1]):
     for _k in (1, 2, 3):
         DBC_FIELD['%s%d' % (_g, _k)] = 61 + _i * 3 + (_k - 1)

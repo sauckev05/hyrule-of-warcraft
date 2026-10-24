@@ -298,7 +298,7 @@ jobs:
           $c += 'Zelda.SprintSpeedRate = 2'
           $c += 'Zelda.SprintAfterSeconds = 15'
           $c += 'Zelda.CrossFaction = 1'
-          $c += 'Zelda.NaviHealPercent = 25'
+          $c += 'Zelda.NaviHealPercent = 10'
           $c += 'Zelda.NaviHealSeconds = 10'
           $c += 'Zelda.NaviReviveMinutes = 5'
           $c += 'Zelda.SwimSpeedRate = 2'
