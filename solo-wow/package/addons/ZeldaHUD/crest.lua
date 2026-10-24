@@ -31,3 +31,16 @@ f:SetScript("OnEvent", function()
 		SendChatMessage(".zcrest", "SAY")
 	end
 end)
+
+-- The stock designer lets only a guild master accept. A hero without a guild may always design
+-- her own crest: enable Accept for her whenever the client says a save can go out.
+local origTabardFrameUpdate = TabardFrame_Update
+TabardFrame_Update = function()
+	if origTabardFrameUpdate then
+		origTabardFrameUpdate()
+	end
+	if not IsInGuild() and TabardModel and TabardModel.CanSaveTabardNow and TabardModel:CanSaveTabardNow() then
+		TabardFrameGreetingText:SetText("Design a crest of your own. Wear a Universal Tabard to show it.")
+		TabardFrameAcceptButton:Enable()
+	end
+end
