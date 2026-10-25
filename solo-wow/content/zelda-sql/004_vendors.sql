@@ -124,3 +124,33 @@ INSERT INTO `npc_vendor` (`entry`,`item`,`maxcount`,`incrtime`,`slot`,`condition
 (190650,2519,0,0,29,0),
 (190650,3033,0,0,30,0),
 (190650,11284,0,0,31,0);
+
+DELETE FROM `creature` WHERE `id` = 190651;
+DELETE FROM `creature_template` WHERE `Entry` = 190651;
+DELETE FROM `npc_vendor` WHERE `entry` = 190651;
+
+INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,`DisplayId1`,`DisplayIdProbability1`,`Faction`,`Scale`,`CreatureType`,`InhabitType`,`RegenerateStats`,`NpcFlags`,`UnitFlags`,`SpeedWalk`,`SpeedRun`,`UnitClass`,`Rank`,`HealthMultiplier`,`PowerMultiplier`,`DamageMultiplier`,`ArmorMultiplier`,`ExperienceMultiplier`,`MeleeBaseAttackTime`,`RangedBaseAttackTime`,`EquipmentTemplateId`,`GossipMenuId`,`AIName`,`ScriptName`) VALUES
+(190651,'Fizzbang Bottlecork','Potion Goblin',50,50,7178,100,35,1.0,7,3,3,4,768,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,0,0,'','');
+
+INSERT INTO `creature` (`guid`,`id`,`map`,`spawnMask`,`position_x`,`position_y`,`position_z`,`orientation`,`spawntimesecsmin`,`spawntimesecsmax`,`spawndist`,`MovementType`) VALUES
+(9103001,190651,0,1,-13187.4,333.6,40.3,4.4,300,300,0,0),
+(9103002,190651,0,1,-8990.4,753.8,98.41,0.6,300,300,0,0),
+(9103003,190651,0,1,-4859.96,-1238.78,501.81,0.5,300,300,0,0),
+(9103004,190651,1,1,10066.45,2344.5,1321.65,3.7,300,300,0,0),
+(9103005,190651,1,1,1961.9,-4469.2,25.78,3.5,300,300,0,0),
+(9103006,190651,1,1,-1085.06,27.12,140.91,2.2,300,300,0,0),
+(9103007,190651,0,1,1400.32,380.81,-65.95,0.0,300,300,0,0);
+
+INSERT INTO `npc_vendor` (`entry`,`item`,`maxcount`,`incrtime`,`slot`,`condition_id`) VALUES
+(190651,118,0,0,0,0),
+(190651,858,0,0,1,0),
+(190651,929,0,0,2,0),
+(190651,1710,0,0,3,0),
+(190651,3928,0,0,4,0),
+(190651,13446,0,0,5,0),
+(190651,2455,0,0,6,0),
+(190651,3385,0,0,7,0),
+(190651,3827,0,0,8,0),
+(190651,6149,0,0,9,0),
+(190651,13443,0,0,10,0),
+(190651,13444,0,0,11,0);

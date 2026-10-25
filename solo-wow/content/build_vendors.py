@@ -14,6 +14,23 @@ BEEDLE = 190650
 GUID_BASE = 9101001
 DISPLAY = 7133            # a goblin merchant with a big pack
 NPC_FLAGS = 0x4 | 0x4000         # vendor, repair (right-click opens the shop)
+# The potion goblin: healing and mana potions only, just outside the Gurubashi Arena (beside Short
+# John Mithril) and in the alchemy shop of every capital city.
+POTION_GOBLIN = 190651
+POTION_GUID_BASE = 9103001
+POTION_DISPLAY = 7178     # a goblin alchemist
+POTION_ITEMS = [118, 858, 929, 1710, 3928, 13446,       # healing potions
+                2455, 3385, 3827, 6149, 13443, 13444]   # mana potions
+# (place, map, x, y, z, orientation): between the alchemy vendors of each shop
+POTION_SPOTS = [
+    ('Gurubashi Arena', 0, -13187.4, 333.6, 40.3, 4.4),
+    ('Stormwind', 0, -8990.4, 753.8, 98.41, 0.6),
+    ('Ironforge', 0, -4859.96, -1238.78, 501.81, 0.5),
+    ('Darnassus', 1, 10066.45, 2344.5, 1321.65, 3.7),
+    ('Orgrimmar', 1, 1961.9, -4469.2, 25.78, 3.5),
+    ('Thunder Bluff', 1, -1085.06, 27.12, 140.91, 2.2),
+    ('Undercity', 0, 1400.32, 380.81, -65.95, 0.0),
+]
 ITEMS = [118, 858, 929, 1710, 3928, 13446,          # healing potions
          2455, 3385, 3827, 6149, 13443, 13444,      # mana potions
          159, 1179, 1205, 1708, 1645, 8766,         # water
@@ -45,6 +62,21 @@ def main():
     out.append(insert('creature', spawns))
     out.append(insert('npc_vendor', [dict(entry=BEEDLE, item=i, maxcount=0, incrtime=0, slot=n, condition_id=0)
                                      for n, i in enumerate(ITEMS)]))
+    # the potion goblin
+    g = creature_template(POTION_GOBLIN, 'Fizzbang Bottlecork', 'Potion Goblin', POTION_DISPLAY, 35, 0, 50, 1, '')
+    g['NpcFlags'] = 0x4                   # vendor
+    g['UnitFlags'] = 0x100 | 0x200
+    g['ExperienceMultiplier'] = 0
+    out += ['DELETE FROM `creature` WHERE `id` = %d;' % POTION_GOBLIN,
+            'DELETE FROM `creature_template` WHERE `Entry` = %d;' % POTION_GOBLIN,
+            'DELETE FROM `npc_vendor` WHERE `entry` = %d;' % POTION_GOBLIN, '']
+    out.append(insert('creature_template', [g]))
+    out.append(insert('creature', [dict(guid=POTION_GUID_BASE + i, id=POTION_GOBLIN, map=m, spawnMask=1, position_x=x,
+                                        position_y=y, position_z=z, orientation=o, spawntimesecsmin=300,
+                                        spawntimesecsmax=300, spawndist=0, MovementType=0)
+                                   for i, (_, m, x, y, z, o) in enumerate(POTION_SPOTS)]))
+    out.append(insert('npc_vendor', [dict(entry=POTION_GOBLIN, item=i, maxcount=0, incrtime=0, slot=n, condition_id=0)
+                                     for n, i in enumerate(POTION_ITEMS)]))
     with open(os.path.join(HERE, 'zelda-sql', '004_vendors.sql'), 'w', newline='\n') as f:
         f.write('\n'.join(out))
     print('wrote', len(spawns), 'Beedle spawns')

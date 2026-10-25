@@ -182,6 +182,10 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   boss on its floor, on the way in, exists (16 dungeons/raids) Beedle stands there ('boss door'),
   elsewhere only the entrance and middle Beedles remain (dungeon_vendors.json, 004_vendors).
 - Healing and mana potions: at most 10 of each kind, stacking to 10 (015_potion_limit.sql).
+- Potion goblin Fizzbang Bottlecork (190651, guids 9103001-7, build_vendors.py -> 004_vendors):
+  healing and mana potions of every rank; beside Short John Mithril above the Gurubashi Arena pit,
+  and between the alchemy vendors of the Stormwind, Ironforge, Darnassus, Orgrimmar, Thunder Bluff
+  and Undercity alchemy shops.
 - Armor set bonuses: new types 8 stun (% chance a melee hit stuns 1 s, Charge Stun 7922; not world
   bosses) and 9 weapon_flat (+N weapon damage via UNIT_MOD_DAMAGE_MAINHAND/OFFHAND TOTAL_VALUE, on
   the character sheet). Zora Scale (30): 2-piece +5 weapon damage, 6-piece 4% stun instead of
