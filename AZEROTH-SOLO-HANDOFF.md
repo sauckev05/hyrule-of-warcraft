@@ -185,6 +185,26 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   Player::RegenerateHealth skips the spirit regen); bandages, potions, food, Navi, set effects and
   health-regen auras from items still heal.
 - Healing and mana potions: at most 10 of each kind, stacking to 10 (015_potion_limit.sql).
+- Riding (016_mounts.sql): Apprentice Riding 400 g, regular mounts 50 g; epic training and mounts
+  unchanged. Mount speeds (build_mastery MOUNT_SPEED, 006 + patch-Z Spell.dbc): every MOUNTED spell's
+  MOD_INCREASE_MOUNTED_SPEED effect 2 goes 59 -> 149 (+150%) and 99 -> 199 (+200%).
+- Reputation x10: Rate.Reputation.Gain = 10 (quests, kills); BattleGround::RewardReputationToTeam
+  now follows the rate too.
+- Honor: rank points never decay (Zelda.HonorRankDecay = 0, ObjectMgr::DistributeRankPoints), so
+  ranks only go up.
+- PvP rank rewards from rank 7 (requiredhonorrank >= 11, armor and weapons) are in
+  zelda_removed_item (007_warrior_gear.sql, PVP_RANK_GEAR in build_warrior_gear.py): no vendor sells
+  them, no loot or AH bot listing.
+- Auction houses restock every in-game day (Zelda.AuctionDailyRestock, ZeldaGameDayIndex from
+  Zelda.DayLengthMinutes): AuctionHouseBot::Update expires the bot's unbid auctions and refills
+  (up to 900 sell passes).
+- Pawnbroker Grizzle Pawnwick (190652, guids 9103101-7, npc_zelda_pawnbroker in
+  zelda_companions.cpp, texts 902001/2): beside every potion goblin; gossip lists the newest 28 of
+  everything sold since login (Player::AddItemToBuyBackSlot -> ZeldaRecordSold, keeps random
+  property and permanent enchant), bought back for what the vendor paid; a normal buyback also
+  takes it off the list; cleared at each login.
+- One-time gifts (Zelda.Gifts, default "Kale:6975"): Kale gets a Whirlwind Axe back (bags, else
+  mail from Navi), marker gift:<item>.
 - Potion goblin Fizzbang Bottlecork (190651, guids 9103001-7, build_vendors.py -> 004_vendors):
   healing and mana potions of every rank; beside Short John Mithril above the Gurubashi Arena pit,
   and between the alchemy vendors of the Stormwind, Ironforge, Darnassus, Orgrimmar, Thunder Bluff

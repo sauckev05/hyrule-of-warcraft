@@ -242,6 +242,8 @@ jobs:
           $c = $c -replace '^Rate\.Drop\.Money\s*=.*', 'Rate.Drop.Money = 5'
           # two talent points per level
           $c = $c -replace '^Rate\.Talent\s*=.*', 'Rate.Talent = 2'
+          # Reputation x10 from quests, kills and battlegrounds (BattleGround.cpp follows the rate too)
+          $c = $c -replace '^Rate\.Reputation\.Gain\s*=.*', 'Rate.Reputation.Gain = 10'
           # raids and raid quests can be done alone
           $c = $c -replace '^Instance\.IgnoreRaid\s*=.*', 'Instance.IgnoreRaid = 1'
           $c = $c -replace '^Quests\.IgnoreRaid\s*=.*', 'Quests.IgnoreRaid = 1'

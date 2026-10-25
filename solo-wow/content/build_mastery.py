@@ -89,6 +89,11 @@ SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
 }
 
+# mounts (an aura 78 MOUNTED spell with its aura 32 MOD_INCREASE_MOUNTED_SPEED in effect 2): the
+# regular ones go 150% faster instead of 60%, the epic ones 200% instead of 100%
+MOUNT_SPEED = {59: 149, 99: 199}
+MOUNT_AURA, MOUNT_SPEED_AURA = 78, 32
+
 EFFECT_GROUPS = ['Effect', 'EffectDieSides', 'EffectBaseDice', 'EffectDicePerLevel', 'EffectRealPointsPerLevel',
                  'EffectBasePoints', 'EffectMechanic', 'EffectImplicitTargetA', 'EffectImplicitTargetB',
                  'EffectRadiusIndex', 'EffectApplyAuraName', 'EffectAmplitude', 'EffectMultipleValue',
@@ -186,6 +191,11 @@ def spell_sql():
     for sid, changes in SPELL_EDITS.items():
         out.append('UPDATE `spell_template` SET %s WHERE `Id` = %d;\n'
                    % (', '.join('`%s` = %d' % kv for kv in changes.items()), sid))
+    # epic first, so a regular mount raised to 149 is not raised again
+    for old, new in sorted(MOUNT_SPEED.items(), reverse=True):
+        out.append('UPDATE `spell_template` SET `EffectBasePoints2` = %d WHERE `EffectApplyAuraName2` = %d AND '
+                   '`EffectBasePoints2` = %d AND %d IN (`EffectApplyAuraName1`, `EffectApplyAuraName3`);\n'
+                   % (new, MOUNT_SPEED_AURA, old, MOUNT_AURA))
     return ''.join(out)
 
 
@@ -318,6 +328,11 @@ def patch_spells(path):
         rows.append(row)
     for sid, text in DESCRIPTION_EDITS.items():
         byid[sid][DBC_DESCRIPTION] = add_string(strings, text)
+    aura = DBC_FIELD['EffectApplyAuraName1']
+    bp2 = DBC_FIELD['EffectBasePoints2']
+    for row in rows:
+        if row[aura + 1] == MOUNT_SPEED_AURA and MOUNT_AURA in (row[aura], row[aura + 2]) and row[bp2] in MOUNT_SPEED:
+            row[bp2] = MOUNT_SPEED[row[bp2]]
     return write_dbc(f, rows, strings)
 
 

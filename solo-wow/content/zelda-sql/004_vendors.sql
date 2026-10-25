@@ -154,3 +154,23 @@ INSERT INTO `npc_vendor` (`entry`,`item`,`maxcount`,`incrtime`,`slot`,`condition
 (190651,6149,0,0,9,0),
 (190651,13443,0,0,10,0),
 (190651,13444,0,0,11,0);
+
+DELETE FROM `creature` WHERE `id` = 190652;
+DELETE FROM `creature_template` WHERE `Entry` = 190652;
+DELETE FROM `npc_text` WHERE `ID` IN (902001,902002);
+
+INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,`DisplayId1`,`DisplayIdProbability1`,`Faction`,`Scale`,`CreatureType`,`InhabitType`,`RegenerateStats`,`NpcFlags`,`UnitFlags`,`SpeedWalk`,`SpeedRun`,`UnitClass`,`Rank`,`HealthMultiplier`,`PowerMultiplier`,`DamageMultiplier`,`ArmorMultiplier`,`ExperienceMultiplier`,`MeleeBaseAttackTime`,`RangedBaseAttackTime`,`EquipmentTemplateId`,`GossipMenuId`,`AIName`,`ScriptName`) VALUES
+(190652,'Grizzle Pawnwick','Pawnbroker',50,50,7130,100,35,1.0,7,3,3,1,768,1.0,1.14286,1,0,1.0,1.0,1.0,1.0,0,2000,2000,0,0,'','npc_zelda_pawnbroker');
+
+INSERT INTO `creature` (`guid`,`id`,`map`,`spawnMask`,`position_x`,`position_y`,`position_z`,`orientation`,`spawntimesecsmin`,`spawntimesecsmax`,`spawndist`,`MovementType`) VALUES
+(9103101,190652,0,1,-13185.69,333.05,40.3,4.4,300,300,0,0),
+(9103102,190652,0,1,-8991.42,755.29,98.41,0.6,300,300,0,0),
+(9103103,190652,0,1,-4860.82,-1237.2,501.81,0.5,300,300,0,0),
+(9103104,190652,1,1,10067.4,2342.97,1321.65,3.7,300,300,0,0),
+(9103105,190652,1,1,1962.53,-4470.89,25.78,3.5,300,300,0,0),
+(9103106,190652,1,1,-1086.52,26.06,140.91,2.2,300,300,0,0),
+(9103107,190652,0,1,1400.32,382.61,-65.95,0.0,300,300,0,0);
+
+INSERT INTO `npc_text` (`ID`,`text0_0`,`text0_1`,`lang0`,`prob0`,`em0_0`,`em0_1`) VALUES
+(902001,'Sold something you miss? Happens to everybody, pal. I bought it all off the vendors - you can have it back for exactly what they paid you. No markup! ...This time.','Sold something you miss? Happens to everybody, pal. I bought it all off the vendors - you can have it back for exactly what they paid you. No markup! ...This time.',0,1,0,1),
+(902002,'Nothing of yours on my shelves yet. Sell something and come see me - I keep everything until you call it a day.','Nothing of yours on my shelves yet. Sell something and come see me - I keep everything until you call it a day.',0,1,0,1);

@@ -199,10 +199,10 @@ index 75c30f094..6873b2e00 100644
          std::string m_strInstData;
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 000000000..f88a63bdd
+index 000000000..a4c410ca7
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,1150 @@
+@@ -0,0 +1,1220 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -1335,6 +1335,70 @@ index 000000000..f88a63bdd
 +    return false;
 +}
 +
++/*######
++## npc_zelda_pawnbroker - buys back everything the hero sold since logging in (the core keeps the
++## list, ZeldaSoldItems), newest first, for what the vendor paid. Logging out empties it.
++######*/
++
++namespace
++{
++    uint32 const PAWN_TEXT = 902001;       // npc_text, 004_vendors.sql
++    uint32 const PAWN_TEXT_EMPTY = 902002;
++    uint32 const PAWN_SHOWN = 28;          // a gossip menu holds about 30 lines
++
++    std::string MoneyText(uint32 copper)
++    {
++        char buf[64];
++        uint32 const g = copper / 10000, sv = (copper / 100) % 100, c = copper % 100;
++        if (g)
++            snprintf(buf, sizeof(buf), "%ug %us %uc", g, sv, c);
++        else if (sv)
++            snprintf(buf, sizeof(buf), "%us %uc", sv, c);
++        else
++            snprintf(buf, sizeof(buf), "%uc", c);
++        return buf;
++    }
++
++    void ShowPawnMenu(Player* player, Creature* creature)
++    {
++        std::vector<ZeldaSoldItem> const sold = ZeldaSoldItems(player);
++        uint32 shown = 0;
++        for (auto itr = sold.rbegin(); itr != sold.rend() && shown < PAWN_SHOWN; ++itr, ++shown)
++        {
++            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itr->entry);
++            if (!proto)
++                continue;
++            std::string line = std::string("Buy back ") + proto->Name1;
++            if (itr->count > 1)
++                line += " x" + std::to_string(itr->count);
++            line += " (" + MoneyText(itr->price) + ")";
++            player->ADD_GOSSIP_ITEM(GOSSIP_ICON_VENDOR, line.c_str(), GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + itr->id);
++        }
++        player->SEND_GOSSIP_MENU(sold.empty() ? PAWN_TEXT_EMPTY : PAWN_TEXT, creature->GetObjectGuid());
++    }
++}
++
++bool GossipHello_npc_zelda_pawnbroker(Player* player, Creature* creature)
++{
++    ShowPawnMenu(player, creature);
++    return true;
++}
++
++bool GossipSelect_npc_zelda_pawnbroker(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
++{
++    player->GetPlayerMenu()->ClearMenus();
++    if (action > GOSSIP_ACTION_INFO_DEF)
++    {
++        std::string why;
++        if (ZeldaBuyBackSold(player, action - GOSSIP_ACTION_INFO_DEF, why))
++            creature->MonsterWhisper("Pleasure doing business! Again!", player);
++        else
++            player->GetSession()->SendNotification("%s", why.c_str());
++    }
++    ShowPawnMenu(player, creature);
++    return true;
++}
++
 +void AddSC_zelda_companions()
 +{
 +    Script* pNewScript = new Script;
@@ -1351,6 +1415,12 @@ index 000000000..f88a63bdd
 +    pNewScript->pGossipHello = &GossipHello_npc_zelda_navi;
 +    pNewScript->pGossipSelect = &GossipSelect_npc_zelda_navi;
 +    pNewScript->pQuestRewardedNPC = &QuestRewarded_npc_zelda_navi;
++    pNewScript->RegisterSelf();
++
++    pNewScript = new Script;
++    pNewScript->Name = "npc_zelda_pawnbroker";
++    pNewScript->pGossipHello = &GossipHello_npc_zelda_pawnbroker;
++    pNewScript->pGossipSelect = &GossipSelect_npc_zelda_pawnbroker;
 +    pNewScript->RegisterSelf();
 +}
 diff --git a/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp b/src/game/AI/ScriptDevAI/system/ScriptLoader.cpp
@@ -1374,7 +1444,7 @@ index d4e75252f..5bbe70c5e 100644
      AddSC_scourge_invasion();
      AddSC_lunar_festival();
 diff --git a/src/game/AuctionHouseBot/AuctionHouseBot.cpp b/src/game/AuctionHouseBot/AuctionHouseBot.cpp
-index 811d227d9..cfd7b4d1d 100644
+index 811d227d9..3a0535421 100644
 --- a/src/game/AuctionHouseBot/AuctionHouseBot.cpp
 +++ b/src/game/AuctionHouseBot/AuctionHouseBot.cpp
 @@ -25,6 +25,7 @@
@@ -1385,7 +1455,47 @@ index 811d227d9..cfd7b4d1d 100644
  
  // Format is YYYYMMDDRR where RR is the change in the conf file
  // for that day.
-@@ -226,6 +227,8 @@ void AuctionHouseBot::Update()
+@@ -158,6 +159,39 @@ void AuctionHouseBot::Initialize()
+ 
+ void AuctionHouseBot::Update()
+ {
++    // Zelda of Warcraft: every in-game day the auction houses restock: the bot's unbid auctions
++    // go and new goods (other weapons, armor and the rest) take their place
++    static uint32 s_day = 0;
++    static bool s_restocking = false;
++    if (!s_restocking && ZeldaAuctionDailyRestock())
++    {
++        uint32 const day = ZeldaGameDayIndex(time(nullptr));
++        if (s_day == 0)
++            s_day = day;
++        else if (day != s_day)
++        {
++            s_day = day;
++            s_restocking = true;
++            sLog.outString("AHBot: a new day - restocking the auction houses");
++            for (uint32 i = 0; i < MAX_AUCTION_HOUSE_TYPE; ++i)
++            {
++                AuctionHouseObject::AuctionEntryMapBounds bounds = sAuctionMgr.GetAuctionsMap(AuctionHouseType(i))->GetAuctionsBounds();
++                for (AuctionHouseObject::AuctionEntryMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
++                    if (!itr->second->owner && itr->second->bid == 0)
++                        itr->second->expireTime = sWorld.GetGameTime();
++            }
++            uint32 const refills = std::min<uint32>(900, ((m_auctionTimeMax - m_auctionTimeMin) / 2 + m_auctionTimeMin) * 90);
++            for (uint32 i = 0; i < refills; ++i)
++            {
++                if (m_houseAction >= MAX_AUCTION_HOUSE_TYPE - 1)
++                    m_houseAction = -1;         // selling only, as Rebuild does
++                Update();
++            }
++            s_restocking = false;
++            return;
++        }
++    }
++
+     if (++m_houseAction >= MAX_AUCTION_HOUSE_TYPE * 2)
+         m_houseAction = 0;
+ 
+@@ -226,6 +260,8 @@ void AuctionHouseBot::Update()
              ItemPrototype const* prototype = ObjectMgr::GetItemPrototype(itemEntry.first);
              if (!prototype || prototype->GetMaxStackSize() == 0)
                  continue; // really shouldn't happen, but better safe than sorry
@@ -1394,6 +1504,21 @@ index 811d227d9..cfd7b4d1d 100644
              auto iterator = m_itemData.find(prototype->ItemId);
              if (iterator != m_itemData.end() && iterator->second.Value == 0)
                  continue; // item is blacklisted
+diff --git a/src/game/BattleGround/BattleGround.cpp b/src/game/BattleGround/BattleGround.cpp
+index dd3374958..0aa90ebc2 100644
+--- a/src/game/BattleGround/BattleGround.cpp
++++ b/src/game/BattleGround/BattleGround.cpp
+@@ -657,8 +657,9 @@ void BattleGround::RewardReputationToTeam(uint32 factionId, uint32 reputation, T
+         Team team = itr->second.playerTeam;
+         if (team != ALLIANCE && team != HORDE) team = player->GetTeam();
+ 
++        // Zelda of Warcraft: battleground reputation follows Rate.Reputation.Gain like the rest
+         if (team == teamId)
+-            player->GetReputationMgr().ModifyReputation(factionEntry, reputation);
++            player->GetReputationMgr().ModifyReputation(factionEntry, int32(reputation * sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_GAIN)));
+     }
+ }
+ 
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
 index ffa25ba3d..d07f7eeaf 100644
 --- a/src/game/Chat/Chat.cpp
@@ -1441,10 +1566,10 @@ index 00fde0a85..0b4eea0fb 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..01e8c4c09
+index 000000000..16eb3067a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,3493 @@
+@@ -0,0 +1,3629 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1532,6 +1657,9 @@ index 000000000..01e8c4c09
 +        // enemies fighting this hero: when each next winds up a heavy blow or a charged bolt (ms)
 +        std::unordered_map<uint64, uint32> heavyReadyAt;
 +        uint32 heavyCleanAt = 0;
++        // the pawnbroker's book: what this hero sold since logging in
++        std::vector<ZeldaSoldItem> sold;
++        uint32 soldNextId = 1;
 +        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
 +        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper, Navi, Elara)
 +        uint32 followerEntry[6] = { 0, 0, 0, 0, 0, 0 };
@@ -2666,6 +2794,7 @@ index 000000000..01e8c4c09
 +}
 +
 +static void ZeldaEnemyMechanics(Player* player, ZeldaState& state);
++static void ZeldaGifts(Player* player);
 +
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
@@ -2681,6 +2810,8 @@ index 000000000..01e8c4c09
 +        player->UpdateSpeed(MOVE_RUN, true);
 +        ApplyCrossFaction(player);
 +        ZeldaHeroFirstLogin(player);
++        state.sold.clear();                     // the pawnbroker forgets what was sold before
++        ZeldaGifts(player);
 +    }
 +
 +    // the Gurubashi Arena challenge
@@ -3207,6 +3338,136 @@ index 000000000..01e8c4c09
 +bool ZeldaNaturalHealthRegen()
 +{
 +    static bool const on = sConfig.GetBoolDefault("Zelda.NaturalHealthRegen", false);
++    return on;
++}
++
++// ---------------------------------------------------------------------------------- gifts
++// Items handed to a character once (Zelda.Gifts: "Name:item Name:item ..."), into the bags or,
++// when they are full, by mail from Navi; marker 'gift:<item>' per character.
++static void ZeldaGifts(Player* player)
++{
++    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975");
++    std::istringstream in(gifts);
++    std::string word;
++    while (in >> word)
++    {
++        size_t const colon = word.find(':');
++        if (colon == std::string::npos || word.substr(0, colon) != player->GetName())
++            continue;
++        uint32 const itemId = uint32(std::strtoul(word.c_str() + colon + 1, nullptr, 10));
++        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
++        if (!proto)
++            continue;
++        std::string const key = "gift:" + std::to_string(itemId);
++        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
++                                     player->GetGUIDLow(), key.c_str()))
++            continue;
++        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
++                                   player->GetGUIDLow(), key.c_str());
++        ItemPosCountVec dest;
++        if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, 1) == EQUIP_ERR_OK)
++        {
++            if (Item* item = player->StoreNewItem(dest, itemId, true, Item::GenerateItemRandomPropertyId(itemId)))
++                player->SendNewItem(item, 1, true, false);
++            ChatHandler(player).PSendSysMessage("|cff33ff99Your %s is back in your bags.|r", proto->Name1);
++        }
++        else if (Item* item = Item::CreateItem(itemId, 1, player))
++        {
++            CharacterDatabase.BeginTransaction();
++            item->SaveToDB();
++            CharacterDatabase.CommitTransaction();
++            MailDraft(proto->Name1, "Hey! Listen! You dropped this - your bags were full, so here it is.")
++                .AddItem(item).SendMailTo(player, MailSender(MAIL_CREATURE, uint32(190601)), MAIL_CHECK_MASK_COPIED);
++            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: your %s was sent to your mailbox.|r", proto->Name1);
++        }
++    }
++}
++
++// ---------------------------------------------------------------------------------- pawnbroker
++void ZeldaRecordSold(Player* player, Item* item, uint32 money)
++{
++    if (!player || !item)
++        return;
++    ZeldaState& state = StateFor(player);
++    ZeldaSoldItem sold;
++    sold.id = state.soldNextId++;
++    sold.entry = item->GetEntry();
++    sold.count = item->GetCount();
++    sold.randomProperty = item->GetItemRandomPropertyId();
++    sold.enchant = item->GetEnchantmentId(PERM_ENCHANTMENT_SLOT);
++    sold.price = money;
++    state.sold.push_back(sold);
++}
++
++void ZeldaForgetSold(Player* player, uint32 entry, uint32 count)
++{
++    ZeldaState& state = StateFor(player);
++    for (auto itr = state.sold.rbegin(); itr != state.sold.rend(); ++itr)
++        if (itr->entry == entry && itr->count == count)
++        {
++            state.sold.erase(std::next(itr).base());
++            return;
++        }
++}
++
++std::vector<ZeldaSoldItem> ZeldaSoldItems(Player* player)
++{
++    return StateFor(player).sold;
++}
++
++bool ZeldaBuyBackSold(Player* player, uint32 id, std::string& why)
++{
++    ZeldaState& state = StateFor(player);
++    auto itr = std::find_if(state.sold.begin(), state.sold.end(), [id](ZeldaSoldItem const& s) { return s.id == id; });
++    if (itr == state.sold.end())
++    {
++        why = "That one is already gone.";
++        return false;
++    }
++    if (player->GetMoney() < itr->price)
++    {
++        why = "You don't have enough money.";
++        return false;
++    }
++    ItemPosCountVec dest;
++    if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itr->entry, itr->count) != EQUIP_ERR_OK)
++    {
++        why = "Your bags are full.";
++        return false;
++    }
++    Item* item = player->StoreNewItem(dest, itr->entry, true, itr->randomProperty);
++    if (!item)
++    {
++        why = "That one is already gone.";
++        return false;
++    }
++    if (itr->enchant)
++    {
++        player->ApplyEnchantment(item, PERM_ENCHANTMENT_SLOT, false);
++        item->SetEnchantment(PERM_ENCHANTMENT_SLOT, itr->enchant, 0, 0);
++        player->ApplyEnchantment(item, PERM_ENCHANTMENT_SLOT, true);
++    }
++    player->ModifyMoney(-int32(itr->price));
++    player->SendNewItem(item, itr->count, true, false);
++    state.sold.erase(itr);
++    return true;
++}
++
++// ---------------------------------------------------------------------------------- auctions
++uint32 ZeldaGameDayIndex(time_t now)
++{
++    static float const dayMinutes = sConfig.GetFloatDefault("Zelda.DayLengthMinutes", 60.0f);
++    if (dayMinutes <= 0.0f || dayMinutes >= 1440.0f)
++        return uint32(now / 86400);
++    float const factor = 1440.0f / dayMinutes;
++    time_t const anchor = 1767225600;               // as ZeldaPackedGameTime
++    double const elapsed = double(now > anchor ? now - anchor : 0);
++    return uint32((double(anchor) + elapsed * factor) / 86400.0);
++}
++
++bool ZeldaAuctionDailyRestock()
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.AuctionDailyRestock", true);
 +    return on;
 +}
 +
@@ -4940,14 +5201,18 @@ index 000000000..01e8c4c09
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..2ba804383
+index 000000000..551d70220
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,199 @@
+@@ -0,0 +1,223 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
 +#include "Common.h"
++#include <string>
++#include <vector>
++
++class Item;
 +
 +class Player;
 +class Unit;
@@ -5089,6 +5354,26 @@ index 000000000..2ba804383
 +
 +// Zelda of Warcraft: the main hand's damage factor, 0.5 while dual wielding (Zelda.DualWieldDamage)
 +float ZeldaDualWieldFactor(Player const* player);
++
++// Zelda of Warcraft: the pawnbroker - every item a hero sold since logging in, to buy back
++struct ZeldaSoldItem
++{
++    uint32 id;              // this login's sale number
++    uint32 entry;
++    uint32 count;
++    int32 randomProperty;
++    uint32 enchant;         // permanent enchantment
++    uint32 price;           // what the vendor paid, and what buying it back costs
++};
++void ZeldaRecordSold(Player* player, Item* item, uint32 money);
++void ZeldaForgetSold(Player* player, uint32 entry, uint32 count);
++std::vector<ZeldaSoldItem> ZeldaSoldItems(Player* player);
++// buys sale `id` back; false (and why) when it cannot
++bool ZeldaBuyBackSold(Player* player, uint32 id, std::string& why);
++// Zelda of Warcraft: the in-game day number (Zelda.DayLengthMinutes): the auction house restocks
++// with new goods every in-game day (Zelda.AuctionDailyRestock)
++uint32 ZeldaGameDayIndex(time_t now);
++bool ZeldaAuctionDailyRestock();
 +
 +// Zelda of Warcraft: whether heroes regain health on their own (Zelda.NaturalHealthRegen, 0)
 +bool ZeldaNaturalHealthRegen();
@@ -5343,7 +5628,7 @@ index 043cad6ef..232434e64 100644
                      // fish catch or fail and junk allowed (after 3.1.0)
                      if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
 diff --git a/src/game/Entities/ItemHandler.cpp b/src/game/Entities/ItemHandler.cpp
-index bf4469834..ec16cd211 100644
+index bf4469834..7b0f11728 100644
 --- a/src/game/Entities/ItemHandler.cpp
 +++ b/src/game/Entities/ItemHandler.cpp
 @@ -17,6 +17,7 @@
@@ -5381,7 +5666,20 @@ index bf4469834..ec16cd211 100644
  
      for (auto i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
      {
-@@ -721,6 +722,9 @@ void WorldSession::SendListInventory(ObjectGuid vendorguid) const
+@@ -628,10 +629,12 @@ void WorldSession::HandleBuybackItem(WorldPacket& recv_data)
+         InventoryResult msg = _player->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false);
+         if (msg == EQUIP_ERR_OK)
+         {
++            uint32 const entry = pItem->GetEntry(), count = pItem->GetCount();
+             _player->ModifyMoney(-(int32)price);
+             _player->RemoveItemFromBuyBackSlot(slot, false);
+             _player->ItemAddedQuestCheck(pItem->GetEntry(), pItem->GetCount());
+             _player->StoreItem(dest, pItem, true);
++            ZeldaForgetSold(_player, entry, count);     // Zelda of Warcraft: off the pawnbroker's book too
+         }
+         else
+             _player->SendEquipError(msg, pItem, nullptr, bagSlot);
+@@ -721,6 +724,9 @@ void WorldSession::SendListInventory(ObjectGuid vendorguid) const
      if (uint32 pauseTimer = pCreature->GetInteractionPauseTimer())
          pCreature->GetMotionMaster()->PauseWaypoints(pauseTimer);
  
@@ -5415,7 +5713,7 @@ index 60cf414d8..c86aa0006 100644
      GetPlayer()->RemovePet(PET_SAVE_REAGENTS);
      GetPlayer()->BuildPlayerRepop();
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..d7b9368d4 100644
+index 4d8e9160a..45bcb6456 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -5512,7 +5810,17 @@ index 4d8e9160a..d7b9368d4 100644
              if (eslot == EQUIPMENT_SLOT_OFFHAND)
              {
                  if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
-@@ -18082,9 +18105,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -11003,6 +11026,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
+ {
+     MANGOS_ASSERT(pItem != nullptr);
+ 
++    // Zelda of Warcraft: the pawnbroker keeps every sale of this login, not just the last 12
++    ZeldaRecordSold(this, pItem, money);
++
+     uint32 slot = m_currentBuybackSlot;
+     // if current back slot non-empty search oldest or free
+     if (m_items[slot])
+@@ -18082,9 +18108,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -5527,7 +5835,7 @@ index 4d8e9160a..d7b9368d4 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19691,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19694,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -5555,7 +5863,7 @@ index 4d8e9160a..d7b9368d4 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20079,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20082,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -5564,7 +5872,7 @@ index 4d8e9160a..d7b9368d4 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20268,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20271,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -5828,6 +6136,31 @@ index 00986af9e..2917a640c 100644
          if (GetDeathState() == CORPSE)
              speed *= sWorld.getConfig(((Player*)this)->InBattleGround() ? CONFIG_FLOAT_GHOST_RUN_SPEED_BG : CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD);
      }
+diff --git a/src/game/Globals/ObjectMgr.cpp b/src/game/Globals/ObjectMgr.cpp
+index a67044614..5084c7488 100644
+--- a/src/game/Globals/ObjectMgr.cpp
++++ b/src/game/Globals/ObjectMgr.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Globals/ObjectMgr.h"
++#include "Config/Config.h"
+ #include "Database/DatabaseEnv.h"
+ #include "Policies/Singleton.h"
+ 
+@@ -3879,7 +3880,11 @@ void ObjectMgr::DistributeRankPoints(uint32 team, uint32 dateBegin, bool flush /
+         HK = fields[1].GetUInt32();
+ 
+         itr->rpEarning = MaNGOS::Honor::CalculateRpEarning(itr->GetInfo()->honorPoints, scores);
+-        RP             = MaNGOS::Honor::CalculateRpDecay(itr->rpEarning, RP);
++        // Zelda of Warcraft: rank points never decay, so a rank once earned is kept and the next
++        // one is only a matter of time (Zelda.HonorRankDecay = 0)
++        static bool const rankDecay = sConfig.GetBoolDefault("Zelda.HonorRankDecay", false);
++        if (rankDecay)
++            RP         = MaNGOS::Honor::CalculateRpDecay(itr->rpEarning, RP);
+ 
+         if (flush)
+         {
 diff --git a/src/game/Guilds/GuildHandler.cpp b/src/game/Guilds/GuildHandler.cpp
 index 0bde155d8..3e7dbf632 100644
 --- a/src/game/Guilds/GuildHandler.cpp

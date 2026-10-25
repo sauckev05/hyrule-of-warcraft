@@ -5,6 +5,7 @@ well clear of the boss exists (never beside the boss itself). Spots
 come from dungeon_vendors.json (solo-wow/tools/compute_dungeon_vendors.py); writes
 zelda-sql/004_vendors.sql."""
 import json
+import math
 import os
 
 from build_content import insert, creature_template
@@ -31,6 +32,15 @@ POTION_SPOTS = [
     ('Thunder Bluff', 1, -1085.06, 27.12, 140.91, 2.2),
     ('Undercity', 0, 1400.32, 380.81, -65.95, 0.0),
 ]
+# The pawnbroker: beside each potion goblin, buys back everything the hero sold since logging in
+# (the core keeps the list; script npc_zelda_pawnbroker in zelda_companions.cpp)
+PAWNBROKER = 190652
+PAWN_GUID_BASE = 9103101
+PAWN_DISPLAY = 7130       # a goblin trader
+PAWN_TEXTS = [(902001, "Sold something you miss? Happens to everybody, pal. I bought it all off the vendors - "
+                       "you can have it back for exactly what they paid you. No markup! ...This time."),
+              (902002, "Nothing of yours on my shelves yet. Sell something and come see me - I keep everything "
+                       "until you call it a day.")]
 ITEMS = [118, 858, 929, 1710, 3928, 13446,          # healing potions
          2455, 3385, 3827, 6149, 13443, 13444,      # mana potions
          159, 1179, 1205, 1708, 1645, 8766,         # water
@@ -77,6 +87,23 @@ def main():
                                    for i, (_, m, x, y, z, o) in enumerate(POTION_SPOTS)]))
     out.append(insert('npc_vendor', [dict(entry=POTION_GOBLIN, item=i, maxcount=0, incrtime=0, slot=n, condition_id=0)
                                      for n, i in enumerate(POTION_ITEMS)]))
+    # the pawnbroker, a step to the side of each potion goblin
+    b = creature_template(PAWNBROKER, 'Grizzle Pawnwick', 'Pawnbroker', PAWN_DISPLAY, 35, 0, 50, 1, 'npc_zelda_pawnbroker')
+    b['NpcFlags'] = 0x1                   # gossip
+    b['UnitFlags'] = 0x100 | 0x200
+    b['ExperienceMultiplier'] = 0
+    out += ['DELETE FROM `creature` WHERE `id` = %d;' % PAWNBROKER,
+            'DELETE FROM `creature_template` WHERE `Entry` = %d;' % PAWNBROKER,
+            'DELETE FROM `npc_text` WHERE `ID` IN (%s);' % ','.join(str(t[0]) for t in PAWN_TEXTS), '']
+    out.append(insert('creature_template', [b]))
+    out.append(insert('creature', [dict(guid=PAWN_GUID_BASE + i, id=PAWNBROKER, map=m, spawnMask=1,
+                                        position_x=round(x + 1.8 * math.cos(o + math.pi / 2), 2),
+                                        position_y=round(y + 1.8 * math.sin(o + math.pi / 2), 2), position_z=z,
+                                        orientation=o, spawntimesecsmin=300, spawntimesecsmax=300, spawndist=0,
+                                        MovementType=0)
+                                   for i, (_, m, x, y, z, o) in enumerate(POTION_SPOTS)]))
+    out.append(insert('npc_text', [dict(ID=t, text0_0=text, text0_1=text, lang0=0, prob0=1, em0_0=0, em0_1=1)
+                                   for t, text in PAWN_TEXTS]))
     with open(os.path.join(HERE, 'zelda-sql', '004_vendors.sql'), 'w', newline='\n') as f:
         f.write('\n'.join(out))
     print('wrote', len(spawns), 'Beedle spawns')
