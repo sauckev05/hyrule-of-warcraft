@@ -6583,7 +6583,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..45bcb6456 100644
+index 4d8e9160a..08fe3b64d 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -6594,7 +6594,19 @@ index 4d8e9160a..45bcb6456 100644
  #include "Tools/Language.h"
  #include "Database/DatabaseEnv.h"
  #include "Log/Log.h"
-@@ -1413,6 +1414,9 @@ void Player::Update(const uint32 diff)
+@@ -1360,6 +1361,11 @@ SpellAuraHolder const* Player::GetMirrorTimerBuff(MirrorTimer::Type timer) const
+ 
+ uint32 Player::getCorpseReclaimDelayHelper(time_t deathExpirationTime, time_t time, bool pvp) const
+ {
++    // Zelda of Warcraft: a ghost that reaches its body can take it back at once (Zelda.InstantCorpseReclaim)
++    static bool const instant = sConfig.GetBoolDefault("Zelda.InstantCorpseReclaim", true);
++    if (instant)
++        return 0;
++
+     uint32 count;
+     if ((pvp && sWorld.getConfig(CONFIG_BOOL_DEATH_CORPSE_RECLAIM_DELAY_PVP)) ||
+         (!pvp && sWorld.getConfig(CONFIG_BOOL_DEATH_CORPSE_RECLAIM_DELAY_PVE)))
+@@ -1413,6 +1419,9 @@ void Player::Update(const uint32 diff)
      Unit::Update(diff);
      SetCanDelayTeleport(false);
  
@@ -6604,7 +6616,7 @@ index 4d8e9160a..45bcb6456 100644
      if (IsHasDelayedTeleport() && m_semaphoreTeleport_Near)
          TeleportTo(m_teleport_dest, m_teleport_options);
  
-@@ -1680,6 +1684,10 @@ void Player::SetDeathState(DeathState s)
+@@ -1680,6 +1689,10 @@ void Player::SetDeathState(DeathState s)
          if (!ressSpellId)
              ressSpellId = GetResurrectionSpellId();
  
@@ -6615,7 +6627,7 @@ index 4d8e9160a..45bcb6456 100644
          if (InstanceData* mapInstance = GetInstanceData())
              mapInstance->OnPlayerDeath(this);
      }
-@@ -2385,8 +2393,10 @@ void Player::RegenerateHealth(uint32 diff)
+@@ -2385,8 +2398,10 @@ void Player::RegenerateHealth(uint32 diff)
  
      float addvalue = 0.0f;
  
@@ -6628,7 +6640,7 @@ index 4d8e9160a..45bcb6456 100644
      {
          addvalue = OCTRegenHPPerSpirit() * HealthIncreaseRate;
          if (!IsInCombat())
-@@ -2679,6 +2689,10 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
+@@ -2679,6 +2694,10 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
      if (level >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          return;
  
@@ -6639,7 +6651,7 @@ index 4d8e9160a..45bcb6456 100644
      // XP resting bonus for kill
      uint32 rested_bonus_xp = victim ? GetXPRestBonus(xp) : 0;
  
-@@ -4895,7 +4909,7 @@ float Player::GetMeleeCritFromAgility() const
+@@ -4895,7 +4914,7 @@ float Player::GetMeleeCritFromAgility() const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -6648,7 +6660,7 @@ index 4d8e9160a..45bcb6456 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -4939,7 +4953,7 @@ float Player::GetDodgeFromAgility(float amount) const
+@@ -4939,7 +4958,7 @@ float Player::GetDodgeFromAgility(float amount) const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -6657,7 +6669,7 @@ index 4d8e9160a..45bcb6456 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -5154,6 +5168,10 @@ bool Player::UpdateFishingSkill()
+@@ -5154,6 +5173,10 @@ bool Player::UpdateFishingSkill()
      if (SkillValue >= GetSkillMax(SKILL_FISHING))
          return false;
  
@@ -6668,7 +6680,7 @@ index 4d8e9160a..45bcb6456 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -9515,6 +9533,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
+@@ -9515,6 +9538,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
  
              uint32 type = pProto->InventoryType;
  
@@ -6680,7 +6692,7 @@ index 4d8e9160a..45bcb6456 100644
              if (eslot == EQUIPMENT_SLOT_OFFHAND)
              {
                  if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
-@@ -11003,6 +11026,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
+@@ -11003,6 +11031,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
  {
      MANGOS_ASSERT(pItem != nullptr);
  
@@ -6690,7 +6702,7 @@ index 4d8e9160a..45bcb6456 100644
      uint32 slot = m_currentBuybackSlot;
      // if current back slot non-empty search oldest or free
      if (m_items[slot])
-@@ -18082,9 +18108,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18113,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -6705,7 +6717,7 @@ index 4d8e9160a..45bcb6456 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19694,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19699,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -6733,7 +6745,7 @@ index 4d8e9160a..45bcb6456 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20082,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20087,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -6742,7 +6754,7 @@ index 4d8e9160a..45bcb6456 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20271,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20276,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
