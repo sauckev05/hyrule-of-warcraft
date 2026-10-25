@@ -1694,10 +1694,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..5bf583c18
+index 000000000..d50cc654a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4271 @@
+@@ -0,0 +1,4305 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1797,6 +1797,7 @@ index 000000000..5bf583c18
 +        int32 bgTickTimer = 0;
 +        std::vector<ObjectGuid> bgSoldiers;
 +        ObjectGuid bgGuards[8];
++        ObjectGuid bgBoss[2];                           // the base champions: [0] Alliance, [1] Horde
 +        uint32 bgGuardDeadAt[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 +        bool crossFactionSuspended = false;
 +        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
@@ -3766,6 +3767,8 @@ index 000000000..5bf583c18
 +    uint32 const BG_WARDEN_ALLIANCE = 190982;    // guards the Silverwing Flag
 +    uint32 const BG_WARDEN_HORDE = 190983;       // guards the Warsong Flag
 +    uint32 const BG_NODE_GUARDIAN = 190984;      // guards an Arathi Basin banner (hostile to all)
++    uint32 const BG_CHAMPION_ALLIANCE = 190985;  // the Alliance base's champion: the Horde wins when it falls
++    uint32 const BG_CHAMPION_HORDE = 190986;     // the Horde base's champion: the Alliance wins when it falls
 +
 +    struct BgPoint { float x, y, z, o; };
 +    struct BgLayout
@@ -3776,6 +3779,7 @@ index 000000000..5bf583c18
 +        int32 waveMs;
 +        std::vector<std::pair<uint32, BgPoint>> guards;     // (entry, place)
 +        int32 guardRespawnMs;
++        bool champions;                     // a champion at each base's entrance; killing it wins
 +    };
 +
 +    std::vector<BgLayout> const& BgLayouts()
@@ -3784,7 +3788,7 @@ index 000000000..5bf583c18
 +            // Warsong Gulch: from flag room to flag room; a warden at each flag
 +            { 489, { 1519.5f, 1481.9f, 352.0f, 3.14f }, { 933.3f, 1433.7f, 345.5f, 0.0f }, 4, 40000,
 +              { { BG_WARDEN_ALLIANCE, { 1535.4f, 1481.3f, 351.8f, 3.14f } },
-+                { BG_WARDEN_HORDE, { 921.5f, 1433.8f, 346.4f, 0.0f } } }, 180000 },
++                { BG_WARDEN_HORDE, { 921.5f, 1433.8f, 346.4f, 0.0f } } }, 180000, true },
 +            // Arathi Basin: from gate to gate; a guardian at every banner
 +            { 529, { 1284.6f, 1281.2f, -16.0f, 3.93f }, { 708.1f, 708.4f, -17.8f, 0.79f }, 4, 40000,
 +              { { BG_NODE_GUARDIAN, { 1170.8f, 1200.1f, -56.7f, 3.14f } },     // stables
@@ -3792,9 +3796,9 @@ index 000000000..5bf583c18
 +                { BG_NODE_GUARDIAN, { 810.2f, 874.3f, -56.0f, 3.14f } },       // farm
 +                { BG_NODE_GUARDIAN, { 860.1f, 1148.9f, 11.2f, 3.14f } },       // lumber mill
 +                { BG_NODE_GUARDIAN, { 1150.9f, 848.2f, -110.9f, 3.14f } } },   // gold mine
-+              300000 },
++              300000, true },
 +            // Alterac Valley: from general to general, its own captains and towers in between
-+            { 30, { 722.4f, -11.0f, 50.7f, 3.14f }, { -1370.9f, -220.2f, 98.5f, 0.0f }, 5, 45000, {}, 0 },
++            { 30, { 722.4f, -11.0f, 50.7f, 3.14f }, { -1370.9f, -220.2f, 98.5f, 0.0f }, 5, 45000, {}, 0, false },
 +        };
 +        return layouts;
 +    }
@@ -3823,7 +3827,11 @@ index 000000000..5bf583c18
 +            for (ObjectGuid& guid : state.bgGuards)
 +                if (Creature* c = guid ? player->GetMap()->GetAnyTypeCreature(guid) : nullptr)
 +                    c->ForcedDespawn();
++            for (ObjectGuid& guid : state.bgBoss)
++                if (Creature* c = guid ? player->GetMap()->GetAnyTypeCreature(guid) : nullptr)
++                    c->ForcedDespawn();
 +        }
++        state.bgBoss[0] = state.bgBoss[1] = ObjectGuid();
 +        state.bgSoldiers.clear();
 +        for (uint32 i = 0; i < 8; ++i)
 +        {
@@ -3926,6 +3934,32 @@ index 000000000..5bf583c18
 +        }
 +        if (alive == 0)
 +            player->GetSession()->SendAreaTriggerMessage("|cffffcc33The armies march! Soldiers pour out of both bases.|r");
++    }
++
++    // the base champions, standing at each base's entrance where the other side's soldiers march
++    // to: the side whose champion falls first loses (the flags or banners can still win it first)
++    if (layout->champions)
++    {
++        for (uint32 side = 0; side < 2; ++side)
++        {
++            if (!state.bgBoss[side])
++            {
++                if (Creature* champ = SpawnBgUnit(player, side == 0 ? BG_CHAMPION_ALLIANCE : BG_CHAMPION_HORDE,
++                                                  side == 0 ? layout->alliance : layout->horde, nullptr, 3))
++                    state.bgBoss[side] = champ->GetObjectGuid();
++                continue;
++            }
++            Creature* champ = map->GetAnyTypeCreature(state.bgBoss[side]);
++            if (champ && champ->IsAlive())
++                continue;
++            Team const winner = side == 0 ? HORDE : ALLIANCE;
++            std::string const fallen = champ ? champ->GetName() : (side == 0 ? "The Alliance champion" : "The Horde champion");
++            player->GetSession()->SendAreaTriggerMessage("|cffffcc33%s has fallen! The %s wins the battle!|r", fallen.c_str(),
++                                                         winner == ALLIANCE ? "Alliance" : "Horde");
++            state.bgBoss[0] = state.bgBoss[1] = ObjectGuid();
++            bg->EndBattleGround(winner);
++            return;
++        }
 +    }
 +
 +    // the guards: one each, back a while after falling

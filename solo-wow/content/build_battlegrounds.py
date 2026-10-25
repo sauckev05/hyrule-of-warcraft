@@ -1,8 +1,8 @@
 """Zelda of Warcraft: solo battlegrounds (core: ZeldaCommands.cpp, ZeldaSoloBattleground).
 
 Writes zelda-sql/017_battlegrounds.sql: the elite soldiers who march from base to base in Warsong
-Gulch, Arathi Basin and Alterac Valley, the wardens of the two Warsong flags and the guardians of
-the five Arathi banners. The core sets their level from the hero's and keeps them coming.
+Gulch, Arathi Basin and Alterac Valley, the wardens of the two Warsong flags, the guardians of
+the five Arathi banners and the two base champions whose fall ends the battle. The core sets their level from the hero's and keeps them coming.
 """
 import os
 
@@ -17,6 +17,10 @@ UNITS = [
     (190982, 'Silverwing Warden', 'Guardian of the Flag', 14793, 14762, 1216, 1.35, 14.0, 2.2, 2200, 1.0),
     (190983, 'Warsong Warlord', 'Guardian of the Flag', 14797, 14777, 1214, 1.35, 14.0, 2.2, 2200, 1.0),
     (190984, 'Ironhide Brute', 'Guardian of the Banner', 11567, 1142, 14, 1.3, 9.0, 2.0, 2600, 1.0),
+    # the base champions at each base's entrance (Warsong Gulch, Arathi Basin): the side whose
+    # champion falls first loses the battle (core: ZeldaSoloBattleground)
+    (190985, 'Stormpike Champion', 'Alliance Base Guardian', 11896, 11948, 1216, 1.6, 60.0, 3.0, 2400, 2.0),
+    (190986, 'Frostwolf Champion', 'Horde Base Guardian', 11894, 11946, 1214, 1.6, 60.0, 3.0, 2400, 2.0),
 ]
 
 TIMER, HP = 0, 2
@@ -37,6 +41,14 @@ ABILITIES = [
     (190984, TIMER, (6000, 9000, 12000, 16000, 0, 0), 15548, SELF),      # Thunderclap
     (190984, TIMER, (9000, 13000, 14000, 18000, 0, 0), 15593, SELF),     # War Stomp
     (190984, HP, (30, 0, 0, 0, 0, 0), 8599, SELF),
+    (190985, TIMER, (6000, 9000, 10000, 14000, 0, 0), 15589, SELF),      # Whirlwind
+    (190985, TIMER, (9000, 12000, 15000, 20000, 0, 0), 15548, SELF),     # Thunderclap
+    (190985, TIMER, (12000, 16000, 18000, 24000, 0, 0), 10101, VICTIM),  # Knock Away
+    (190985, HP, (30, 0, 0, 0, 0, 0), 8599, SELF),
+    (190986, TIMER, (6000, 9000, 10000, 14000, 0, 0), 15589, SELF),
+    (190986, TIMER, (9000, 12000, 15000, 20000, 0, 0), 15548, SELF),
+    (190986, TIMER, (12000, 16000, 18000, 24000, 0, 0), 10101, VICTIM),
+    (190986, HP, (30, 0, 0, 0, 0, 0), 8599, SELF),
 ]
 
 

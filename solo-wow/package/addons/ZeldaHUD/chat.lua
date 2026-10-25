@@ -59,9 +59,21 @@ local function Relay(event)
 end
 
 -- ------------------------------------------------------------------ hide the windows
+-- The stock interface shows the windows again now and then (a new message, docking, the tabs on
+-- mouse-over, entering a battleground): hidden alone they flashed back for a moment. Made fully
+-- see-through and deaf to the mouse as well, they stay gone even while shown.
 local function HideNamed(name)
 	local f = getglobal(name)
-	if f and f.IsVisible and f:IsVisible() then
+	if not f then
+		return
+	end
+	if f.SetAlpha and f.GetAlpha and f:GetAlpha() > 0 then
+		f:SetAlpha(0)
+	end
+	if f.EnableMouse then
+		f:EnableMouse(false)
+	end
+	if f.IsVisible and f:IsVisible() then
 		f:Hide()
 	end
 end
@@ -96,14 +108,9 @@ relay:SetScript("OnEvent", function()
 	end
 end)
 
--- the stock UI shows the windows again now and then (tabs on mouse-over, docking, new windows)
-local since = 0
+-- and checked every frame, so nothing shows in between
 relay:SetScript("OnUpdate", function()
-	since = since + (arg1 or 0)
-	if since >= 0.5 then
-		since = 0
-		HideChat()
-	end
+	HideChat()
 end)
 
 HideChat()
