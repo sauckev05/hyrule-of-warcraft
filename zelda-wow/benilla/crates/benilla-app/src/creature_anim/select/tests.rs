@@ -539,10 +539,17 @@ fn a_set_state_outranks_the_idle_fallbacks_and_nothing_before_them() {
 
     // Ahead of it: locomotion (`0x5fd100`), swimming included, runs on the move bits alone.
     let swim_forward = MovementState {
+        speed: 4.0,
         flags: move_flags::SWIMMING | move_flags::FORWARD,
         ..Default::default()
     };
     assert_eq!(claimed(&swim_forward, None, None, Some(234)), [42, 41, 0]);
+    // Zelda of Warcraft: a move bit with no speed treads water
+    let swim_still = MovementState {
+        flags: move_flags::SWIMMING | move_flags::FORWARD,
+        ..Default::default()
+    };
+    assert_eq!(claimed(&swim_still, None, None, Some(234)), [41, 0]);
     assert_eq!(claimed(&moving_forward(3.0), None, None, Some(234)), [4, 0]);
     // The turn shuffle, the Ready idle (a swimmer's is the swim idle), the ranged idle and the
     // chair loops all come first.

@@ -1,7 +1,8 @@
 -- Zelda of Warcraft: two Kirin Tor portal mages. One stands in the basement of the Wizard's Sanctum
 -- (the Stormwind Mage Tower, by the mage trainers) and sends you to the Kirin Tor camp outside sealed
 -- Dalaran (Alterac Mountains, beside Archmage Ansirem Runeweaver); the other stands there and sends
--- you back. Applied by the server at startup; safe to apply again.
+-- you back (their gossip is the core script npc_zelda_portal_mage). Applied by the server at startup;
+-- safe to apply again.
 DELETE FROM `creature` WHERE `id` IN (190670, 190671);
 DELETE FROM `creature_template` WHERE `Entry` IN (190670, 190671);
 DELETE FROM `gossip_menu` WHERE `entry` IN (64101, 64102);
@@ -10,8 +11,8 @@ DELETE FROM `npc_text` WHERE `ID` IN (900101, 900102);
 DELETE FROM `dbscripts_on_gossip` WHERE `id` IN (900670, 900671);
 
 INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,`DisplayId1`,`DisplayIdProbability1`,`Faction`,`Scale`,`CreatureType`,`InhabitType`,`RegenerateStats`,`NpcFlags`,`UnitFlags`,`SpeedWalk`,`SpeedRun`,`UnitClass`,`Rank`,`HealthMultiplier`,`PowerMultiplier`,`DamageMultiplier`,`ArmorMultiplier`,`ExperienceMultiplier`,`MeleeBaseAttackTime`,`RangedBaseAttackTime`,`EquipmentTemplateId`,`GossipMenuId`,`AIName`,`ScriptName`) VALUES
-(190670,'Archmage Elandra','Portal to Dalaran',60,60,3292,100,35,1.0,7,3,3,1,768,1.0,1.14286,8,0,1.0,1.0,1.0,1.0,0,2000,2000,0,64101,'',''),
-(190671,'Magister Aldwyn','Portal to Stormwind',60,60,1484,100,35,1.0,7,3,3,1,768,1.0,1.14286,8,0,1.0,1.0,1.0,1.0,0,2000,2000,0,64102,'','');
+(190670,'Archmage Elandra','Portal to Dalaran',60,60,3292,100,35,1.0,7,3,3,1,768,1.0,1.14286,8,0,1.0,1.0,1.0,1.0,0,2000,2000,0,64101,'','npc_zelda_portal_mage'),
+(190671,'Magister Aldwyn','Portal to Stormwind',60,60,1484,100,35,1.0,7,3,3,1,768,1.0,1.14286,8,0,1.0,1.0,1.0,1.0,0,2000,2000,0,64102,'','npc_zelda_portal_mage');
 
 INSERT INTO `creature` (`guid`,`id`,`map`,`spawnMask`,`position_x`,`position_y`,`position_z`,`orientation`,`spawntimesecsmin`,`spawntimesecsmax`,`spawndist`,`MovementType`) VALUES
 (9102001,190670,0,1,-8996.0,856.0,29.71,1.95,300,300,0,0),

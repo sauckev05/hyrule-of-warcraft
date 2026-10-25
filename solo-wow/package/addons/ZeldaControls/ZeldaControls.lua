@@ -296,6 +296,16 @@ local DEFAULT_KEYS = {
 	{ "7", "ZELDA_MOUNT" },
 	{ "8", "ZELDA_INVENTORY" },
 	{ "9", "ZELDA_SUBSCREEN" },
+	-- the number pad's 1-9 do the same as the top row's
+	{ "NUMPAD1", "ZELDA_ATTACK" },
+	{ "NUMPAD2", "ZELDA_BOW" },
+	{ "NUMPAD3", "ZELDA_SHIELD" },
+	{ "NUMPAD4", "ZELDA_HOOK" },
+	{ "NUMPAD5", "ZELDA_ROLL" },
+	{ "NUMPAD6", "ZELDA_POTION" },
+	{ "NUMPAD7", "ZELDA_MOUNT" },
+	{ "NUMPAD8", "ZELDA_INVENTORY" },
+	{ "NUMPAD9", "ZELDA_SUBSCREEN" },
 	{ "Q", "ZELDA_STANCE_PREV" },
 	{ "E", "ZELDA_STANCE_NEXT" },
 	{ "SHIFT-Q", "ZELDA_ROLL_LEFT" },
@@ -304,8 +314,8 @@ local DEFAULT_KEYS = {
 }
 -- keys older versions used; freed if they still hold a Zelda move
 local OLD_KEYS = { "F", "G", "R", "V", "H", "Z", "SHIFT-W", "SHIFT-A", "SHIFT-D" }
-local KEYS_VERSION = 8
-local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), 7 mount slot (right-click a mount), 8 character and bags, 9 Subscreen (Left/Right to turn), Q/E previous/next stance, Shift+Q/E side roll, Shift+S backflip."
+local KEYS_VERSION = 9
+local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), 7 mount slot (right-click a mount), 8 character and bags, 9 Subscreen (Left/Right arrows to turn), the number pad's 1-9 work the same, Q/E previous/next stance, Shift+Q/E side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
@@ -323,8 +333,17 @@ frame:SetScript("OnEvent", function()
 				SetBinding("8", "ZELDA_INVENTORY")
 				SetBinding("9", "ZELDA_SUBSCREEN")
 			end
-			SetBinding("Q", "ZELDA_STANCE_PREV")
-			SetBinding("E", "ZELDA_STANCE_NEXT")
+			if was < 8 then
+				SetBinding("Q", "ZELDA_STANCE_PREV")
+				SetBinding("E", "ZELDA_STANCE_NEXT")
+			end
+			-- version 9: the number pad's 1-9 copy whatever the top row's 1-9 do
+			for i = 1, 9 do
+				local action = GetBindingAction and GetBindingAction(tostring(i))
+				if action and action ~= "" then
+					SetBinding("NUMPAD" .. i, action)
+				end
+			end
 			SaveBindings(1)
 			ZeldaControlsDB.keysVersion = KEYS_VERSION
 		elseif (ZeldaControlsDB.keysVersion or 0) < KEYS_VERSION then

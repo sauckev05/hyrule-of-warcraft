@@ -13,3 +13,5 @@ dungeon.lua
 crest.lua
 chat.lua
 actionbar.lua
+mailfix.lua
+castbar.lua

@@ -234,6 +234,7 @@ jobs:
           $c = $c -replace '^MaxPrimaryTradeSkill\s*=.*', 'MaxPrimaryTradeSkill = 9'
           # professions level ten times faster, and old recipes and nodes still give points
           $c = $c -replace '^SkillGain\.Crafting\s*=.*', 'SkillGain.Crafting = 10'
+          $c = $c -replace '^SkillGain\.Weapon\s*=.*', 'SkillGain.Weapon = 5'
           $c = $c -replace '^SkillGain\.Gathering\s*=.*', 'SkillGain.Gathering = 10'
           $c = $c -replace '^SkillChance\.Yellow\s*=.*', 'SkillChance.Yellow = 100'
           $c = $c -replace '^SkillChance\.Green\s*=.*', 'SkillChance.Green  = 100'

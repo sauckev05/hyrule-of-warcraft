@@ -549,8 +549,10 @@ pub(super) fn drive_animations(
         // The airborne freeze (`0x5fd8e8`): keep the current clip iff
         // `FALLING && (FALLINGFAR || vz ≠ 0)`; a walk-off's first vz == 0 substep may re-pick. It
         // also gates the deferred-cache consumer: a parked clip never plays mid-air.
-        let airborne_frozen =
-            falling && (mv.flags & move_flags::FALLING_FAR != 0 || mv.vertical_speed != 0.0);
+        // Zelda of Warcraft: never in the water - a swimmer treads water rather than holding a pose.
+        let airborne_frozen = falling
+            && mv.flags & move_flags::SWIMMING == 0
+            && (mv.flags & move_flags::FALLING_FAR != 0 || mv.vertical_speed != 0.0);
         // A stationary unit easing its yaw reads as turning (`0x607ed0`), so it shuffles, and each
         // return to Stand re-rolls the fidget. Gated like `0x5fce30`: no combat or cast. A positive
         // step is counterclockwise, turning left.

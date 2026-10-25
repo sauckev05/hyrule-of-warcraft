@@ -78,16 +78,33 @@ SPELLS = [
     (40012, 17393, 'Charged Bolt', 'A slow, heavy bolt. Raise your shield or roll away!',
      dict(Effect1=3, EffectBasePoints1=0, EffectDieSides1=0, EffectImplicitTargetA1=6, DmgClass=0, ManaCost=0,
           InterruptFlags=0, School=6, SpellFamilyName=0, SpellFamilyFlags=0)),
+    # Mace Specialization's armor crush (ZeldaAfterMeleeHit): each mace hit lowers the enemy's armor by
+    # the talent's points in percent (the core sets the amount), stacking up to five times
+    (40013, 11971, 'Crushing Blows', "Armor reduced by $s1%.",
+     dict(EffectApplyAuraName1=101, EffectBasePoints1=-2, EffectMiscValue1=1, DmgClass=0, PowerType=0, ManaCost=0,
+          EquippedItemClass=-1, SpellFamilyName=0, SpellFamilyFlags=0, tooltip="Armor reduced by $s1%.")),
 ]
 
 # stock spell texts changed in the client (patch-Z only): mana potions are shields now
 DESCRIPTION_EDITS = {sid: 'Shields you, absorbing $s1 damage for 20 sec.'
                      for sid in (437, 438, 2023, 11903, 17530, 17531, 21395, 21396)}
+# Dual Wield Specialization (warrior and rogue): melee hit while two weapons are held, not off-hand
+# damage (ZeldaDualWieldHit); a dummy aura whose $s1 is the rank
+DUAL_WIELD_SPEC = (23584, 23585, 23586, 23587, 23588, 13715, 13848, 13849, 13851, 13852)
+for _n, _sid in enumerate(DUAL_WIELD_SPEC):
+    DESCRIPTION_EDITS[_sid] = 'Increases your chance to hit with melee attacks by $s1% while dual wielding.'
+# Mace Specialization: its stun stays, and every mace hit also crushes armor (Crushing Blows, 40013)
+MACE_SPEC = (12284, 12701, 12702, 12703, 12704)
+for _n, _sid in enumerate(MACE_SPEC):
+    DESCRIPTION_EDITS[_sid] = ('Gives you a $h%% chance to stun your target for 3 sec with a Mace. Every hit with a '
+                               'mace also lowers the target\'s armor by %d%%, stacking up to 5 times.' % (_n + 1))
 
 # stock spells changed in place: {spell id: {spell_template column: value}}
 SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
 }
+for _n, _sid in enumerate(DUAL_WIELD_SPEC):
+    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=_n % 5)   # SPELL_AURA_DUMMY, rank - 1
 
 # mounts (an aura 78 MOUNTED spell with its aura 32 MOD_INCREASE_MOUNTED_SPEED in effect 2): the
 # regular ones go 150% faster instead of 60%, the epic ones 200% instead of 100%

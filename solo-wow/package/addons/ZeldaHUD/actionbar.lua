@@ -53,6 +53,19 @@ local function Layout()
 	end
 end
 
+-- The stance buttons' lit one follows the stance you are in now: the stock bar lit it when the
+-- stance change was announced, before the new stance had landed, so it stayed on the old one.
+local function LightStance()
+	local forms = GetNumShapeshiftForms and GetNumShapeshiftForms() or 0
+	for i = 1, forms do
+		local button = getglobal("ShapeshiftButton" .. i)
+		if button and button.SetChecked then
+			local _, _, active = GetShapeshiftFormInfo(i)
+			if active then button:SetChecked(1) else button:SetChecked(nil) end
+		end
+	end
+end
+
 local watcher = CreateFrame("Frame", "ZeldaActionBarWatcher", UIParent)
 local since = 0
 watcher:SetScript("OnUpdate", function()
@@ -61,6 +74,7 @@ watcher:SetScript("OnUpdate", function()
 		since = 0
 		Layout()
 	end
+	LightStance()
 end)
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")

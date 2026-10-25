@@ -358,8 +358,11 @@ fn claimed_candidates(
     let f = state.flags;
     let swimming = f & SWIMMING != 0;
     // Swimming locomotion (`0x5fd100`): turn, then strafe, then backward, then forward.
+    // Zelda of Warcraft: only while the swimmer actually goes somewhere - a stroke clip runs at the
+    // swim speed, so a still swimmer with a move bit standing would hold one frozen frame; it
+    // treads water (the swim idle) instead.
     if swimming && f & ANY_MOVE != 0 {
-        return Some(if f & (TURN_LEFT | TURN_RIGHT) != 0 {
+        return Some(if state.speed <= 0.05 || f & (TURN_LEFT | TURN_RIGHT) != 0 {
             &[41, 0]
         } else if f & STRAFE_LEFT != 0 {
             &[43, 42, 41, 0]
@@ -679,7 +682,9 @@ pub(super) fn ready_anim(main: Option<(u8, u8)>) -> u16 {
 /// The unit's Special: airborne, Fall once FALLINGFAR latches, else Jump for an upward launch (a
 /// step-off fall keeps its gait, `0x5fd8e8`); still and sitting, sleeping or kneeling, a Pose.
 pub(super) fn current_special(mv: &MovementState, jump_arc: bool) -> Option<Special> {
-    if mv.flags & move_flags::FALLING != 0 {
+    // Zelda of Warcraft: a swimmer is never mid-air - a fall flag still standing in the water must
+    // not hold the jump or fall clip over the swim idle
+    if mv.flags & move_flags::FALLING != 0 && mv.flags & move_flags::SWIMMING == 0 {
         if mv.flags & move_flags::FALLING_FAR != 0 {
             Some(Special::Fall)
         } else if jump_arc {
