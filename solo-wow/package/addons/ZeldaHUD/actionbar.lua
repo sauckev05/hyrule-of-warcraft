@@ -1,7 +1,7 @@
 -- Zelda HUD: no action bar. The main bar's art, buttons, micro buttons and bag buttons are hidden
 -- (the Zelda keys, the potion and mount slots, 8 for the bags and 9 for the Subscreen do their
 -- work); only the experience bar stays, at the very bottom of the screen, with the reputation bar
--- just above it. The stance buttons sit under the buff icons, top right.
+-- just above it. The stance buttons sit in a row under the buff icons, top right.
 
 local HIDE = {
 	"MainMenuBarArtFrame", "BonusActionBarFrame", "MultiBarBottomLeft", "MultiBarBottomRight",
@@ -39,15 +39,17 @@ local function Layout()
 	if ReputationWatchBar and MainMenuExpBar then
 		Place(ReputationWatchBar, "BOTTOM", MainMenuExpBar, "TOP", 0, 2)
 	end
-	-- the stance buttons under the buffs (two rows of buffs and the debuffs above them)
-	if ShapeshiftBarFrame then
-		if ShapeshiftBarFrame:GetParent() ~= UIParent then
-			ShapeshiftBarFrame:SetParent(UIParent)
-		end
-		Place(ShapeshiftBarFrame, "TOPRIGHT", UIParent, "TOPRIGHT", -170, -125)
-		if GetNumShapeshiftForms and GetNumShapeshiftForms() > 0 and not ShapeshiftBarFrame:IsVisible() then
-			ShapeshiftBarFrame:Show()
-		end
+	-- The stance bar keeps its own frame and place (moving the frame itself broke the mouse); its
+	-- buttons are moved instead, into a row under the buff icons, its right end under theirs.
+	if ShapeshiftBarFrame and ShapeshiftBarFrame.EnableMouse then
+		ShapeshiftBarFrame:EnableMouse(false)
+	end
+	if MainMenuBar and MainMenuBar.EnableMouse then
+		MainMenuBar:EnableMouse(false)          -- its art is gone: let clicks reach the world
+	end
+	local forms = GetNumShapeshiftForms and GetNumShapeshiftForms() or 0
+	if forms > 0 and ShapeshiftButton1 then
+		Place(ShapeshiftButton1, "TOPLEFT", UIParent, "TOPRIGHT", -(205 + forms * 37), -150)
 	end
 end
 

@@ -107,3 +107,16 @@ relay:SetScript("OnUpdate", function()
 end)
 
 HideChat()
+
+-- With no chat window a script error would go unseen: show it in front of the screen instead.
+pcall(function()
+	local previous = geterrorhandler and geterrorhandler()
+	seterrorhandler(function(msg)
+		if UIErrorsFrame then
+			UIErrorsFrame:AddMessage("Interface error: " .. tostring(msg), 1.0, 0.25, 0.25, 1.0, 12)
+		end
+		if previous then
+			return previous(msg)
+		end
+	end)
+end)

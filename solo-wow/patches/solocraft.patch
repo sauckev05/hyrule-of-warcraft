@@ -1608,10 +1608,10 @@ index 00fde0a85..199cad2b0 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..c9986e6ca
+index 000000000..94ec623af
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,3874 @@
+@@ -0,0 +1,3891 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1693,6 +1693,7 @@ index 000000000..c9986e6ca
 +        uint32 bowReadyAt = 0;
 +        bool shield = false;
 +        bool parry = false;                             // no shield: the weapon held up to parry
++        bool guardRooted = false;                       // the guard holds the hero in place
 +        uint32 shoutCheckIn = 0;
 +        // melee crit from gear that counts for spells too (Zelda.GearCritForSpells)
 +        float gearSpellCrit = 0.0f;
@@ -2862,6 +2863,7 @@ index 000000000..c9986e6ca
 +        ApplyCrossFaction(player);
 +        ZeldaHeroFirstLogin(player);
 +        state.sold.clear();                     // the pawnbroker forgets what was sold before
++        state.shield = state.parry = state.guardRooted = false;     // a fresh login holds no guard
 +        ZeldaGifts(player);
 +    }
 +
@@ -4357,6 +4359,21 @@ index 000000000..c9986e6ca
 +    state.shield = shield;
 +    state.parry = parry;
 +    player->UpdateSpeed(MOVE_RUN, true);       // ZeldaSpeedFactor slows a raised guard
++    // while the guard is up the hero stands firm, so the held pose never breaks into a walk
++    // (turning still works); a root or stun from elsewhere is left as it is
++    if ((shield || parry) && !state.guardRooted)
++    {
++        state.guardRooted = true;
++        player->addUnitState(UNIT_STAT_AI_ROOT);
++        player->SendMoveRoot(true);
++    }
++    else if (!shield && !parry && state.guardRooted)
++    {
++        state.guardRooted = false;
++        player->clearUnitState(UNIT_STAT_AI_ROOT);
++        if (!player->IsImmobilizedState())
++            player->SendMoveRoot(false);
++    }
 +    if (shield)
 +        player->HandleEmoteCommand(EMOTE_ONESHOT_PARRYSHIELD);
 +    return true;
