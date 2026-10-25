@@ -1710,10 +1710,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..bf830f6f8
+index 000000000..1d4bb7f96
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4317 @@
+@@ -0,0 +1,4331 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3651,6 +3651,20 @@ index 000000000..bf830f6f8
 +            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: your %s was sent to your mailbox.|r", proto->Name1);
 +        }
 +    }
++}
++
++uint32 ZeldaMarkTurnInXP(Player* player, Quest const* quest)
++{
++    static float const pct = std::max(0.0f, sConfig.GetFloatDefault("Zelda.MarkTurnInXPPercent", 3.0f));
++    if (!player || !quest || pct <= 0.0f)
++        return 0;
++    uint32 marks = 0;
++    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
++        if (quest->ReqItemId[i] == 20558 || quest->ReqItemId[i] == 20559 || quest->ReqItemId[i] == 20560)
++            marks += quest->ReqItemCount[i];
++    if (!marks)
++        return 0;
++    return uint32(player->GetUInt32Value(PLAYER_NEXT_LEVEL_XP) * pct / 100.0f * marks);
 +}
 +
 +uint32 ZeldaBattlegroundPortal(Player* player, uint32 triggerId)
@@ -6033,10 +6047,10 @@ index 000000000..bf830f6f8
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..2c4ee67de
+index 000000000..f24d65f87
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,245 @@
+@@ -0,0 +1,251 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6237,6 +6251,12 @@ index 000000000..2c4ee67de
 +// (and notes the moment), else 0; ZeldaAtBattlegroundPortal is true for a moment after.
 +uint32 ZeldaBattlegroundPortal(Player* player, uint32 triggerId);
 +bool ZeldaAtBattlegroundPortal(Player* player, uint32 mapId);
++
++// Zelda of Warcraft: a quest that takes battleground marks (Warsong Gulch, Arathi Basin, Alterac
++// Valley) gives Zelda.MarkTurnInXPPercent (default 3) percent of the hero's current level per mark
++// handed in, whatever the quest's own level; 0 for other quests
++class Quest;
++uint32 ZeldaMarkTurnInXP(Player* player, Quest const* quest);
 +
 +// Zelda of Warcraft: an enemy's ability aimed at a hero charges up for at least
 +// Zelda.EnemyChargeTime ms (default 1500) and the hero gets a hidden "ZCAST:caster;spell;ms" line
@@ -6583,7 +6603,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..08fe3b64d 100644
+index 4d8e9160a..927a6314e 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -6702,7 +6722,16 @@ index 4d8e9160a..08fe3b64d 100644
      uint32 slot = m_currentBuybackSlot;
      // if current back slot non-empty search oldest or free
      if (m_items[slot])
-@@ -18082,9 +18113,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -12659,6 +12690,8 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+ 
+     // Used for client inform but rewarded only in case not max level
+     uint32 xp = uint32(pQuest->XPValue(this) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
++    // Zelda of Warcraft: handing in battleground marks always gives experience, sized to the hero's level
++    xp = std::max(xp, ZeldaMarkTurnInXP(this, pQuest));
+ 
+     if (GetLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+         GiveXP(xp, nullptr);
+@@ -18082,9 +18115,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -6717,7 +6746,7 @@ index 4d8e9160a..08fe3b64d 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19699,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19701,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -6745,7 +6774,7 @@ index 4d8e9160a..08fe3b64d 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20087,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20089,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -6754,7 +6783,7 @@ index 4d8e9160a..08fe3b64d 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20276,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20278,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
