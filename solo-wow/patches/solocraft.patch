@@ -1692,10 +1692,10 @@ index 00fde0a85..199cad2b0 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..8257d5469
+index 000000000..9ab951f51
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4179 @@
+@@ -0,0 +1,4182 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3146,9 +3146,12 @@ index 000000000..8257d5469
 +            player->DealHeal(player, amount, healInfo);
 +        else
 +            player->ModifyHealth(int32(amount));
-+        std::vector<ObjectGuid> self;
-+        self.push_back(player->GetObjectGuid());
-+        PlaySpellVisual(player, NAVI_HEAL_VISUAL, self);
++        // only the heal's golden glow landing on the hero (Flash Heal's impact kit), no casting:
++        // Navi heals the hero, the hero does not cast
++        const uint32 FLASH_HEAL_IMPACT_KIT = 2730;
++        WorldPacket glow(SMSG_PLAY_SPELL_VISUAL, 8 + 4);
++        glow << player->GetObjectGuid() << uint32(FLASH_HEAL_IMPACT_KIT);
++        player->SendMessageToSet(glow, true);
 +    }
 +
 +    static bool const passiveShout = sConfig.GetBoolDefault("Zelda.PassiveBattleShout", true);
