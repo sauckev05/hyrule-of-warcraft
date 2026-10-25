@@ -5,13 +5,14 @@
 
 BINDING_HEADER_ZELDA = "Zelda Controls"
 BINDING_NAME_ZELDA_ATTACK = "Sword (hold, then release for Spin Attack / Shield Slam in Defensive Stance)"
-BINDING_NAME_ZELDA_SHIELD = "Shield (hold)"
+BINDING_NAME_ZELDA_SHIELD = "Shield / parry (hold)"
 BINDING_NAME_ZELDA_ROLL = "Roll forward"
 BINDING_NAME_ZELDA_ROLL_LEFT = "Roll left"
 BINDING_NAME_ZELDA_ROLL_RIGHT = "Roll right"
 BINDING_NAME_ZELDA_FLIP = "Backflip"
 BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon"
 BINDING_NAME_ZELDA_HOOK = "Boomerang (stuns or disarms)"
+BINDING_NAME_ZELDA_POTION = "Drink the potion in the potion slot"
 BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on) - tapping Shift already toggles it"
 
 local SPIN_HOLD = 0.8
@@ -206,14 +207,40 @@ function ZeldaControls_Attack(state)
 	end
 end
 
+-- The guard key: with a shield it raises the shield (80% less damage from the front); with only a
+-- weapon the hero holds it up to parry (every melee blow from the front is parried). Holding the
+-- key holds the guard pose - the Zelda of Warcraft client stops the block or parry clip at its
+-- highest point (ZeldaGuardAnim) - and a quick click plays the whole clip once.
 local shieldUp = false
+local guardKind = 1
+
+local function HasShield()
+	local link = GetInventoryItemLink("player", 17)
+	local _, _, id = string.find(link or "", "item:(%d+)")
+	if not id then
+		return false
+	end
+	local _, _, _, _, _, _, _, equipLoc = GetItemInfo(tonumber(id))
+	return equipLoc == "INVTYPE_SHIELD"
+end
+
 function ZeldaControls_Shield(state)
 	local wanted = (state == "down")
 	if wanted ~= shieldUp then
 		shieldUp = wanted
+		if wanted then
+			guardKind = HasShield() and 1 or 2
+			if guardKind == 2 and not GetInventoryItemLink("player", 16) then
+				guardKind = 0      -- empty hands: nothing to guard with (the server says so)
+			end
+		end
+		if ZeldaGuardAnim and guardKind > 0 then
+			ZeldaGuardAnim(guardKind, wanted)
+		end
 		ZeldaControls_Command(wanted and ".zshield on" or ".zshield off")
 		if ZeldaControlsShieldText then
-			if wanted then ZeldaControlsShieldText:Show() else ZeldaControlsShieldText:Hide() end
+			ZeldaControlsShieldText:SetText(guardKind == 2 and "|cffffcc66PARRY|r" or "|cff66ccffSHIELD UP|r")
+			if wanted and guardKind > 0 then ZeldaControlsShieldText:Show() else ZeldaControlsShieldText:Hide() end
 		end
 	end
 end
@@ -258,14 +285,15 @@ local DEFAULT_KEYS = {
 	{ "3", "ZELDA_SHIELD" },
 	{ "4", "ZELDA_HOOK" },
 	{ "5", "ZELDA_ROLL" },
+	{ "6", "ZELDA_POTION" },
 	{ "SHIFT-Q", "ZELDA_ROLL_LEFT" },
 	{ "SHIFT-E", "ZELDA_ROLL_RIGHT" },
 	{ "SHIFT-S", "ZELDA_FLIP" },
 }
 -- keys older versions used; freed if they still hold a Zelda move
 local OLD_KEYS = { "F", "G", "R", "V", "H", "Z", "SHIFT-W", "SHIFT-A", "SHIFT-D" }
-local KEYS_VERSION = 5
-local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold), 4 boomerang, 5 roll, Shift+Q/E side roll, Shift+S backflip."
+local KEYS_VERSION = 6
+local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), Shift+Q/E side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
@@ -273,7 +301,12 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function()
 	if event == "VARIABLES_LOADED" then
 		if not ZeldaControlsDB then ZeldaControlsDB = {} end
-		if (ZeldaControlsDB.keysVersion or 0) < KEYS_VERSION then
+		if (ZeldaControlsDB.keysVersion or 0) == 5 then
+			-- version 6 only adds the potion key: keep everything else as it was set
+			SetBinding("6", "ZELDA_POTION")
+			SaveBindings(1)
+			ZeldaControlsDB.keysVersion = KEYS_VERSION
+		elseif (ZeldaControlsDB.keysVersion or 0) < KEYS_VERSION then
 			if GetBindingAction then
 				for _, key in ipairs(OLD_KEYS) do
 					local action = GetBindingAction(key)

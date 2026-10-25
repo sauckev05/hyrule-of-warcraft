@@ -86,6 +86,16 @@ pub(crate) fn apply_script_calls(
                     swings.0.push((step, seconds));
                 }
             }
+            ScriptCall::ZeldaGuard { kind, held } => {
+                if let Some(swings) = zelda.1.as_deref_mut() {
+                    let guard = &mut swings.1;
+                    if held {
+                        guard.kind = kind;
+                        guard.start = true;
+                    }
+                    guard.held = held;
+                }
+            }
             ScriptCall::ZeldaCrest(crest) => {
                 if let Some(design) = zelda.3.as_deref_mut() {
                     design.set_crest(crest);

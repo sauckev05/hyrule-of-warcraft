@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Zelda of Warcraft: Beedle, a friendly travelling merchant who repairs and sells potions, food,
-water and ammunition at the entrance, the middle and the end of every dungeon and raid. Spots
+water and ammunition at the entrance and the middle of every dungeon and raid, and outside the final boss's chamber where a spot
+well clear of the boss exists (never beside the boss itself). Spots
 come from dungeon_vendors.json (solo-wow/tools/compute_dungeon_vendors.py); writes
 zelda-sql/004_vendors.sql."""
 import json

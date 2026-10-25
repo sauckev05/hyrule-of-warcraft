@@ -19,12 +19,12 @@
  },
  {
   "dungeon": "Ragefire Chasm",
-  "spot": "end",
+  "spot": "boss door",
   "map": 389,
-  "x": -263.52,
-  "y": 150.47,
-  "z": -19.0,
-  "o": 6.263
+  "x": -195.35,
+  "y": 108.51,
+  "z": -24.29,
+  "o": 5.239
  },
  {
   "dungeon": "The Deadmines",
@@ -46,12 +46,12 @@
  },
  {
   "dungeon": "The Deadmines",
-  "spot": "end",
+  "spot": "boss door",
   "map": 36,
-  "x": -77.81,
-  "y": -815.1,
-  "z": 40.02,
-  "o": 3.607
+  "x": -51.63,
+  "y": -790.11,
+  "z": 38.56,
+  "o": 2.178
  },
  {
   "dungeon": "Wailing Caverns",
@@ -70,15 +70,6 @@
   "y": 63.74,
   "z": -75.74,
   "o": 5.872
- },
- {
-  "dungeon": "Wailing Caverns",
-  "spot": "end",
-  "map": 43,
-  "x": -102.59,
-  "y": 10.92,
-  "z": -30.57,
-  "o": 0.8
  },
  {
   "dungeon": "Shadowfang Keep",
@@ -100,12 +91,12 @@
  },
  {
   "dungeon": "Shadowfang Keep",
-  "spot": "end",
+  "spot": "boss door",
   "map": 33,
-  "x": -81.55,
-  "y": 2156.02,
-  "z": 155.79,
-  "o": 5.637
+  "x": -126.5,
+  "y": 2153.87,
+  "z": 155.68,
+  "o": 2.314
  },
  {
   "dungeon": "Blackfathom Deeps",
@@ -127,12 +118,12 @@
  },
  {
   "dungeon": "Blackfathom Deeps",
-  "spot": "end",
+  "spot": "boss door",
   "map": 48,
-  "x": -848.45,
-  "y": -447.87,
-  "z": -33.89,
-  "o": 4.712
+  "x": -820.58,
+  "y": -396.22,
+  "z": -33.81,
+  "o": 1.096
  },
  {
   "dungeon": "The Stockade",
@@ -154,12 +145,12 @@
  },
  {
   "dungeon": "The Stockade",
-  "spot": "end",
+  "spot": "boss door",
   "map": 34,
-  "x": 91.8,
-  "y": -126.05,
-  "z": -33.94,
-  "o": 4.738
+  "x": 82.61,
+  "y": -94.84,
+  "z": -33.86,
+  "o": 0.809
  },
  {
   "dungeon": "Gnomeregan",
@@ -180,15 +171,6 @@
   "o": 1.134
  },
  {
-  "dungeon": "Gnomeregan",
-  "spot": "end",
-  "map": 90,
-  "x": -537.17,
-  "y": 671.51,
-  "z": -325.19,
-  "o": 6.056
- },
- {
   "dungeon": "Razorfen Kraul",
   "spot": "entrance",
   "map": 47,
@@ -205,15 +187,6 @@
   "y": 1658.24,
   "z": 82.39,
   "o": 1.266
- },
- {
-  "dungeon": "Razorfen Kraul",
-  "spot": "end",
-  "map": 47,
-  "x": 2191.54,
-  "y": 1870.18,
-  "z": 79.14,
-  "o": 4.52
  },
  {
   "dungeon": "Scarlet Monastery Graveyard",
@@ -235,12 +208,12 @@
  },
  {
   "dungeon": "Scarlet Monastery Graveyard",
-  "spot": "end",
+  "spot": "boss door",
   "map": 189,
-  "x": 1814.34,
-  "y": 1416.61,
-  "z": -7.92,
-  "o": 0.017
+  "x": 1780.67,
+  "y": 1397.55,
+  "z": 0.08,
+  "o": 4.541
  },
  {
   "dungeon": "Scarlet Monastery Library",
@@ -261,15 +234,6 @@
   "o": 3.895
  },
  {
-  "dungeon": "Scarlet Monastery Library",
-  "spot": "end",
-  "map": 189,
-  "x": 173.97,
-  "y": -427.5,
-  "z": 18.62,
-  "o": 3.188
- },
- {
   "dungeon": "Scarlet Monastery Armory",
   "spot": "entrance",
   "map": 189,
@@ -286,15 +250,6 @@
   "y": -408.85,
   "z": 8.01,
   "o": 6.163
- },
- {
-  "dungeon": "Scarlet Monastery Armory",
-  "spot": "end",
-  "map": 189,
-  "x": 1959.16,
-  "y": -430.67,
-  "z": 6.26,
-  "o": 6.126
  },
  {
   "dungeon": "Scarlet Monastery Cathedral",
@@ -316,12 +271,12 @@
  },
  {
   "dungeon": "Scarlet Monastery Cathedral",
-  "spot": "end",
+  "spot": "boss door",
   "map": 189,
-  "x": 1196.13,
-  "y": 1399.17,
-  "z": 29.09,
-  "o": 6.266
+  "x": 1153.87,
+  "y": 1398.39,
+  "z": 32.61,
+  "o": 3.419
  },
  {
   "dungeon": "Razorfen Downs",
@@ -343,12 +298,12 @@
  },
  {
   "dungeon": "Razorfen Downs",
-  "spot": "end",
+  "spot": "boss door",
   "map": 129,
-  "x": 2383.98,
-  "y": 983.52,
-  "z": 55.11,
-  "o": 5.422
+  "x": 2424.75,
+  "y": 995.49,
+  "z": 49.31,
+  "o": 1.053
  },
  {
   "dungeon": "Uldaman",
@@ -370,12 +325,12 @@
  },
  {
   "dungeon": "Uldaman",
-  "spot": "end",
+  "spot": "boss door",
   "map": 70,
-  "x": 102.63,
-  "y": 255.19,
-  "z": -51.7,
-  "o": 1.472
+  "x": 61.98,
+  "y": 247.81,
+  "z": -52.2,
+  "o": 3.039
  },
  {
   "dungeon": "Zul'Farrak",
@@ -394,15 +349,6 @@
   "y": 844.51,
   "z": 9.45,
   "o": 0.666
- },
- {
-  "dungeon": "Zul'Farrak",
-  "spot": "end",
-  "map": 209,
-  "x": 1716.24,
-  "y": 1047.53,
-  "z": 53.57,
-  "o": 5.057
  },
  {
   "dungeon": "Maraudon (Orange)",
@@ -424,12 +370,12 @@
  },
  {
   "dungeon": "Maraudon (Orange)",
-  "spot": "end",
+  "spot": "boss door",
   "map": 349,
-  "x": 30.57,
-  "y": 115.54,
+  "x": 92.56,
+  "y": 78.61,
   "z": -131.07,
-  "o": 4.63
+  "o": 6.187
  },
  {
   "dungeon": "Maraudon (Purple)",
@@ -450,15 +396,6 @@
   "o": 2.159
  },
  {
-  "dungeon": "Maraudon (Purple)",
-  "spot": "end",
-  "map": 349,
-  "x": 30.57,
-  "y": 115.54,
-  "z": -131.07,
-  "o": 4.63
- },
- {
   "dungeon": "Sunken Temple",
   "spot": "entrance",
   "map": 109,
@@ -475,15 +412,6 @@
   "y": 74.09,
   "z": -173.81,
   "o": 3.771
- },
- {
-  "dungeon": "Sunken Temple",
-  "spot": "end",
-  "map": 109,
-  "x": -659.99,
-  "y": -28.03,
-  "z": -90.75,
-  "o": 4.712
  },
  {
   "dungeon": "Blackrock Depths",
@@ -505,12 +433,12 @@
  },
  {
   "dungeon": "Blackrock Depths",
-  "spot": "end",
+  "spot": "boss door",
   "map": 230,
-  "x": 1363.32,
-  "y": -824.04,
-  "z": -91.9,
-  "o": 5.86
+  "x": 1345.59,
+  "y": -799.74,
+  "z": -85.07,
+  "o": 2.232
  },
  {
   "dungeon": "Lower Blackrock Spire",
@@ -531,22 +459,13 @@
   "o": 5.035
  },
  {
-  "dungeon": "Lower Blackrock Spire",
-  "spot": "end",
-  "map": 229,
-  "x": -28.63,
-  "y": -486.19,
-  "z": 90.75,
-  "o": 6.283
- },
- {
   "dungeon": "Upper Blackrock Spire",
-  "spot": "end",
+  "spot": "boss door",
   "map": 229,
-  "x": 36.88,
-  "y": -296.57,
-  "z": 111.04,
-  "o": 1.611
+  "x": 33.97,
+  "y": -327.54,
+  "z": 111.03,
+  "o": 4.753
  },
  {
   "dungeon": "Dire Maul East",
@@ -567,15 +486,6 @@
   "o": 6.162
  },
  {
-  "dungeon": "Dire Maul East",
-  "spot": "end",
-  "map": 429,
-  "x": 262.09,
-  "y": -445.75,
-  "z": -119.88,
-  "o": 0.967
- },
- {
   "dungeon": "Dire Maul West",
   "spot": "entrance",
   "map": 429,
@@ -594,15 +504,6 @@
   "o": 0.641
  },
  {
-  "dungeon": "Dire Maul West",
-  "spot": "end",
-  "map": 429,
-  "x": 132.1,
-  "y": 619.94,
-  "z": -48.38,
-  "o": 1.484
- },
- {
   "dungeon": "Dire Maul North",
   "spot": "entrance",
   "map": 429,
@@ -619,15 +520,6 @@
   "y": 316.59,
   "z": 2.94,
   "o": 0.427
- },
- {
-  "dungeon": "Dire Maul North",
-  "spot": "end",
-  "map": 429,
-  "x": 834.0,
-  "y": 489.54,
-  "z": 37.4,
-  "o": 4.23
  },
  {
   "dungeon": "Scholomance",
@@ -649,12 +541,12 @@
  },
  {
   "dungeon": "Scholomance",
-  "spot": "end",
+  "spot": "boss door",
   "map": 289,
-  "x": -19.11,
-  "y": 141.49,
-  "z": 83.91,
-  "o": 3.176
+  "x": 31.74,
+  "y": 131.25,
+  "z": 83.63,
+  "o": 5.741
  },
  {
   "dungeon": "Stratholme Live",
@@ -676,12 +568,12 @@
  },
  {
   "dungeon": "Stratholme Live",
-  "spot": "end",
+  "spot": "boss door",
   "map": 329,
-  "x": 3423.47,
-  "y": -3055.73,
-  "z": 136.58,
-  "o": 2.169
+  "x": 3436.74,
+  "y": -3090.19,
+  "z": 135.08,
+  "o": 4.957
  },
  {
   "dungeon": "Stratholme Undead",
@@ -703,12 +595,12 @@
  },
  {
   "dungeon": "Stratholme Undead",
-  "spot": "end",
+  "spot": "boss door",
   "map": 329,
-  "x": 4035.62,
-  "y": -3342.31,
-  "z": 115.14,
-  "o": 1.536
+  "x": 3990.78,
+  "y": -3381.93,
+  "z": 118.72,
+  "o": 2.878
  },
  {
   "dungeon": "Molten Core",
@@ -730,12 +622,12 @@
  },
  {
   "dungeon": "Molten Core",
-  "spot": "end",
+  "spot": "boss door",
   "map": 409,
-  "x": 613.86,
-  "y": -1178.12,
-  "z": -195.6,
-  "o": 3.219
+  "x": 639.97,
+  "y": -1131.11,
+  "z": -198.95,
+  "o": 0.324
  },
  {
   "dungeon": "Onyxia's Lair",
@@ -756,15 +648,6 @@
   "o": 5.167
  },
  {
-  "dungeon": "Onyxia's Lair",
-  "spot": "end",
-  "map": 249,
-  "x": -27.05,
-  "y": -219.1,
-  "z": -89.29,
-  "o": 0.087
- },
- {
   "dungeon": "Blackwing Lair",
   "spot": "entrance",
   "map": 469,
@@ -781,15 +664,6 @@
   "y": -1115.99,
   "z": 407.28,
   "o": 4.843
- },
- {
-  "dungeon": "Blackwing Lair",
-  "spot": "end",
-  "map": 469,
-  "x": -7583.36,
-  "y": -1258.48,
-  "z": 482.03,
-  "o": 3.752
  },
  {
   "dungeon": "Zul'Gurub",
@@ -810,15 +684,6 @@
   "o": 5.393
  },
  {
-  "dungeon": "Zul'Gurub",
-  "spot": "end",
-  "map": 309,
-  "x": -11787.09,
-  "y": -1655.33,
-  "z": 54.1,
-  "o": 1.623
- },
- {
   "dungeon": "Ruins of Ahn'Qiraj",
   "spot": "entrance",
   "map": 509,
@@ -835,15 +700,6 @@
   "y": 1519.37,
   "z": 21.47,
   "o": 2.237
- },
- {
-  "dungeon": "Ruins of Ahn'Qiraj",
-  "spot": "end",
-  "map": 509,
-  "x": -9489.25,
-  "y": 2026.13,
-  "z": 105.48,
-  "o": 2.381
  },
  {
   "dungeon": "Temple of Ahn'Qiraj",
@@ -864,15 +720,6 @@
   "o": 3.525
  },
  {
-  "dungeon": "Temple of Ahn'Qiraj",
-  "spot": "end",
-  "map": 531,
-  "x": -8584.29,
-  "y": 1983.8,
-  "z": 100.3,
-  "o": 0.349
- },
- {
   "dungeon": "Naxxramas",
   "spot": "entrance",
   "map": 533,
@@ -889,14 +736,5 @@
   "y": -5093.97,
   "z": 143.34,
   "o": 6.075
- },
- {
-  "dungeon": "Naxxramas",
-  "spot": "end",
-  "map": 533,
-  "x": 3762.38,
-  "y": -5115.86,
-  "z": 143.94,
-  "o": 2.986
  }
 ]

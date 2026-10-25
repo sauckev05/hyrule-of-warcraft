@@ -58,6 +58,9 @@ pub enum ScriptCall {
     /// (1 right slash, 2 left slash, 3 special strike, 4 Berserker Stance's leaping strike) on the
     /// hero, finishing in `seconds`.
     ZeldaSwing { step: u8, seconds: f32 },
+    /// Zelda of Warcraft: `ZeldaGuardAnim(kind, held)`, the guard key pressed (`held` true) or let
+    /// go: `kind` 1 raises the shield, 2 holds the weapon up to parry.
+    ZeldaGuard { kind: u8, held: bool },
     /// Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)` turns the Minimap into the big dungeon map
     /// (square, zoomed out to `zoom` 0..3, widest first) or back into the corner disc.
     ZeldaDungeonMap { on: bool, zoom: u8 },

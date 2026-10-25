@@ -812,6 +812,14 @@ pub(super) fn drive_animations(
                     requests.push((id, None, Some((variation, seconds))));
                 }
                 queue.0.clear();
+                // the guard key's press: its clip once, at its own rate
+                let guard = &mut queue.1;
+                if guard.start {
+                    guard.start = false;
+                    let w = wielded.copied().unwrap_or_default();
+                    guard.id = super::zelda_swing::guard_clip(guard.kind, w.armed_main());
+                    requests.push((guard.id, None, Some((0, 0.0))));
+                }
             }
         }
         // At the play seam (`0x5fe2f0`), Special1H/2H with both hands empty becomes
@@ -990,6 +998,50 @@ pub(super) fn drive_animations(
                         "anim play unit={entity} id={id} masked={masked_played} base={base_played} under={special:?}"
                     ),
                 );
+            }
+        }
+
+        // Zelda of Warcraft: while the guard key is held, the guard clip stops at its guard pose
+        // (on the overlay when the hero walks, else on the base); letting go plays the rest.
+        if is_self {
+            if let Some(guard) = zelda_swings.as_deref_mut().map(|q| &mut q.1) {
+                if guard.id != 0 {
+                    let gid = guard.id;
+                    let node = drv
+                        .overlay
+                        .filter(|ov| ov.id == gid)
+                        .map(|ov| ov.node)
+                        .or_else(|| {
+                            matches!(drv.mode, Mode::Swing { id: m, .. } if m == gid)
+                                .then(|| tr.get_main_animation())
+                                .flatten()
+                        });
+                    let duration = node.and_then(|n| {
+                        anims.clips.iter().find(|c| c.node == n).map(|c| c.duration)
+                    });
+                    match (node.and_then(|n| player.animation_mut(n)), duration) {
+                        (Some(active), Some(duration)) if guard.held => {
+                            let pose = duration * super::zelda_swing::GUARD_POSE;
+                            if active.seek_time() >= pose {
+                                if active.seek_time() - pose > 0.02 {
+                                    active.seek_to(pose);
+                                }
+                                active.set_speed(0.0);
+                            }
+                        }
+                        (Some(active), _) => {
+                            if active.speed() == 0.0 {
+                                active.set_speed(1.0);
+                            }
+                            guard.id = 0;
+                        }
+                        _ => {
+                            if !guard.held {
+                                guard.id = 0;
+                            }
+                        }
+                    }
+                }
             }
         }
 

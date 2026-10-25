@@ -7,5 +7,6 @@
 	<Binding name="ZELDA_FLIP">ZeldaControls_ShiftMove(".zflip")</Binding>
 	<Binding name="ZELDA_BOW">ZeldaControls_Command(".zbow")</Binding>
 	<Binding name="ZELDA_HOOK">ZeldaControls_Command(".zboomerang")</Binding>
+	<Binding name="ZELDA_POTION">ZeldaControls_DrinkPotion()</Binding>
 	<Binding name="ZELDA_TARGET" runOnUp="true">ZeldaControls_Target(keystate)</Binding>
 </Bindings>

@@ -1,5 +1,5 @@
 -- Zelda HUD: combat stats beside the character sheet - melee and ranged crit, hit bonus, weapon
--- skill, spell crit and hit, dodge, parry and block. The 1.12 interface cannot read crit or hit
+-- skill, spell crit, hit and power, dodge, parry and block. The 1.12 interface cannot read crit or hit
 -- chance, so while the sheet is open the panel asks the server once a second (".zstats"); the
 -- answer comes back as a "ZSTATS:" system line, which is kept out of the chat.
 
@@ -13,6 +13,7 @@ local ROWS = {
 	{ "Ranged Crit", 2, "%.2f%%" },
 	{ "Spell Crit", 3, "%.2f%%" },
 	{ "Spell Hit Bonus", 5, "+%.2f%%" },
+	{ "Spell Power", 11, "%d" },
 	{ "Dodge", 6, "%.2f%%" },
 	{ "Parry", 7, "%.2f%%" },
 	{ "Block", 8, "%.2f%%" },

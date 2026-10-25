@@ -15,8 +15,36 @@
 use bevy::prelude::*;
 
 /// The swings the addon asked for since the driver last ran, `(step, seconds)`; the last wins.
+/// The second field is the guard key: the shield raised, or the weapon held up to parry.
 #[derive(Resource, Default)]
-pub(crate) struct ZeldaSwingRequests(pub(crate) Vec<(u8, f32)>);
+pub(crate) struct ZeldaSwingRequests(pub(crate) Vec<(u8, f32)>, pub(crate) ZeldaGuard);
+
+/// Zelda of Warcraft: the guard key, from `ZeldaGuardAnim(kind, held)`. Pressing it plays the
+/// guard clip once - ShieldBlock (24) with a shield (`kind` 1), the wielded weapon's parry (20-23)
+/// without one (`kind` 2). While the key stays held the clip stops at its guard pose
+/// ([`GUARD_POSE`] of the way through) and holds it; letting go plays the rest. A quick click
+/// therefore plays the whole clip, as before.
+#[derive(Default, Clone, Copy, Debug)]
+pub(crate) struct ZeldaGuard {
+    pub(crate) kind: u8,
+    pub(crate) held: bool,
+    /// A press not yet played.
+    pub(crate) start: bool,
+    /// The clip id playing for the guard, 0 when none.
+    pub(crate) id: u16,
+}
+
+/// Where in the guard clip the pose holds while the key is down, as a fraction of its length: the
+/// shield or blade is at its highest a little before the middle of the block and parry clips.
+pub(super) const GUARD_POSE: f32 = 0.4;
+
+/// The guard clip for `kind` with `main` (`(class, subclass)` of the armed main hand) in hand.
+pub(super) fn guard_clip(kind: u8, main: Option<(u8, u8)>) -> u16 {
+    if kind == 1 {
+        return 24; // ShieldBlock
+    }
+    super::select::defense_anim(3, main).unwrap_or(21)
+}
 
 /// Per `(race, gender)`: the `(right, left)` variation index, in file order, of AttackUnarmed
 /// (16), Attack1H (17), Attack2H (18) and Attack2HL (19).

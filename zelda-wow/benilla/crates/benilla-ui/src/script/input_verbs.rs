@@ -366,6 +366,26 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
             Ok(())
         })?,
     )?;
+    // Zelda of Warcraft: `ZeldaGuardAnim(kind, held)`, the guard key: pressed (held true) or let go.
+    g.set(
+        "ZeldaGuardAnim",
+        lua.create_function(|lua, (kind, held): (Option<Value>, Option<Value>)| {
+            let kind = match kind {
+                Some(Value::Integer(n)) => n as i64,
+                Some(Value::Number(n)) => n as i64,
+                _ => 1,
+            }
+            .clamp(1, 2) as u8;
+            let held = match held {
+                Some(Value::Boolean(b)) => b,
+                Some(Value::Integer(n)) => n != 0,
+                Some(Value::Number(n)) => n != 0.0,
+                _ => false,
+            };
+            push_call(lua, ScriptCall::ZeldaGuard { kind, held });
+            Ok(())
+        })?,
+    )?;
     // Zelda of Warcraft: `ZeldaSetCrest(emblem, emblemColor, border, borderColor, background)`,
     // the guildless hero's crest as the server keeps it (the ZeldaHUD addon relays it).
     g.set(

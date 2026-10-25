@@ -3,3 +3,4 @@
 ## Notes: Ocarina of Time style sword, shield, rolls and hookshot (needs the Azeroth Solo server)
 ## SavedVariables: ZeldaControlsDB
 ZeldaControls.lua
+potion.lua

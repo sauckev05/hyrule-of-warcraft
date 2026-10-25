@@ -67,7 +67,22 @@ SPELLS = [
     # brings you back with 10% of your health and mana, in a priest's resurrection light
     (40009, 3026, "Navi's Light", "Navi's light brings you back to life with 10% of your health and mana.",
      dict(EffectBasePoints1=9, SpellVisual=41, SpellIconID=121)),
+    # a mana potion's mana as an absorb shield (ZeldaManaPotionShield); the core sets the amount
+    (40010, 23506, 'Potion Shield', 'Absorbs $s1 damage.  Lasts $d.', dict(tooltip='Absorbs $s1 damage.')),
+    # the enemies' telegraphed attacks (ZeldaEnemyMechanics): a two-second windup whose dummy effect
+    # the core resolves - blocked, parried, dodged or landing for a share of the hero's health
+    (40011, 1464, 'Heavy Blow', 'A slow, crushing blow. Raise your shield, parry, or roll away!',
+     dict(CastingTimeIndex=5, Effect1=3, EffectBasePoints1=0, EffectImplicitTargetA1=6, DmgClass=0, ManaCost=0,
+          PowerType=0, InterruptFlags=0, EquippedItemClass=-1, SpellFamilyName=0, SpellFamilyFlags=0,
+          Attributes=16, AttributesEx=0, AttributesEx3=0)),
+    (40012, 17393, 'Charged Bolt', 'A slow, heavy bolt. Raise your shield or roll away!',
+     dict(Effect1=3, EffectBasePoints1=0, EffectDieSides1=0, EffectImplicitTargetA1=6, DmgClass=0, ManaCost=0,
+          InterruptFlags=0, School=6, SpellFamilyName=0, SpellFamilyFlags=0)),
 ]
+
+# stock spell texts changed in the client (patch-Z only): mana potions are shields now
+DESCRIPTION_EDITS = {sid: 'Shields you, absorbing $s1 damage for 20 sec.'
+                     for sid in (437, 438, 2023, 11903, 17530, 17531, 21395, 21396)}
 
 # stock spells changed in place: {spell id: {spell_template column: value}}
 SPELL_EDITS = {
@@ -132,7 +147,10 @@ ITEM_COLUMNS = ['entry', 'class', 'subclass', 'name', 'displayid', 'Quality', 'F
 
 # Spell.dbc (1.12.1, 173 fields): where the spell_template columns sit
 DBC_FIELD = {'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
-             'SpellIconID': 117}
+             'SpellIconID': 117, 'School': 1, 'Attributes': 6, 'AttributesEx': 7, 'AttributesEx3': 9, 'CastingTimeIndex': 18, 'InterruptFlags': 21, 'PowerType': 31,
+             'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'SpellFamilyName': 160,
+             'SpellFamilyFlags': 161, 'DmgClass': 164}
+SQL_ONLY = ('copy_effect1_to_2', 'tooltip')
 for _i, _g in enumerate(EFFECT_GROUPS[:-1]):
     for _k in (1, 2, 3):
         DBC_FIELD['%s%d' % (_g, _k)] = 61 + _i * 3 + (_k - 1)
@@ -163,7 +181,7 @@ def spell_sql():
         sets = ['`SpellName` = %s' % sql_str(name)]
         if changes.get('copy_effect1_to_2'):
             sets += ['`%s2` = `%s1`' % (g, g) for g in EFFECT_GROUPS]
-        sets += ['`%s` = %d' % (k, v) for k, v in changes.items() if k != 'copy_effect1_to_2']
+        sets += ['`%s` = %d' % (k, v) for k, v in changes.items() if k not in SQL_ONLY]
         out.append('UPDATE `spell_template` SET %s WHERE `Id` = %d;\n' % (', '.join(sets), sid))
     for sid, changes in SPELL_EDITS.items():
         out.append('UPDATE `spell_template` SET %s WHERE `Id` = %d;\n'
@@ -289,13 +307,17 @@ def patch_spells(path):
                 a = DBC_FIELD['%s1' % g]
                 row[a + 1] = row[a]
         for k, v in changes.items():
-            if k != 'copy_effect1_to_2':
-                row[DBC_FIELD[k]] = v
+            if k not in SQL_ONLY:
+                row[DBC_FIELD[k]] = v & 0xFFFFFFFF
+                if k == 'SpellFamilyFlags':
+                    row[DBC_FIELD[k] + 1] = 0           # the flags' upper half
         row[DBC_NAME] = add_string(strings, name)
         row[DBC_RANK] = 0
         row[DBC_DESCRIPTION] = add_string(strings, text)
-        row[DBC_TOOLTIP] = 0
+        row[DBC_TOOLTIP] = add_string(strings, changes['tooltip']) if 'tooltip' in changes else 0
         rows.append(row)
+    for sid, text in DESCRIPTION_EDITS.items():
+        byid[sid][DBC_DESCRIPTION] = add_string(strings, text)
     return write_dbc(f, rows, strings)
 
 

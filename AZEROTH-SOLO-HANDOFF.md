@@ -75,7 +75,7 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   combo swing is its percentage faster (ZeldaFlurryPercent / the addon's FlurryPercent). Slash/spin
   reach halved. (Standing still while swinging was tried and removed.)
 - Normal and rare (non-elite) enemy creatures' melee/ranged attacks on heroes hit 3x
-  (Zelda.EnemyMeleeDamageRate); elites/bosses unchanged. In dungeons SoloCraft's 0.55 still applies.
+  (Zelda.EnemyMeleeDamageRate, now 4); see the 2026-10-24 notes for elites and dungeons.
 - The red swing trail (a Heroic Strike SPELL_GO) is skipped for combo swings: its cast animation
   replaced the client-played combo swing.
 - Charged attack by stance: Defensive Stance + shield = Shield Slam (spell 23922, damage = shield
@@ -151,6 +151,36 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   Durza (Shadowprey): Uldaman 90309, ZF 90308, Maraudon 90303, Sunken Temple 90310, BRD 90304/90305
   at Kargath, -> Lothos Riftwaker 90311 (then the real Attunement to the Core 7848), Ragnaros
   90306. ZeldaAlternateQuestDone: BWL opens after 90110, Naxx after 90417, MC needs 7848.
+- Stats (heroes all scale as warriors, Zelda.WarriorSpellStats): intellect gives spell power, 2 per
+  point (Zelda.IntellectSpellPower; SpellBaseDamage/HealingBonusDone, magic schools); spirit gives
+  spell crit at the warrior's agility-to-crit rate (UpdateSpellCritChance). Gear melee crit and hit
+  (item-cast MOD_CRIT_PERCENT / MOD_HIT_CHANCE auras, any slot) also count for spells
+  (Zelda.GearCritForSpells; ZeldaState.gearSpellCrit, m_modSpellHitChance). The Combat Stats panel
+  shows Spell Power (ZSTATS field 11).
+- Guard key (3): with a shield `.zshield on` raises it (80% less from the front, as before); with
+  only a weapon it is a parry stance: every melee swing and melee ability from the front is parried
+  (ZeldaParryHolds in RollMeleeOutcomeAgainst / MeleeSpellHitResult). Benilla `ZeldaGuardAnim(kind,
+  held)` (creature_anim/zelda_swing.rs ZeldaGuard, driver.rs): a press plays ShieldBlock (24) or the
+  weapon's parry (20-23); while held the clip stops at 40% (GUARD_POSE) and holds; release plays the
+  rest, so a click plays the whole clip.
+- Mana potions (spell category 4 with mana energize) give Potion Shield 40010 (absorb = the mana,
+  20 s) instead of mana, drinkable at any mana (EffectEnergize, Spell::CheckCast); patch-Z rewrites
+  the mana potion tooltips (DESCRIPTION_EDITS).
+- Potion slot (ZeldaControls potion.lua): right-click a healing/mana potion in the bags to slot it
+  (not drunk; not at vendor/bank/mail/AH/trade), key 6 (ZELDA_POTION, keys version 6) or a click
+  drinks one; per-character in ZeldaControlsDB.potion.
+- Harder enemies: Zelda.EnemyMeleeDamageRate 4 (world normals), Zelda.EliteMeleeDamageRate 1.75
+  (world elites/bosses), SoloCraft.DungeonHealth 0.65 / DungeonDamage 0.9 with raid exponents
+  1.08 / 0.79 (raids as before). Heavy blows (ZeldaEnemyMechanics in ZeldaPlayerUpdate, one windup
+  at a time per hero): enemies fighting the hero cast Heavy Blow 40011 (2 s Slam windup, dummy) in
+  melee or, casters out of melee, Charged Bolt 40012; "winds up a heavy blow - raise your shield!"
+  on screen. ZeldaHeavyBlowLands (EffectDummy): roll or out of reach = dodged; shield in front =
+  blocked + 2 s stagger (7922); parry (melee) = parried + 1.5 s stagger; else 20/30/40% of max
+  health (normal/elite/boss: Zelda.HeavyBlowNormal/Elite/Boss; boss = world boss or dungeon elite
+  with HealthMultiplier >= 5) and a melee blow knocks down (5164). Intervals 14-20 / 9-14 / 7-10 s.
+- Beedle: the 'end' spot beside each final boss is gone; where a creature spot 40-70 yd from the
+  boss on its floor, on the way in, exists (16 dungeons/raids) Beedle stands there ('boss door'),
+  elsewhere only the entrance and middle Beedles remain (dungeon_vendors.json, 004_vendors).
 
 ## What the Zelda layer does (current features)
 

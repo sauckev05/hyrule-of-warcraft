@@ -1441,10 +1441,10 @@ index 00fde0a85..0b4eea0fb 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..db6c44d53
+index 000000000..e455ccc7a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,3130 @@
+@@ -0,0 +1,3450 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1525,7 +1525,13 @@ index 000000000..db6c44d53
 +        uint32 boomerangReadyAt = 0;
 +        uint32 bowReadyAt = 0;
 +        bool shield = false;
++        bool parry = false;                             // no shield: the weapon held up to parry
 +        uint32 shoutCheckIn = 0;
++        // melee crit from gear that counts for spells too (Zelda.GearCritForSpells)
++        float gearSpellCrit = 0.0f;
++        // enemies fighting this hero: when each next winds up a heavy blow or a charged bolt (ms)
++        std::unordered_map<uint64, uint32> heavyReadyAt;
++        uint32 heavyCleanAt = 0;
 +        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
 +        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper, Navi, Elara)
 +        uint32 followerEntry[6] = { 0, 0, 0, 0, 0, 0 };
@@ -1772,8 +1778,8 @@ index 000000000..db6c44d53
 +    }
 +    if (moveType != MOVE_RUN)
 +        return 1.0f;
-+    if (StateFor(player).shield)
-+        return 0.45f;                           // shield up: a careful walk, whatever the run speed
++    if (StateFor(player).shield || StateFor(player).parry)
++        return 0.45f;                           // shield or parry up: a careful walk, whatever the run speed
 +    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 1.3f));
 +    static float const sprintRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.SprintSpeedRate", 2.0f));
 +    return StateFor(player).sprinting ? sprintRate : runRate;
@@ -1817,14 +1823,17 @@ index 000000000..db6c44d53
 +{
 +    // normal (not elite) enemies' melee and ranged attacks - not spells or effects - hit heroes
 +    // harder (Zelda.EnemyMeleeDamageRate, 3); elites, rare elites and bosses hit as before
-+    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 3.0f));
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 4.0f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
++        return 1.0f;
++    // world elites, rare elites and bosses hit harder too (Zelda.EliteMeleeDamageRate, 1.75); inside
++    // dungeons and raids SoloCraft sets their strength instead
++    static float const eliteRate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EliteMeleeDamageRate", 1.75f));
++    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
 +        return 1.0f;
 +    uint32 const rank = static_cast<Creature const*>(attacker)->GetCreatureInfo()->Rank;
 +    if (rank != CREATURE_ELITE_NORMAL && rank != CREATURE_ELITE_RARE)
-+        return 1.0f;
-+    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
-+        return 1.0f;
++        return attacker->GetMap()->IsDungeon() ? 1.0f : eliteRate;
 +    return rate;
 +}
 +
@@ -2637,6 +2646,8 @@ index 000000000..db6c44d53
 +    return EQUIP_ERR_CANT_DO_RIGHT_NOW;
 +}
 +
++static void ZeldaEnemyMechanics(Player* player, ZeldaState& state);
++
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
 +    if (!player)
@@ -2655,6 +2666,7 @@ index 000000000..db6c44d53
 +
 +    // the Gurubashi Arena challenge
 +    ArenaUpdate(player, state, diff);
++    ZeldaEnemyMechanics(player, state);
 +
 +    // the dungeon clear bar under the minimap: sent when it changes, looked at twice a second
 +    if (player->IsInWorld() && !player->IsBeingTeleported())
@@ -2693,7 +2705,7 @@ index 000000000..db6c44d53
 +        static uint32 const sprintAfter = uint32(std::max(0, sConfig.GetIntDefault("Zelda.SprintAfterSeconds", 15))) * 1000;
 +        uint32 const now = WorldTimer::getMSTime();
 +        bool const running = player->IsAlive() && player->IsMoving() && !player->IsWalking() && !player->IsTaxiFlying() &&
-+                             !state.shield && player->IsInWorld();
++                             !state.shield && !state.parry && player->IsInWorld();
 +        if (running)
 +        {
 +            if (!state.runningSince)
@@ -3155,6 +3167,310 @@ index 000000000..db6c44d53
 +    return damage;
 +}
 +
++// ---------------------------------------------------------------------------------- guard: parry
++bool ZeldaParryHolds(Unit const* victim, Unit const* attacker)
++{
++    if (!victim || !attacker || victim == attacker || victim->GetTypeId() != TYPEID_PLAYER || !victim->IsAlive())
++        return false;
++    {
++        std::lock_guard<std::mutex> guard(s_statesLock);
++        auto itr = s_states.find(victim->GetGUIDLow());
++        if (itr == s_states.end() || !itr->second.parry)
++            return false;
++    }
++    return victim->HasInArc(attacker, M_PI_F * 2.0f / 3.0f);
++}
++
++// ---------------------------------------------------------------------------------- spell stats
++// Every hero fights as a warrior (ZeldaStatClass): intellect gives spell power as strength gives
++// attack power, and spirit gives spell crit as agility gives melee crit (Zelda.WarriorSpellStats).
++static bool WarriorSpellStats(Player const* player)
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.WarriorSpellStats", true);
++    return on && player && ZeldaStatClass(player) == CLASS_WARRIOR;
++}
++
++int32 ZeldaSpellPowerFromStats(Player const* player)
++{
++    static float const perIntellect = std::max(0.0f, sConfig.GetFloatDefault("Zelda.IntellectSpellPower", 2.0f));
++    if (!WarriorSpellStats(player))
++        return 0;
++    return int32(player->GetStat(STAT_INTELLECT) * perIntellect);
++}
++
++bool ZeldaSpiritSpellCrit(Player const* player)
++{
++    return WarriorSpellStats(player);
++}
++
++float ZeldaSpellCritFromSpirit(Player const* player)
++{
++    // the warrior's agility-to-crit rate: 3.9 points per 1% at level 1, 20 at level 60
++    float const level = float(player->GetLevel());
++    float const rate = 3.9f * (60.0f - level) / 59.0f + 20.0f * (level - 1.0f) / 59.0f;
++    return rate > 0.0f ? player->GetStat(STAT_SPIRIT) / rate : 0.0f;
++}
++
++void ZeldaGearCritForSpells(Player* player, float delta)
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.GearCritForSpells", true);
++    if (!on || !player)
++        return;
++    StateFor(player).gearSpellCrit += delta;
++    player->UpdateAllSpellCritChances();
++}
++
++float ZeldaGearSpellCrit(Player const* player)
++{
++    std::lock_guard<std::mutex> guard(s_statesLock);
++    auto itr = s_states.find(player->GetGUIDLow());
++    return itr == s_states.end() ? 0.0f : itr->second.gearSpellCrit;
++}
++
++bool ZeldaGearHitForSpells()
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.GearCritForSpells", true);
++    return on;
++}
++
++// ---------------------------------------------------------------------------------- potions
++// A mana potion's mana becomes a shield that absorbs as much damage (Zelda.ManaPotionShield).
++static uint32 const POTION_SHIELD = 40010;     // custom (006_mastery, patch-Z): Aura of Protection's absorb, 20 sec
++
++bool ZeldaManaPotionShieldItem(ItemPrototype const* item, SpellEntry const& spell)
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.ManaPotionShield", true);
++    if (!on || !item || item->Class != ITEM_CLASS_CONSUMABLE)
++        return false;
++    uint32 category = spell.Category;
++    for (auto const& itemSpell : item->Spells)
++        if (itemSpell.SpellId == spell.Id && itemSpell.SpellCategory)
++            category = itemSpell.SpellCategory;
++    return category == 4;                       // healing, mana and rejuvenation potions
++}
++
++bool ZeldaManaPotionShield(Unit* target, ItemPrototype const* item, SpellEntry const& spell, int32 mana)
++{
++    if (!target || target->GetTypeId() != TYPEID_PLAYER || mana <= 0 || !ZeldaManaPotionShieldItem(item, spell))
++        return false;
++    Player* player = static_cast<Player*>(target);
++    player->RemoveAurasDueToSpell(POTION_SHIELD);
++    player->CastCustomSpell(player, POTION_SHIELD, &mana, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
++    player->GetSession()->SendAreaTriggerMessage("Potion Shield: absorbs %d damage", mana);
++    return true;
++}
++
++// ---------------------------------------------------------------------------------- enemy heavy blows
++// Enemies fighting a hero wind up a heavy blow now and then (Heavy Blow, 40011: a two-second Slam
++// windup) - casters a Charged Bolt (40012) when they are not in melee - and the hero is told in
++// front of the screen. A raised shield blocks it and staggers the enemy, a parry (no shield, melee
++// only) turns it aside and staggers it, a roll or stepping out of reach avoids it; otherwise it
++// lands for a share of the hero's health and a blow knocks the hero down (Zelda.HeavyBlows).
++static uint32 const HEAVY_BLOW = 40011;
++static uint32 const CHARGED_BOLT = 40012;
++static uint32 const HEAVY_KNOCKDOWN = 5164;    // Knockdown
++static uint32 const HEAVY_STAGGER = 7922;      // Charge Stun, held for the stagger
++
++namespace
++{
++    enum class Threat { Normal, Elite, Boss };
++
++    Threat ThreatOf(Creature const* creature)
++    {
++        CreatureInfo const* info = creature->GetCreatureInfo();
++        if (creature->IsWorldBoss() || info->Rank == CREATURE_ELITE_WORLDBOSS)
++            return Threat::Boss;
++        if (info->Rank == CREATURE_ELITE_ELITE || info->Rank == CREATURE_ELITE_RAREELITE)
++            // a dungeon's bosses carry far more health than its other elites
++            return creature->GetMap()->IsDungeon() && info->HealthMultiplier >= 5.0f ? Threat::Boss : Threat::Elite;
++        return Threat::Normal;
++    }
++
++    uint32 HeavyInterval(Threat t)
++    {
++        switch (t)
++        {
++            case Threat::Boss:  return urand(7000, 10000);
++            case Threat::Elite: return urand(9000, 14000);
++            default:            return urand(14000, 20000);
++        }
++    }
++
++    float HeavyShare(Threat t)
++    {
++        static float const normal = sConfig.GetFloatDefault("Zelda.HeavyBlowNormal", 0.20f);
++        static float const elite = sConfig.GetFloatDefault("Zelda.HeavyBlowElite", 0.30f);
++        static float const boss = sConfig.GetFloatDefault("Zelda.HeavyBlowBoss", 0.40f);
++        switch (t)
++        {
++            case Threat::Boss:  return boss;
++            case Threat::Elite: return elite;
++            default:            return normal;
++        }
++    }
++
++    bool IsCasterCreature(Creature const* creature)
++    {
++        CreatureInfo const* info = creature->GetCreatureInfo();
++        return creature->GetPowerType() == POWER_MANA && creature->GetMaxPower(POWER_MANA) > 0 &&
++               (info->UnitClass == CLASS_MAGE || info->UnitClass == CLASS_PALADIN);
++    }
++
++    void Stagger(Unit* hero, Unit* enemy, int32 ms)
++    {
++        if (!enemy->IsAlive())
++            return;
++        enemy->InterruptNonMeleeSpells(false);
++        hero->CastSpell(enemy, HEAVY_STAGGER, TRIGGERED_OLD_TRIGGERED);
++        if (SpellAuraHolder* holder = enemy->GetSpellAuraHolder(HEAVY_STAGGER, hero->GetObjectGuid()))
++        {
++            holder->SetAuraMaxDuration(ms);
++            holder->SetAuraDuration(ms);
++            holder->UpdateAuraDuration();
++        }
++    }
++}
++
++static void ZeldaEnemyMechanics(Player* player, ZeldaState& state)
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.HeavyBlows", true);
++    if (!on || !player->IsAlive() || !player->IsInWorld() || player->IsTaxiFlying() || player->IsGameMaster())
++        return;
++    uint32 const now = WorldTimer::getMSTime();
++    if (now < state.heavyCleanAt && player->getAttackers().empty())
++        return;
++
++    // forget enemies that are no longer fighting
++    if (now >= state.heavyCleanAt)
++    {
++        state.heavyCleanAt = now + 10000;
++        for (auto itr = state.heavyReadyAt.begin(); itr != state.heavyReadyAt.end();)
++        {
++            Creature* c = player->GetMap()->GetAnyTypeCreature(ObjectGuid(itr->first));
++            if (!c || !c->IsAlive() || c->GetVictim() != player)
++                itr = state.heavyReadyAt.erase(itr);
++            else
++                ++itr;
++        }
++    }
++
++    // one windup at a time: none starts while another enemy is still winding one up at this hero
++    for (Unit* attacker : player->getAttackers())
++        if (Spell const* spell = attacker->GetCurrentSpell(CURRENT_GENERIC_SPELL))
++            if (spell->m_spellInfo->Id == HEAVY_BLOW || spell->m_spellInfo->Id == CHARGED_BOLT)
++                return;
++
++    for (Unit* attacker : player->getAttackers())
++    {
++        if (attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled() || !attacker->IsAlive())
++            continue;
++        Creature* c = static_cast<Creature*>(attacker);
++        uint32 const entry = c->GetEntry();
++        if (entry >= 190000 && entry < 190960)  // companions, story characters, Beedle
++            continue;
++        CreatureInfo const* info = c->GetCreatureInfo();
++        if (info->CreatureType == CREATURE_TYPE_CRITTER || c->GetLevel() < 5 || c->GetVictim() != player)
++            continue;
++        Threat const threat = ThreatOf(c);
++        uint64 const key = c->GetObjectGuid().GetRawValue();
++        auto itr = state.heavyReadyAt.find(key);
++        if (itr == state.heavyReadyAt.end())
++        {
++            state.heavyReadyAt[key] = now + (threat == Threat::Normal ? urand(6000, 10000) : urand(3500, 6500));
++            continue;
++        }
++        if (now < itr->second)
++            continue;
++        if (c->IsNonMeleeSpellCasted(false) || c->hasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
++        {
++            itr->second = now + 1000;
++            continue;
++        }
++        bool const melee = c->CanReachWithMeleeAttack(player);
++        bool const bolt = !melee && IsCasterCreature(c) && c->IsWithinDistInMap(player, 30.0f) && c->IsWithinLOSInMap(player);
++        if (!melee && !bolt)
++        {
++            itr->second = now + 1000;
++            continue;
++        }
++        uint32 const spellId = melee ? HEAVY_BLOW : CHARGED_BOLT;
++        c->SetFacingToObject(player);
++        if (c->CastSpell(player, spellId, TRIGGERED_NONE) != SPELL_CAST_OK)
++        {
++            itr->second = now + 1500;
++            continue;
++        }
++        itr->second = now + HeavyInterval(threat);
++        if (melee)
++            player->GetSession()->SendAreaTriggerMessage("|cffff4040%s winds up a heavy blow - raise your shield!|r", c->GetName());
++        else
++            player->GetSession()->SendAreaTriggerMessage("|cffff4040%s charges a bolt - shield up or roll!|r", c->GetName());
++        return;                                  // one at a time
++    }
++}
++
++bool ZeldaHeavyBlowLands(Unit* caster, Unit* target, uint32 spellId)
++{
++    if (spellId != HEAVY_BLOW && spellId != CHARGED_BOLT)
++        return false;
++    if (!caster || !target || !target->IsAlive() || target->GetTypeId() != TYPEID_PLAYER)
++        return true;
++    Player* hero = static_cast<Player*>(target);
++    bool const melee = spellId == HEAVY_BLOW;
++
++    ZeldaState snapshot;
++    {
++        std::lock_guard<std::mutex> guard(s_statesLock);
++        auto itr = s_states.find(hero->GetGUIDLow());
++        if (itr != s_states.end())
++            snapshot = itr->second;
++    }
++    WorldSession* session = hero->GetSession();
++    bool const inFront = hero->HasInArc(caster, M_PI_F * 2.0f / 3.0f);
++    if (WorldTimer::getMSTime() < snapshot.invulnerableUntil ||
++        (melee && !caster->CanReachWithMeleeAttack(hero, 1.5f)))
++    {
++        Unit::SendSpellMiss(caster, hero, spellId, SPELL_MISS_DODGE);
++        session->SendAreaTriggerMessage("|cff66ff66Dodged!|r");
++        return true;
++    }
++    if (snapshot.shield && inFront)
++    {
++        Unit::SendSpellMiss(caster, hero, spellId, SPELL_MISS_BLOCK);
++        hero->HandleEmoteCommand(EMOTE_ONESHOT_PARRYSHIELD);
++        if (melee)
++        {
++            Stagger(hero, caster, 2000);
++            session->SendAreaTriggerMessage("|cff66ccffBlocked! %s is staggered - strike now!|r", caster->GetName());
++        }
++        else
++            session->SendAreaTriggerMessage("|cff66ccffBlocked!|r");
++        return true;
++    }
++    if (melee && snapshot.parry && inFront)
++    {
++        Unit::SendSpellMiss(caster, hero, spellId, SPELL_MISS_PARRY);
++        Stagger(hero, caster, 1500);
++        session->SendAreaTriggerMessage("|cffffcc66Parried! %s is thrown off balance!|r", caster->GetName());
++        return true;
++    }
++
++    Threat const threat = caster->GetTypeId() == TYPEID_UNIT ? ThreatOf(static_cast<Creature*>(caster)) : Threat::Normal;
++    uint32 damage = std::max<uint32>(1, uint32(hero->GetMaxHealth() * HeavyShare(threat)));
++    SpellSchoolMask const mask = melee ? SPELL_SCHOOL_MASK_NORMAL : SPELL_SCHOOL_MASK_ARCANE;
++    SpellNonMeleeDamage info(caster, hero, spellId, melee ? SPELL_SCHOOL_NORMAL : SPELL_SCHOOL_ARCANE);
++    uint32 absorb = 0;
++    int32 resist = 0;
++    hero->CalculateDamageAbsorbAndResist(caster, mask, SPELL_DIRECT_DAMAGE, damage, &absorb, &resist, false, false);
++    info.absorb = absorb;
++    info.damage = damage > absorb ? damage - absorb : 0;
++    Unit::SendSpellNonMeleeDamageLog(&info);
++    Unit::DealSpellDamage(caster, &info, true, false);
++    if (melee && hero->IsAlive())
++        caster->CastSpell(hero, HEAVY_KNOCKDOWN, TRIGGERED_OLD_TRIGGERED);
++    return true;
++}
++
 +bool ChatHandler::HandleZeldaSlashCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
@@ -3284,12 +3600,13 @@ index 000000000..db6c44d53
 +    // the ZeldaHUD addon's combat stats panel asks for what the 1.12 interface cannot read; the
 +    // reply is a system line it hides from the chat
 +    Player* player = m_session->GetPlayer();
-+    PSendSysMessage("ZSTATS:%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%u;%u",
++    PSendSysMessage("ZSTATS:%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%.2f;%u;%u;%d",
 +                    player->GetCritChance(BASE_ATTACK), player->GetCritChance(RANGED_ATTACK),
 +                    player->GetCritChance(SPELL_SCHOOL_MASK_HOLY), player->GetHitChance(BASE_ATTACK),
 +                    player->GetHitChance(SPELL_SCHOOL_MASK_HOLY), player->GetFloatValue(PLAYER_DODGE_PERCENTAGE),
 +                    player->GetFloatValue(PLAYER_PARRY_PERCENTAGE), player->GetFloatValue(PLAYER_BLOCK_PERCENTAGE),
-+                    player->GetWeaponSkillValue(BASE_ATTACK), uint32(player->GetSkillMaxForLevel()));
++                    player->GetWeaponSkillValue(BASE_ATTACK), uint32(player->GetSkillMaxForLevel()),
++                    player->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_HOLY));
 +    return true;
 +}
 +
@@ -3432,21 +3749,24 @@ index 000000000..db6c44d53
 +    }
 +    if (on && !CanAct(player))
 +        on = false;
-+    if (on && !player->GetShield(true))
++    // with a shield the hero blocks; with only a weapon the hero holds it up to parry every melee
++    // blow from the front (ZeldaParryHolds); the Zelda client holds the pose while the key is down
++    bool const hasShield = player->GetShield(true) != nullptr;
++    bool const hasWeapon = player->GetWeaponForAttack(BASE_ATTACK, true, true) != nullptr;
++    if (on && !hasShield && !hasWeapon)
 +    {
-+        Style style = StyleOf(player);
-+        if (style == Style::TwoHanded)
-+            SendSysMessage("You can't raise a shield while wielding a two-handed weapon - swing it instead!");
-+        else
-+            PSendSysMessage("You need a shield equipped in your off hand to block (you have %s).", StyleName(style));
++        SendSysMessage("You need a shield to block or a weapon to parry.");
 +        on = false;
 +    }
-+    if (on == state.shield)
++    bool const shield = on && hasShield;
++    bool const parry = on && !hasShield;
++    if (shield == state.shield && parry == state.parry)
 +        return true;
 +
-+    state.shield = on;
-+    player->UpdateSpeed(MOVE_RUN, true);       // ZeldaSpeedFactor slows a raised shield
-+    if (on)
++    state.shield = shield;
++    state.parry = parry;
++    player->UpdateSpeed(MOVE_RUN, true);       // ZeldaSpeedFactor slows a raised guard
++    if (shield)
 +        player->HandleEmoteCommand(EMOTE_ONESHOT_PARRYSHIELD);
 +    return true;
 +}
@@ -4577,10 +4897,10 @@ index 000000000..db6c44d53
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..9017afd92
+index 000000000..80aafd963
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,197 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -4726,6 +5046,23 @@ index 000000000..9017afd92
 +
 +// Zelda of Warcraft: the main hand's damage factor, 0.5 while dual wielding (Zelda.DualWieldDamage)
 +float ZeldaDualWieldFactor(Player const* player);
++
++// Zelda of Warcraft: the guard key without a shield - every melee blow from the front is parried
++bool ZeldaParryHolds(Unit const* victim, Unit const* attacker);
++// Zelda of Warcraft: intellect gives spell power (Zelda.IntellectSpellPower per point, 2) and spirit
++// spell crit (as agility gives melee crit) to heroes, who all scale as warriors
++int32 ZeldaSpellPowerFromStats(Player const* player);
++bool ZeldaSpiritSpellCrit(Player const* player);
++float ZeldaSpellCritFromSpirit(Player const* player);
++// Zelda of Warcraft: crit and hit chance from gear count for spells as well (Zelda.GearCritForSpells)
++void ZeldaGearCritForSpells(Player* player, float delta);
++float ZeldaGearSpellCrit(Player const* player);
++bool ZeldaGearHitForSpells();
++// Zelda of Warcraft: a mana potion's mana becomes an absorb shield (Zelda.ManaPotionShield)
++bool ZeldaManaPotionShieldItem(ItemPrototype const* item, SpellEntry const& spell);
++bool ZeldaManaPotionShield(Unit* target, ItemPrototype const* item, SpellEntry const& spell, int32 mana);
++// Zelda of Warcraft: an enemy's heavy blow or charged bolt lands (true when spellId is one)
++bool ZeldaHeavyBlowLands(Unit* caster, Unit* target, uint32 spellId);
 +
 +// Zelda of Warcraft: a warrior's Berserker and Defensive stances take only their own weapons
 +// returns an InventoryResult, EQUIP_ERR_OK (0) when allowed
@@ -5193,7 +5530,7 @@ index 010b0034f..9c00f68eb 100644
          uint32 EnvironmentalDamage(EnvironmentalDamageType type, uint32 damage);
  
 diff --git a/src/game/Entities/StatSystem.cpp b/src/game/Entities/StatSystem.cpp
-index 70b4e7d00..1362adf32 100644
+index 70b4e7d00..540b7db72 100644
 --- a/src/game/Entities/StatSystem.cpp
 +++ b/src/game/Entities/StatSystem.cpp
 @@ -21,6 +21,7 @@
@@ -5204,7 +5541,15 @@ index 70b4e7d00..1362adf32 100644
  #include "Spells/SpellAuras.h"
  
  /*#######################################
-@@ -220,7 +221,7 @@ void Player::UpdateAttackPowerAndDamage(bool ranged)
+@@ -56,6 +57,7 @@ bool Player::UpdateStats(Stats stat)
+             break;
+ 
+         case STAT_SPIRIT:
++            UpdateAllSpellCritChances();                    // Zelda of Warcraft: spirit gives spell crit
+             break;
+ 
+         default:
+@@ -220,7 +222,7 @@ void Player::UpdateAttackPowerAndDamage(bool ranged)
  
          mod = AttackPowerMod::RANGED_ATTACK_POWER;
  
@@ -5213,7 +5558,7 @@ index 70b4e7d00..1362adf32 100644
          {
              case CLASS_HUNTER: val2 = level * 2.0f + GetStat(STAT_AGILITY) * 2.0f - 10.0f;    break;
              case CLASS_ROGUE:  val2 = level        + GetStat(STAT_AGILITY) - 10.0f;    break;
-@@ -241,7 +242,7 @@ void Player::UpdateAttackPowerAndDamage(bool ranged)
+@@ -241,7 +243,7 @@ void Player::UpdateAttackPowerAndDamage(bool ranged)
      }
      else
      {
@@ -5222,7 +5567,7 @@ index 70b4e7d00..1362adf32 100644
          {
              case CLASS_WARRIOR:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
              case CLASS_PALADIN:      val2 = level * 3.0f + GetStat(STAT_STRENGTH) * 2.0f                    - 20.0f; break;
-@@ -360,6 +361,15 @@ void Player::CalculateMinMaxDamage(WeaponAttackType attType, bool normalized, fl
+@@ -360,6 +362,15 @@ void Player::CalculateMinMaxDamage(WeaponAttackType attType, bool normalized, fl
  
      min_damage = ((base_value + weapon_mindamage) * base_pct + total_value) * total_pct;
      max_damage = ((base_value + weapon_maxdamage) * base_pct + total_value) * total_pct;
@@ -5238,8 +5583,21 @@ index 70b4e7d00..1362adf32 100644
  }
  
  void Player::UpdateDamagePhysical(WeaponAttackType attType)
+@@ -505,8 +516,10 @@ void Player::UpdateDodgePercentage()
+ void Player::UpdateSpellCritChance(uint32 school)
+ {
+     float crit = 0.0f;
+-    // Base spell crit and spell crit from Intellect
+-    crit += GetSpellCritFromIntellect();
++    // Base spell crit and spell crit from Intellect - Zelda of Warcraft: from spirit, as agility
++    // gives melee crit, plus the gear's melee crit
++    crit += ZeldaSpiritSpellCrit(this) ? ZeldaSpellCritFromSpirit(this) : GetSpellCritFromIntellect();
++    crit += ZeldaGearSpellCrit(this);
+     // Increase crit from SPELL_AURA_MOD_SPELL_CRIT_CHANCE
+     crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
+     // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..7a335db21 100644
+index 00986af9e..2917a640c 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -5306,7 +5664,29 @@ index 00986af9e..7a335db21 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -3628,7 +3653,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -2711,6 +2736,10 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+     if (pVictim->GetCombatManager().IsInEvadeMode())
+         return MELEE_HIT_EVADE;
+ 
++    // Zelda of Warcraft: a hero holding the weapon up parries every melee blow from the front
++    if (attType != RANGED_ATTACK && ZeldaParryHolds(pVictim, this))
++        return MELEE_HIT_PARRY;
++
+     Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
+     die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
+     if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
+@@ -2829,6 +2858,10 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+ 
+ SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
+ {
++    // Zelda of Warcraft: a hero holding the weapon up parries every melee ability from the front
++    if (spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MELEE && ZeldaParryHolds(pVictim, this))
++        return SPELL_MISS_PARRY;
++
+     Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
+     die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
+     die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
+@@ -3628,7 +3661,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -5316,7 +5696,7 @@ index 00986af9e..7a335db21 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -4976,6 +5002,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5010,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -5328,7 +5708,7 @@ index 00986af9e..7a335db21 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6128,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6136,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -5337,7 +5717,7 @@ index 00986af9e..7a335db21 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7081,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7089,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -5346,7 +5726,27 @@ index 00986af9e..7a335db21 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -8095,6 +8126,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -7167,6 +7206,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+                 DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
+             }
+         }
++        // Zelda of Warcraft: intellect gives spell power as strength gives attack power
++        if (schoolMask & SPELL_SCHOOL_MASK_MAGIC)
++            DoneAdvertisedBenefit += ZeldaSpellPowerFromStats(static_cast<Player*>(this));
+     }
+     return DoneAdvertisedBenefit;
+ }
+@@ -7309,6 +7351,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+             AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
+         }
+     }
++    // Zelda of Warcraft: intellect's spell power heals too
++    if (GetTypeId() == TYPEID_PLAYER)
++        AdvertisedBenefit += ZeldaSpellPowerFromStats(static_cast<Player*>(this));
+     return AdvertisedBenefit;
+ }
+ 
+@@ -8095,6 +8140,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -5360,7 +5760,7 @@ index 00986af9e..7a335db21 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8442,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8456,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
@@ -5592,7 +5992,7 @@ index 09b927f41..065c3058f 100644
          MovementGeneratorType GetCurrentMovementGeneratorType() const;
  
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..d1279baf7 100644
+index bf5c5c578..9a9b216b5 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -5635,7 +6035,20 @@ index bf5c5c578..d1279baf7 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6565,6 +6577,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6511,12 @@ SpellCastResult Spell::CheckItems()
+                     }
+ 
+                     Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
++                    // Zelda of Warcraft: a mana potion is a shield, drinkable at any mana
++                    if (power == POWER_MANA && ZeldaManaPotionShieldItem(proto, *m_spellInfo))
++                    {
++                        failReason = SPELL_CAST_OK;
++                        break;
++                    }
+                     if (target->GetPower(power) == target->GetMaxPower(power))
+                     {
+                         failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
+@@ -6565,6 +6583,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;
@@ -5646,7 +6059,7 @@ index bf5c5c578..d1279baf7 100644
                  uint32 itemid    = m_spellInfo->Reagent[i];
                  uint32 itemcount = m_spellInfo->ReagentCount[i];
 diff --git a/src/game/Spells/SpellAuras.cpp b/src/game/Spells/SpellAuras.cpp
-index 500bb08eb..659ab8f3d 100644
+index 500bb08eb..42a4411eb 100644
 --- a/src/game/Spells/SpellAuras.cpp
 +++ b/src/game/Spells/SpellAuras.cpp
 @@ -46,6 +46,7 @@
@@ -5657,7 +6070,27 @@ index 500bb08eb..659ab8f3d 100644
  #include "Loot/LootMgr.h"
  #include "AI/ScriptDevAI/include/sc_grid_searchers.h"
  #include "Spells/SpellStacking.h"
-@@ -3936,6 +3937,9 @@ void Aura::HandleModMeleeSpeedPct(bool apply, bool /*Real*/)
+@@ -3845,6 +3846,9 @@ void Aura::HandleAuraModCritPercent(bool apply, bool Real)
+         ((Player*)target)->HandleBaseModValue(CRIT_PERCENTAGE,         FLAT_MOD, float(m_modifier.m_amount), apply);
+         ((Player*)target)->HandleBaseModValue(OFFHAND_CRIT_PERCENTAGE, FLAT_MOD, float(m_modifier.m_amount), apply);
+         ((Player*)target)->HandleBaseModValue(RANGED_CRIT_PERCENTAGE,  FLAT_MOD, float(m_modifier.m_amount), apply);
++        // Zelda of Warcraft: crit from gear counts for spells too
++        if (GetCastItemGuid())
++            ZeldaGearCritForSpells(static_cast<Player*>(target), apply ? float(m_modifier.m_amount) : -float(m_modifier.m_amount));
+     }
+     else
+     {
+@@ -3861,6 +3865,9 @@ void Aura::HandleModHitChance(bool apply, bool /*Real*/)
+         static_cast<Player*>(target)->UpdateWeaponHitChances(BASE_ATTACK);
+         static_cast<Player*>(target)->UpdateWeaponHitChances(OFF_ATTACK);
+         static_cast<Player*>(target)->UpdateWeaponHitChances(RANGED_ATTACK);
++        // Zelda of Warcraft: hit from gear counts for spells too
++        if (GetCastItemGuid() && GetSpellProto()->EquippedItemClass == -1 && ZeldaGearHitForSpells())
++            target->m_modSpellHitChance += (apply ? m_modifier.m_amount : -m_modifier.m_amount);
+     }
+     else
+     {
+@@ -3936,6 +3943,9 @@ void Aura::HandleModMeleeSpeedPct(bool apply, bool /*Real*/)
      float amount = m_modifier.m_amount;
  
      Unit* target = GetTarget();
@@ -5668,7 +6101,7 @@ index 500bb08eb..659ab8f3d 100644
      target->ApplyAttackTimePercentMod(OFF_ATTACK, amount, apply);
  }
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
-index a9fb2306c..35ceecd03 100644
+index a9fb2306c..b066fc464 100644
 --- a/src/game/Spells/SpellEffects.cpp
 +++ b/src/game/Spells/SpellEffects.cpp
 @@ -17,6 +17,7 @@
@@ -5695,7 +6128,18 @@ index a9fb2306c..35ceecd03 100644
          switch (m_spellInfo->SpellFamilyName)
          {
              case SPELLFAMILY_GENERIC:
-@@ -1535,6 +1545,11 @@ void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
+@@ -345,6 +355,10 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
+ 
+ void Spell::EffectDummy(SpellEffectIndex eff_idx)
+ {
++    // Zelda of Warcraft: an enemy's heavy blow or charged bolt reaches the hero
++    if (ZeldaHeavyBlowLands(m_caster, unitTarget, m_spellInfo->Id))
++        return;
++
+     // selection by spell family
+     switch (m_spellInfo->SpellFamilyName)
+     {
+@@ -1535,6 +1549,11 @@ void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
  {
      uint32 triggered_spell_id = m_spellInfo->EffectTriggerSpell[effIndex];
  
@@ -5707,7 +6151,18 @@ index a9fb2306c..35ceecd03 100644
      // special cases
      switch (triggered_spell_id)
      {
-@@ -3555,6 +3570,10 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
+@@ -2114,6 +2133,10 @@ void Spell::EffectEnergize(SpellEffectIndex eff_idx)
+     if (damage < 0)
+         return;
+ 
++    // Zelda of Warcraft: a mana potion's mana becomes an absorb shield
++    if (power == POWER_MANA && m_CastItem && ZeldaManaPotionShield(unitTarget, m_CastItem->GetProto(), *m_spellInfo, damage))
++        return;
++
+     if (unitTarget->GetMaxPower(power) == 0)
+         return;
+ 
+@@ -3555,6 +3578,10 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
      }
  
      // total damage
