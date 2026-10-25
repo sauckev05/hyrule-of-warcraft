@@ -1582,6 +1582,22 @@ index dd3374958..e1b784960 100644
      }
  }
  
+diff --git a/src/game/BattleGround/BattleGroundAB.cpp b/src/game/BattleGround/BattleGroundAB.cpp
+index c4b513eb9..9cb458cc6 100644
+--- a/src/game/BattleGround/BattleGroundAB.cpp
++++ b/src/game/BattleGround/BattleGroundAB.cpp
+@@ -351,6 +351,11 @@ void BattleGroundAB::HandlePlayerClickedOnFlag(Player* player, GameObject* go)
+     // update score
+     UpdatePlayerScore(player, scoreType, 1);
+ 
++    // Zelda of Warcraft: assaulting a base counts for "The Battle for Arathi Basin!" (its credit
++    // creatures, 15001 stables to 15005 gold mine, in node order)
++    if (scoreType == SCORE_BASES_ASSAULTED)
++        player->KilledMonsterCredit(15001 + uint32(node));
++
+     // update banner object
+     DoUpdateBanner(node, m_nodeStatus[node], true);
+ 
 diff --git a/src/game/BattleGround/BattleGroundHandler.cpp b/src/game/BattleGround/BattleGroundHandler.cpp
 index 101bf1602..51a921783 100644
 --- a/src/game/BattleGround/BattleGroundHandler.cpp
