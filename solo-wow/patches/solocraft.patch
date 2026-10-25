@@ -1710,10 +1710,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..58f2bfb70
+index 000000000..a0c8310bb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4367 @@
+@@ -0,0 +1,4409 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3651,6 +3651,48 @@ index 000000000..58f2bfb70
 +            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: your %s was sent to your mailbox.|r", proto->Name1);
 +        }
 +    }
++}
++
++bool ZeldaIsBattlegroundQuest(Quest const* quest)
++{
++    if (!quest)
++        return false;
++    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
++        if (quest->ReqItemId[i] == 20558 || quest->ReqItemId[i] == 20559 || quest->ReqItemId[i] == 20560)
++            return true;
++    // the quests given for the battlegrounds' own zones and factions
++    switch (quest->GetZoneOrSort())
++    {
++        case 3277: case 3358: case 2597:        // Warsong Gulch, Arathi Basin, Alterac Valley
++        case -25:                               // the "Battlegrounds" quest sort
++            return true;
++    }
++    for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)
++        switch (quest->RewRepFaction[i])
++        {
++            case 509: case 510: case 729: case 730: case 889: case 890:
++                return true;
++        }
++    return false;
++}
++
++uint32 ZeldaBattlegroundXP(uint32 xp)
++{
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.BattlegroundXPRate", 5.0f));
++    return uint32(xp * rate);
++}
++
++int32 ZeldaBattlegroundReputation(uint32 factionId, int32 standing)
++{
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.BattlegroundRepRate", 5.0f));
++    switch (factionId)
++    {
++        case 509: case 510:                     // League of Arathor, The Defilers
++        case 729: case 730:                     // Frostwolf Clan, Stormpike Guard
++        case 889: case 890:                     // Warsong Outriders, Silverwing Sentinels
++            return int32(standing * rate);
++    }
++    return standing;
 +}
 +
 +uint32 ZeldaMarkTurnInXP(Player* player, Quest const* quest)
@@ -6083,10 +6125,10 @@ index 000000000..58f2bfb70
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..328e4a2cf
+index 000000000..d7e1332ac
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,260 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6293,6 +6335,12 @@ index 000000000..328e4a2cf
 +// handed in, whatever the quest's own level; 0 for other quests
 +class Quest;
 +uint32 ZeldaMarkTurnInXP(Player* player, Quest const* quest);
++// Zelda of Warcraft: battlegrounds pay five times over - experience earned inside one and from its
++// quests (Zelda.BattlegroundXPRate), and reputation with the six battleground factions from every
++// source (Zelda.BattlegroundRepRate)
++bool ZeldaIsBattlegroundQuest(Quest const* quest);
++uint32 ZeldaBattlegroundXP(uint32 xp);
++int32 ZeldaBattlegroundReputation(uint32 factionId, int32 standing);
 +
 +// Zelda of Warcraft: an enemy's ability aimed at a hero charges up for at least
 +// Zelda.EnemyChargeTime ms (default 1500) and the hero gets a hidden "ZCAST:caster;spell;ms" line
@@ -6642,7 +6690,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..927a6314e 100644
+index 4d8e9160a..4314190d2 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -6699,18 +6747,21 @@ index 4d8e9160a..927a6314e 100644
      {
          addvalue = OCTRegenHPPerSpirit() * HealthIncreaseRate;
          if (!IsInCombat())
-@@ -2679,6 +2694,10 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
+@@ -2679,6 +2694,13 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
      if (level >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          return;
  
-+    // Zelda of Warcraft: kills inside dungeons and raids give less experience (Zelda.DungeonXPRate)
-+    if (victim && GetMap()->IsDungeon())
++    // Zelda of Warcraft: experience earned in a battleground is five times as much
++    // (Zelda.BattlegroundXPRate); kills inside dungeons and raids give less (Zelda.DungeonXPRate)
++    if (GetMap()->IsBattleGround())
++        xp = ZeldaBattlegroundXP(xp);
++    else if (victim && GetMap()->IsDungeon())
 +        xp = ZeldaDungeonXP(xp);
 +
      // XP resting bonus for kill
      uint32 rested_bonus_xp = victim ? GetXPRestBonus(xp) : 0;
  
-@@ -4895,7 +4914,7 @@ float Player::GetMeleeCritFromAgility() const
+@@ -4895,7 +4917,7 @@ float Player::GetMeleeCritFromAgility() const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -6719,7 +6770,7 @@ index 4d8e9160a..927a6314e 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -4939,7 +4958,7 @@ float Player::GetDodgeFromAgility(float amount) const
+@@ -4939,7 +4961,7 @@ float Player::GetDodgeFromAgility(float amount) const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -6728,7 +6779,7 @@ index 4d8e9160a..927a6314e 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -5154,6 +5173,10 @@ bool Player::UpdateFishingSkill()
+@@ -5154,6 +5176,10 @@ bool Player::UpdateFishingSkill()
      if (SkillValue >= GetSkillMax(SKILL_FISHING))
          return false;
  
@@ -6739,7 +6790,7 @@ index 4d8e9160a..927a6314e 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -9515,6 +9538,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
+@@ -9515,6 +9541,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
  
              uint32 type = pProto->InventoryType;
  
@@ -6751,7 +6802,7 @@ index 4d8e9160a..927a6314e 100644
              if (eslot == EQUIPMENT_SLOT_OFFHAND)
              {
                  if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
-@@ -11003,6 +11031,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
+@@ -11003,6 +11034,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
  {
      MANGOS_ASSERT(pItem != nullptr);
  
@@ -6761,16 +6812,18 @@ index 4d8e9160a..927a6314e 100644
      uint32 slot = m_currentBuybackSlot;
      // if current back slot non-empty search oldest or free
      if (m_items[slot])
-@@ -12659,6 +12690,8 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12659,6 +12693,10 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
  
      // Used for client inform but rewarded only in case not max level
      uint32 xp = uint32(pQuest->XPValue(this) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
 +    // Zelda of Warcraft: handing in battleground marks always gives experience, sized to the hero's level
 +    xp = std::max(xp, ZeldaMarkTurnInXP(this, pQuest));
++    if (ZeldaIsBattlegroundQuest(pQuest))
++        xp = ZeldaBattlegroundXP(xp);               // battleground quests: five times the experience
  
      if (GetLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          GiveXP(xp, nullptr);
-@@ -18082,9 +18115,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18120,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -6785,7 +6838,7 @@ index 4d8e9160a..927a6314e 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19701,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19706,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -6813,7 +6866,7 @@ index 4d8e9160a..927a6314e 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20089,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20094,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -6822,7 +6875,7 @@ index 4d8e9160a..927a6314e 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20278,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20283,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -7358,6 +7411,29 @@ index 09b927f41..065c3058f 100644
  
          MovementGeneratorType GetCurrentMovementGeneratorType() const;
  
+diff --git a/src/game/Reputation/ReputationMgr.cpp b/src/game/Reputation/ReputationMgr.cpp
+index 591908ab5..5cb585b23 100644
+--- a/src/game/Reputation/ReputationMgr.cpp
++++ b/src/game/Reputation/ReputationMgr.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Reputation/ReputationMgr.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Server/DBCStores.h"
+ #include "Entities/Player.h"
+ #include "Server/WorldPacket.h"
+@@ -268,6 +269,10 @@ bool ReputationMgr::SetReputation(FactionEntry const* factionEntry, int32 standi
+     if (!factionEntry)
+         return false;
+ 
++    // Zelda of Warcraft: the battleground factions gain five times as much, from every source
++    if (incremental && standing > 0)
++        standing = ZeldaBattlegroundReputation(factionEntry->ID, standing);
++
+     bool res = false;
+     if (!noSpillover)
+     {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
 index bf5c5c578..68d4d637f 100644
 --- a/src/game/Spells/Spell.cpp
