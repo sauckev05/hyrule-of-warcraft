@@ -1,7 +1,7 @@
 -- Zelda HUD: no action bar. The main bar's art, buttons, micro buttons and bag buttons are hidden
 -- (the Zelda keys, the potion and mount slots, 8 for the bags and 9 for the Subscreen do their
 -- work); only the experience bar stays, at the very bottom of the screen, with the reputation bar
--- just above it. The stance buttons sit in a row under the buff icons, top right.
+-- just above it. The stance buttons sit in a row just under the magic (rage) meter, top left.
 
 local HIDE = {
 	"MainMenuBarArtFrame", "BonusActionBarFrame", "MultiBarBottomLeft", "MultiBarBottomRight",
@@ -40,7 +40,7 @@ local function Layout()
 		Place(ReputationWatchBar, "BOTTOM", MainMenuExpBar, "TOP", 0, 2)
 	end
 	-- The stance bar keeps its own frame and place (moving the frame itself broke the mouse); its
-	-- buttons are moved instead, into a row under the buff icons, its right end under theirs.
+	-- buttons are moved instead, into a row just under the magic (rage) meter.
 	if ShapeshiftBarFrame and ShapeshiftBarFrame.EnableMouse then
 		ShapeshiftBarFrame:EnableMouse(false)
 	end
@@ -49,7 +49,12 @@ local function Layout()
 	end
 	local forms = GetNumShapeshiftForms and GetNumShapeshiftForms() or 0
 	if forms > 0 and ShapeshiftButton1 then
-		Place(ShapeshiftButton1, "TOPLEFT", UIParent, "TOPRIGHT", -(205 + forms * 37), -150)
+		if ZeldaHUDMagic then
+			-- just under the magic (rage) meter, below its gold frame
+			Place(ShapeshiftButton1, "TOPLEFT", ZeldaHUDMagic, "BOTTOMLEFT", -4, -16)
+		else
+			Place(ShapeshiftButton1, "TOPLEFT", UIParent, "TOPRIGHT", -(205 + forms * 37), -150)
+		end
 	end
 end
 

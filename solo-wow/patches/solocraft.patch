@@ -1653,10 +1653,10 @@ index 00fde0a85..199cad2b0 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..0418912d5
+index 000000000..867c54942
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4065 @@
+@@ -0,0 +1,4152 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1694,6 +1694,7 @@ index 000000000..0418912d5
 +#include "Loot/LootMgr.h"
 +#include "Spells/SpellAuras.h"
 +#include "Spells/Spell.h"
++#include "VMapFactory.h"
 +#include "Entities/GameObject.h"
 +#include "Entities/Pet.h"
 +#include "Server/DBCStores.h"
@@ -1788,6 +1789,12 @@ index 000000000..0418912d5
 +        std::string lastClearReport;
 +        uint32 clearCheckIn = 0;
 +        uint32 doneQuestCheckIn = 0;
++        // falling through the world: the last spot the hero stood on, and when the fall began
++        uint32 safeMap = 0xFFFFFFFF;
++        float safeX = 0.0f, safeY = 0.0f, safeZ = 0.0f, safeO = 0.0f;
++        uint32 fallingSince = 0;
++        uint32 rescueCheckIn = 0;
++        bool ghostSpeed = false;
 +        // the Arena Grand Master's shield rises by itself near death, then rests until this time
 +        time_t grandMasterReadyAt = 0;
 +        // the Gurubashi Arena challenge this hero is running
@@ -2005,6 +2012,13 @@ index 000000000..0418912d5
 +    }
 +    if (moveType != MOVE_RUN)
 +        return 1.0f;
++    if (player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
++    {
++        // a ghost runs back to the corpse twice as fast as the hero runs
++        static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 1.3f));
++        static float const ghostRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.GhostSpeedRate", 2.0f));
++        return runRate * ghostRate;
++    }
 +    if (StateFor(player).shield || StateFor(player).parry)
 +        return 0.45f;                           // shield or parry up: a careful walk, whatever the run speed
 +    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 1.3f));
@@ -2906,6 +2920,7 @@ index 000000000..0418912d5
 +static void ZeldaEnemyMechanics(Player* player, ZeldaState& state);
 +static void ZeldaGifts(Player* player);
 +static void ZeldaDoneQuests(Player* player);
++static void ZeldaUnderWorldRescue(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
 +
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
@@ -2942,6 +2957,20 @@ index 000000000..0418912d5
 +            SendClearReport(player, state, false);
 +        }
 +    }
++
++    // a ghost runs twice as fast back to the corpse
++    {
++        bool const ghost = player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
++        if (ghost != state.ghostSpeed)
++        {
++            state.ghostSpeed = ghost;
++            player->UpdateSpeed(MOVE_RUN, true);
++            player->UpdateSpeed(MOVE_SWIM, true);
++        }
++    }
++
++    // fell through the ground: back up to the surface
++    ZeldaUnderWorldRescue(player, state, diff);
 +
 +    // quests the hero had already done before the story asked: finished as soon as they are taken
 +    if (player->IsInWorld())
@@ -3548,6 +3577,64 @@ index 000000000..0418912d5
 +            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: your %s was sent to your mailbox.|r", proto->Name1);
 +        }
 +    }
++}
++
++// Falling through the world (Zelda.UnderWorldRescue, default on): a hero who has been falling for
++// over a second and a half with no floor anywhere below and under the land's surface is put back on
++// the last spot it stood on (or on the surface right above when there is none).
++static void ZeldaUnderWorldRescue(Player* player, ZeldaState& state, uint32 diff)
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.UnderWorldRescue", true);
++    if (!on || !player->IsInWorld() || player->IsBeingTeleported() || player->IsTaxiFlying() ||
++        player->GetTransport() || (!player->IsAlive() && !player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST)))
++    {
++        state.fallingSince = 0;
++        return;
++    }
++    state.rescueCheckIn = state.rescueCheckIn > diff ? state.rescueCheckIn - diff : 0;
++    if (state.rescueCheckIn)
++        return;
++    state.rescueCheckIn = 250;
++
++    uint32 const now = WorldTimer::getMSTime();
++    float const x = player->GetPositionX(), y = player->GetPositionY(), z = player->GetPositionZ();
++    uint32 const mapId = player->GetMapId();
++    if (!player->IsFalling() || player->IsInWater())
++    {
++        state.fallingSince = 0;
++        // standing on something: remember it
++        float const ground = player->GetMap()->GetHeight(x, y, z + 2.0f);
++        if (ground > INVALID_HEIGHT && std::fabs(ground - z) < 3.0f)
++        {
++            state.safeMap = mapId;
++            state.safeX = x;
++            state.safeY = y;
++            state.safeZ = z;
++            state.safeO = player->GetOrientation();
++        }
++        return;
++    }
++    if (!state.fallingSince)
++        state.fallingSince = now;
++    if (WorldTimer::getMSTimeDiff(state.fallingSince, now) < 1500)
++        return;
++
++    // a floor somewhere below (a cave, a deep drop): a real fall
++    float const floor = VMAP::VMapFactory::createOrGetVMapManager()->getHeight(mapId, x, y, z + 2.0f, 2000.0f);
++    if (floor > INVALID_HEIGHT)
++        return;
++    float const surface = player->GetMap()->GetTerrain()->GetHeightStatic(x, y, z, false);
++    if (surface > INVALID_HEIGHT && z > surface - 2.0f)
++        return;                             // above the land: it will land on it
++
++    state.fallingSince = 0;
++    if (state.safeMap == mapId)
++        player->TeleportTo(mapId, state.safeX, state.safeY, state.safeZ + 0.5f, state.safeO);
++    else if (surface > INVALID_HEIGHT)
++        player->TeleportTo(mapId, x, y, surface + 1.0f, player->GetOrientation());
++    else
++        player->TeleportToHomebind();
++    ChatHandler(player).PSendSysMessage("|cff33ff99You fell through the world - back to solid ground.|r");
 +}
 +
 +// Zelda.DoneQuests "Name:quest,quest,... Name2:..." - quests a hero has already done (a dungeon
