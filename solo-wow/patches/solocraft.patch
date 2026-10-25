@@ -1644,10 +1644,10 @@ index 8e6c51885..194a7b698 100644
  
  }
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba3d..d8a89eb00 100644
+index ffa25ba3d..06f70fdc8 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,18 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,19 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
@@ -1660,6 +1660,7 @@ index ffa25ba3d..d8a89eb00 100644
 +        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
 +        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
 +        { "zmount",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaMountCommand,          "", nullptr },
++        { "zbag",           SEC_PLAYER,         false, &ChatHandler::HandleZeldaBagCommand,            "", nullptr },
 +        { "zhook",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaHookCommand,           "", nullptr },
 +        { "zbow",           SEC_PLAYER,         false, &ChatHandler::HandleZeldaBowCommand,            "", nullptr },
 +        { "zboomerang",     SEC_PLAYER,         false, &ChatHandler::HandleZeldaBoomerangCommand,      "", nullptr },
@@ -1667,10 +1668,10 @@ index ffa25ba3d..d8a89eb00 100644
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a85..199cad2b0 100644
+index 00fde0a85..1e68b80d7 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,19 @@ class ChatHandler
+@@ -679,6 +679,20 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
@@ -1684,6 +1685,7 @@ index 00fde0a85..199cad2b0 100644
 +        bool HandleZeldaFlipCommand(char* args);
 +        bool HandleZeldaShieldCommand(char* args);
 +        bool HandleZeldaMountCommand(char* args);
++        bool HandleZeldaBagCommand(char* args);
 +        bool HandleZeldaHookCommand(char* args);
 +        bool HandleZeldaBowCommand(char* args);
 +        bool HandleZeldaBoomerangCommand(char* args);
@@ -1692,10 +1694,10 @@ index 00fde0a85..199cad2b0 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..9ab951f51
+index 000000000..5bf583c18
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4182 @@
+@@ -0,0 +1,4271 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4698,6 +4700,95 @@ index 000000000..9ab951f51
 +    SpellCastTargets targets;
 +    targets.setUnitTarget(player);
 +    player->CastItemUseSpell(item, targets, 0);
++    return true;
++}
++
++// .zbag <bag> <slot> (the client's container and 1-based slot): puts that bag on - into an empty
++// bag slot, else in place of the smallest bag worn when it is bigger. The smaller bag's things move
++// to free room elsewhere first, and the smaller bag goes where the new one was.
++bool ChatHandler::HandleZeldaBagCommand(char* args)
++{
++    Player* player = m_session->GetPlayer();
++    uint32 clientBag = 0, clientSlot = 0;
++    if (!args || sscanf(args, "%u %u", &clientBag, &clientSlot) != 2 || clientBag > 4 || clientSlot == 0)
++        return true;
++    auto pos = [](uint8 bag, uint8 slot) { return uint16((uint16(bag) << 8) | slot); };
++    uint8 const srcBag = clientBag == 0 ? uint8(INVENTORY_SLOT_BAG_0) : uint8(INVENTORY_SLOT_BAG_START + clientBag - 1);
++    uint8 const srcSlotIdx = clientBag == 0 ? uint8(INVENTORY_SLOT_ITEM_START + clientSlot - 1) : uint8(clientSlot - 1);
++    uint16 src = pos(srcBag, srcSlotIdx);
++    Item* item = player->GetItemByPos(src);
++    if (!item || item->GetProto()->InventoryType != INVTYPE_BAG)
++        return true;
++    if (player->IsInCombat())
++    {
++        m_session->SendNotification("You can't change bags in combat.");
++        return true;
++    }
++
++    // an empty bag slot: straight in
++    for (uint8 b = INVENTORY_SLOT_BAG_START; b < INVENTORY_SLOT_BAG_END; ++b)
++        if (!player->GetItemByPos(INVENTORY_SLOT_BAG_0, b))
++        {
++            player->SwapItem(src, pos(INVENTORY_SLOT_BAG_0, b));
++            return true;
++        }
++
++    // else the smallest bag worn
++    uint8 target = 0;
++    uint32 targetSize = 0xFFFFFFFF;
++    for (uint8 b = INVENTORY_SLOT_BAG_START; b < INVENTORY_SLOT_BAG_END; ++b)
++        if (Bag* bag = dynamic_cast<Bag*>(player->GetItemByPos(INVENTORY_SLOT_BAG_0, b)))
++            if (bag->GetBagSize() < targetSize)
++            {
++                target = b;
++                targetSize = bag->GetBagSize();
++            }
++    if (!target)
++        return true;
++    if (item->GetProto()->ContainerSlots <= targetSize)
++    {
++        m_session->SendNotification("Your smallest bag already holds %u - this one is no bigger.", targetSize);
++        return true;
++    }
++
++    // room for the smaller bag's things: the backpack and the other ordinary bags
++    std::vector<uint16> freeSlots;
++    for (uint8 s = INVENTORY_SLOT_ITEM_START; s < INVENTORY_SLOT_ITEM_END; ++s)
++        if (!player->GetItemByPos(INVENTORY_SLOT_BAG_0, s))
++            freeSlots.push_back(pos(INVENTORY_SLOT_BAG_0, s));
++    for (uint8 b = INVENTORY_SLOT_BAG_START; b < INVENTORY_SLOT_BAG_END; ++b)
++    {
++        if (b == target)
++            continue;
++        Bag* bag = dynamic_cast<Bag*>(player->GetItemByPos(INVENTORY_SLOT_BAG_0, b));
++        if (!bag || bag->GetProto()->SubClass != ITEM_SUBCLASS_CONTAINER)
++            continue;                                   // soul, herb and other special bags take only their own
++        for (uint32 s = 0; s < bag->GetBagSize(); ++s)
++            if (!bag->GetItemByPos(uint8(s)))
++                freeSlots.push_back(pos(b, uint8(s)));
++    }
++    std::vector<uint16> inside;
++    Bag* old = static_cast<Bag*>(player->GetItemByPos(INVENTORY_SLOT_BAG_0, target));
++    for (uint32 s = 0; s < old->GetBagSize(); ++s)
++        if (old->GetItemByPos(uint8(s)))
++            inside.push_back(pos(target, uint8(s)));
++    if (inside.size() > freeSlots.size())
++    {
++        m_session->SendNotification("Make room for %u more items first.", uint32(inside.size() - freeSlots.size()));
++        return true;
++    }
++    for (size_t i = 0; i < inside.size(); ++i)
++    {
++        player->SwapItem(inside[i], freeSlots[i]);
++        if (inside[i] == src)
++            src = freeSlots[i];                         // the new bag itself was in the small one
++    }
++    if (!old->IsEmpty())
++    {
++        m_session->SendNotification("Couldn't empty your smallest bag.");
++        return true;
++    }
++    player->SwapItem(src, pos(INVENTORY_SLOT_BAG_0, target));
 +    return true;
 +}
 +
