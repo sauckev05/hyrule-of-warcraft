@@ -1441,10 +1441,10 @@ index 00fde0a85..0b4eea0fb 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..9306bf54a
+index 000000000..01e8c4c09
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,3487 @@
+@@ -0,0 +1,3493 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3204,6 +3204,12 @@ index 000000000..9306bf54a
 +    return damage;
 +}
 +
++bool ZeldaNaturalHealthRegen()
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.NaturalHealthRegen", false);
++    return on;
++}
++
 +// ---------------------------------------------------------------------------------- guard: parry
 +bool ZeldaParryHolds(Unit const* victim, Unit const* attacker)
 +{
@@ -4934,10 +4940,10 @@ index 000000000..9306bf54a
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..80aafd963
+index 000000000..2ba804383
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,199 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -5084,6 +5090,8 @@ index 000000000..80aafd963
 +// Zelda of Warcraft: the main hand's damage factor, 0.5 while dual wielding (Zelda.DualWieldDamage)
 +float ZeldaDualWieldFactor(Player const* player);
 +
++// Zelda of Warcraft: whether heroes regain health on their own (Zelda.NaturalHealthRegen, 0)
++bool ZeldaNaturalHealthRegen();
 +// Zelda of Warcraft: the guard key without a shield - every melee blow from the front is parried
 +bool ZeldaParryHolds(Unit const* victim, Unit const* attacker);
 +// Zelda of Warcraft: intellect gives spell power (Zelda.IntellectSpellPower per point, 2) and spirit
@@ -5407,7 +5415,7 @@ index 60cf414d8..c86aa0006 100644
      GetPlayer()->RemovePet(PET_SAVE_REAGENTS);
      GetPlayer()->BuildPlayerRepop();
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..c462e2f45 100644
+index 4d8e9160a..d7b9368d4 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -5439,7 +5447,20 @@ index 4d8e9160a..c462e2f45 100644
          if (InstanceData* mapInstance = GetInstanceData())
              mapInstance->OnPlayerDeath(this);
      }
-@@ -2679,6 +2687,10 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
+@@ -2385,8 +2393,10 @@ void Player::RegenerateHealth(uint32 diff)
+ 
+     float addvalue = 0.0f;
+ 
+-    // normal regen case (maybe partly in combat case)
+-    if (!IsInCombat() || HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
++    // normal regen case (maybe partly in combat case) - Zelda of Warcraft: heroes get no natural
++    // health back, in or out of combat; only bandages, potions, food, Navi, set effects and other
++    // healing (Zelda.NaturalHealthRegen = 0)
++    if ((!IsInCombat() || HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT)) && ZeldaNaturalHealthRegen())
+     {
+         addvalue = OCTRegenHPPerSpirit() * HealthIncreaseRate;
+         if (!IsInCombat())
+@@ -2679,6 +2689,10 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
      if (level >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          return;
  
@@ -5450,7 +5471,7 @@ index 4d8e9160a..c462e2f45 100644
      // XP resting bonus for kill
      uint32 rested_bonus_xp = victim ? GetXPRestBonus(xp) : 0;
  
-@@ -4895,7 +4907,7 @@ float Player::GetMeleeCritFromAgility() const
+@@ -4895,7 +4909,7 @@ float Player::GetMeleeCritFromAgility() const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -5459,7 +5480,7 @@ index 4d8e9160a..c462e2f45 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -4939,7 +4951,7 @@ float Player::GetDodgeFromAgility(float amount) const
+@@ -4939,7 +4953,7 @@ float Player::GetDodgeFromAgility(float amount) const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -5468,7 +5489,7 @@ index 4d8e9160a..c462e2f45 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -5154,6 +5166,10 @@ bool Player::UpdateFishingSkill()
+@@ -5154,6 +5168,10 @@ bool Player::UpdateFishingSkill()
      if (SkillValue >= GetSkillMax(SKILL_FISHING))
          return false;
  
@@ -5479,7 +5500,7 @@ index 4d8e9160a..c462e2f45 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -9515,6 +9531,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
+@@ -9515,6 +9533,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
  
              uint32 type = pProto->InventoryType;
  
@@ -5491,7 +5512,7 @@ index 4d8e9160a..c462e2f45 100644
              if (eslot == EQUIPMENT_SLOT_OFFHAND)
              {
                  if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
-@@ -18082,9 +18103,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18105,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -5506,7 +5527,7 @@ index 4d8e9160a..c462e2f45 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19689,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19691,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -5534,7 +5555,7 @@ index 4d8e9160a..c462e2f45 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20077,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20079,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -5543,7 +5564,7 @@ index 4d8e9160a..c462e2f45 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20266,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20268,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  

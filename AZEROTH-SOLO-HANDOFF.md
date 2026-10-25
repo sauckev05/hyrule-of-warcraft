@@ -181,6 +181,9 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Beedle: the 'end' spot beside each final boss is gone; where a creature spot 40-70 yd from the
   boss on its floor, on the way in, exists (16 dungeons/raids) Beedle stands there ('boss door'),
   elsewhere only the entrance and middle Beedles remain (dungeon_vendors.json, 004_vendors).
+- No natural health regeneration for heroes, in or out of combat (Zelda.NaturalHealthRegen = 0,
+  Player::RegenerateHealth skips the spirit regen); bandages, potions, food, Navi, set effects and
+  health-regen auras from items still heal.
 - Healing and mana potions: at most 10 of each kind, stacking to 10 (015_potion_limit.sql).
 - Potion goblin Fizzbang Bottlecork (190651, guids 9103001-7, build_vendors.py -> 004_vendors):
   healing and mana potions of every rank; beside Short John Mithril above the Gurubashi Arena pit,
