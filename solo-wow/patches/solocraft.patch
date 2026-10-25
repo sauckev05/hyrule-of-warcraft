@@ -1441,10 +1441,10 @@ index 00fde0a85..0b4eea0fb 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..e455ccc7a
+index 000000000..9306bf54a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,3450 @@
+@@ -0,0 +1,3487 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1551,8 +1551,9 @@ index 000000000..e455ccc7a
 +        uint32 entryInstance = 0;
 +        float entryX = 0.0f, entryY = 0.0f, entryZ = 0.0f, entryO = 0.0f;
 +        // armor set bonuses worn right now, by bonus type, and the crit chance given to this login
-+        float setBonus[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
++        float setBonus[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 +        float appliedCrit = 0.0f;
++        float appliedWeaponDamage = 0.0f;               // flat weapon damage given to this login
 +        Player const* setsAppliedFor = nullptr;
 +        // a warrior's stance the weapons were last fitted to, and when a refused equip was last told
 +        uint8 lastForm = 0xFF;
@@ -1976,7 +1977,9 @@ index 000000000..e455ccc7a
 +        SET_BONUS_EXTRA_SWING   = 5,    // % chance a hit swings again at once
 +        SET_BONUS_SPIN_RAGE     = 6,    // rage the Spin Attack costs less
 +        SET_BONUS_HEAL_ON_KILL  = 7,    // % of health back on every kill
-+        SET_BONUS_MAX           = 8
++        SET_BONUS_STUN          = 8,    // % chance a hit stuns the enemy for 1 second
++        SET_BONUS_WEAPON_FLAT   = 9,    // flat weapon damage on every melee hit
++        SET_BONUS_MAX           = 10
 +    };
 +    struct SetBonusRow
 +    {
@@ -2003,6 +2006,7 @@ index 000000000..e455ccc7a
 +        {
 +            state.setsAppliedFor = player;      // a new login starts without the old crit bonus
 +            state.appliedCrit = 0.0f;
++            state.appliedWeaponDamage = 0.0f;
 +        }
 +        std::unordered_map<uint32, uint32> worn;
 +        if (!s_setOfItem.empty())
@@ -2015,7 +2019,7 @@ index 000000000..e455ccc7a
 +                        ++worn[itr->second];
 +                }
 +        }
-+        float totals[SET_BONUS_MAX] = { 0, 0, 0, 0, 0, 0, 0, 0 };
++        float totals[SET_BONUS_MAX] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 +        for (SetBonusRow const& row : s_setBonuses)
 +        {
 +            auto itr = worn.find(row.set);
@@ -2035,7 +2039,22 @@ index 000000000..e455ccc7a
 +                if (crit != 0.0f)
 +                    player->HandleBaseModValue(group, FLAT_MOD, crit, true);
 +            }
++            ZeldaGearCritForSpells(player, crit - state.appliedCrit);   // gear crit counts for spells
 +            state.appliedCrit = crit;
++        }
++
++        // flat weapon damage, as a "+N Weapon Damage" enchant: shown on the character sheet
++        float const flat = totals[SET_BONUS_WEAPON_FLAT];
++        if (flat != state.appliedWeaponDamage)
++        {
++            for (UnitMods mod : { UNIT_MOD_DAMAGE_MAINHAND, UNIT_MOD_DAMAGE_OFFHAND })
++            {
++                if (state.appliedWeaponDamage != 0.0f)
++                    player->HandleStatModifier(mod, TOTAL_VALUE, state.appliedWeaponDamage, false);
++                if (flat != 0.0f)
++                    player->HandleStatModifier(mod, TOTAL_VALUE, flat, true);
++            }
++            state.appliedWeaponDamage = flat;
 +        }
 +    }
 +
@@ -3050,6 +3069,24 @@ index 000000000..e455ccc7a
 +            CreatureInfo const* info = creature->GetCreatureInfo();
 +            if (!creature->IsWorldBoss() && !(info && info->Rank == CREATURE_ELITE_WORLDBOSS))
 +                creature->GetMotionMaster()->MovePushedBack(*player, 2.5f, 12.0f);
++        }
++    }
++
++    // or stuns the enemy for a moment (not world bosses)
++    float const stun = SetBonusOf(player, SET_BONUS_STUN);
++    if (stun > 0.0f && victim->IsAlive() && roll_chance_f(stun))
++    {
++        Creature const* creature = victim->GetTypeId() == TYPEID_UNIT ? static_cast<Creature const*>(victim) : nullptr;
++        if (!creature || !creature->IsWorldBoss())
++        {
++            const uint32 STUN_SPELL = 7922;     // Charge Stun, held for 1 second
++            player->CastSpell(victim, STUN_SPELL, TRIGGERED_OLD_TRIGGERED);
++            if (SpellAuraHolder* holder = victim->GetSpellAuraHolder(STUN_SPELL, player->GetObjectGuid()))
++            {
++                holder->SetAuraMaxDuration(1000);
++                holder->SetAuraDuration(1000);
++                holder->UpdateAuraDuration();
++            }
 +        }
 +    }
 +

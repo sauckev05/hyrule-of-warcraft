@@ -181,6 +181,12 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Beedle: the 'end' spot beside each final boss is gone; where a creature spot 40-70 yd from the
   boss on its floor, on the way in, exists (16 dungeons/raids) Beedle stands there ('boss door'),
   elsewhere only the entrance and middle Beedles remain (dungeon_vendors.json, 004_vendors).
+- Healing and mana potions: at most 10 of each kind, stacking to 10 (015_potion_limit.sql).
+- Armor set bonuses: new types 8 stun (% chance a melee hit stuns 1 s, Charge Stun 7922; not world
+  bosses) and 9 weapon_flat (+N weapon damage via UNIT_MOD_DAMAGE_MAINHAND/OFFHAND TOTAL_VALUE, on
+  the character sheet). Zora Scale (30): 2-piece +5 weapon damage, 6-piece 4% stun instead of
+  knockback. Kokiri, Scarlet Crusade and Hylian Knight: their 5% weapon damage is +5 weapon damage.
+  Set crit also counts as spell crit.
 
 ## What the Zelda layer does (current features)
 
