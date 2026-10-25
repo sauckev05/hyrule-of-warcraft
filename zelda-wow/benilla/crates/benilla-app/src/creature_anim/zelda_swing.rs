@@ -32,6 +32,9 @@ pub(crate) struct ZeldaGuard {
     pub(crate) start: bool,
     /// The clip id playing for the guard, 0 when none.
     pub(crate) id: u16,
+    /// Re-armed while held after something else took the body (the server's root on a raised
+    /// guard re-picks the stance): the clip goes straight to its guard pose.
+    pub(crate) resume: bool,
 }
 
 /// Where in the guard clip the pose holds while the key is down, as a fraction of its length: the

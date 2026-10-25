@@ -1016,12 +1016,23 @@ pub(super) fn drive_animations(
                                 .then(|| tr.get_main_animation())
                                 .flatten()
                         });
+                    let on_base = node.is_some()
+                        && drv.overlay.is_none_or(|ov| ov.id != gid)
+                        && matches!(drv.mode, Mode::Swing { id: m, .. } if m == gid);
                     let duration = node.and_then(|n| {
                         anims.clips.iter().find(|c| c.node == n).map(|c| c.duration)
                     });
+                    // The server roots a raised guard: that movement-flag edge (and the flags it
+                    // wipes) must not re-arm the base over the held pose.
+                    if guard.held && on_base {
+                        drv.gait_flags = mv.flags;
+                    }
                     match (node.and_then(|n| player.animation_mut(n)), duration) {
                         (Some(active), Some(duration)) if guard.held => {
                             let pose = duration * super::zelda_swing::GUARD_POSE;
+                            if std::mem::take(&mut guard.resume) && active.seek_time() < pose {
+                                active.seek_to(pose);
+                            }
                             if active.seek_time() >= pose {
                                 if active.seek_time() - pose > 0.02 {
                                     active.seek_to(pose);
@@ -1036,7 +1047,12 @@ pub(super) fn drive_animations(
                             guard.id = 0;
                         }
                         _ => {
-                            if !guard.held {
+                            if guard.held {
+                                // something else took the body while the key is still down: play
+                                // the guard again, straight into its pose
+                                guard.start = true;
+                                guard.resume = true;
+                            } else {
                                 guard.id = 0;
                             }
                         }
