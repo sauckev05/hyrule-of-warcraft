@@ -177,6 +177,10 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Key 9 (ZELDA_SUBSCREEN): the Subscreen, one screen at a time - Spellbook, Talents, Quest Log,
   World Map, Main Menu - with a title bar; Left/Right arrows are rebound to ZELDA_SUB_PREV/NEXT
   while it is open (restored on close); 9 or Escape closes it. Keys version 7 adds 7/8/9 only.
+- No action bar (ZeldaHUD actionbar.lua, enforced every 0.25 s): MainMenuBarArtFrame (art, micro
+  and bag buttons), ActionButton1-12, the bonus/multi/pet bars are hidden; MainMenuExpBar sits at the
+  bottom edge with ReputationWatchBar above it; ShapeshiftBarFrame is reparented under the buffs
+  (TOPRIGHT -170, -125). Q / E (ZELDA_STANCE_PREV/NEXT, keys version 8) cycle the stances with wrap.
 - Harder enemies: Zelda.EnemyMeleeDamageRate 4 (world normals), Zelda.EliteMeleeDamageRate 1.75
   (world elites/bosses), SoloCraft.DungeonHealth 0.65 / DungeonDamage 0.9 with raid exponents
   1.08 / 0.79 (raids as before). Heavy blows (ZeldaEnemyMechanics in ZeldaPlayerUpdate, one windup

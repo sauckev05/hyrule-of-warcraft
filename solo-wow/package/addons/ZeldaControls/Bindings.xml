@@ -13,5 +13,7 @@
 	<Binding name="ZELDA_SUBSCREEN">ZeldaControls_Subscreen()</Binding>
 	<Binding name="ZELDA_SUB_PREV">ZeldaControls_SubscreenPrev()</Binding>
 	<Binding name="ZELDA_SUB_NEXT">ZeldaControls_SubscreenNext()</Binding>
+	<Binding name="ZELDA_STANCE_PREV">ZeldaControls_StancePrev()</Binding>
+	<Binding name="ZELDA_STANCE_NEXT">ZeldaControls_StanceNext()</Binding>
 	<Binding name="ZELDA_TARGET" runOnUp="true">ZeldaControls_Target(keystate)</Binding>
 </Bindings>

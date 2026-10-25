@@ -12,3 +12,4 @@ stats.lua
 dungeon.lua
 crest.lua
 chat.lua
+actionbar.lua

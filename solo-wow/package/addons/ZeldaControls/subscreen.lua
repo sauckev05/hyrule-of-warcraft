@@ -165,3 +165,28 @@ bar:SetScript("OnUpdate", function()
 		BindArrows(false)
 	end
 end)
+
+-- ------------------------------------------------------------------ stances on Q and E
+-- E takes the next stance in the stance bar's order (Battle, Defensive, Berserker), Q the one
+-- before; past either end it comes round to the other.
+local function CycleStance(step)
+	local n = GetNumShapeshiftForms and GetNumShapeshiftForms() or 0
+	if n == 0 then return end
+	local current = 0
+	for i = 1, n do
+		local _, _, active = GetShapeshiftFormInfo(i)
+		if active then current = i end
+	end
+	local nextForm
+	if current == 0 then
+		nextForm = 1
+	else
+		nextForm = current + step
+		if nextForm > n then nextForm = 1 end
+		if nextForm < 1 then nextForm = n end
+	end
+	CastShapeshiftForm(nextForm)
+end
+
+function ZeldaControls_StanceNext() CycleStance(1) end
+function ZeldaControls_StancePrev() CycleStance(-1) end
