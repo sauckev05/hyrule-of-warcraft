@@ -1694,10 +1694,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..d50cc654a
+index 000000000..bf830f6f8
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4305 @@
+@@ -0,0 +1,4317 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1837,6 +1837,7 @@ index 000000000..d50cc654a
 +        uint32 fallingSince = 0;
 +        uint32 rescueCheckIn = 0;
 +        bool ghostSpeed = false;
++        uint32 controlMap = 0xFFFFFFFF;            // the map the hero was last given control on
 +        uint32 portalMap = 0, portalAt = 0;     // the battleground entrance just walked into
 +        // the Arena Grand Master's shield rises by itself near death, then rests until this time
 +        time_t grandMasterReadyAt = 0;
@@ -2999,6 +3000,17 @@ index 000000000..d50cc654a
 +            state.clearCheckIn = 500;
 +            SendClearReport(player, state, false);
 +        }
++    }
++
++    // A battleground's end takes the hero's control away (BlockMovement) and counts on the client to
++    // take it back on the next map change; the Zelda of Warcraft client does not, so the hero stood
++    // frozen after leaving: every arrival on a new map gives control back.
++    if (player->IsInWorld() && !player->IsBeingTeleported() && state.controlMap != player->GetMapId())
++    {
++        state.controlMap = player->GetMapId();
++        if (!player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_CLIENT_CONTROL_LOST) && !player->IsTaxiFlying() &&
++            player->GetMover() == player)
++            player->UpdateClientControl(player, true, true);
 +    }
 +
 +    // a ghost runs twice as fast back to the corpse
