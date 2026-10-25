@@ -1505,10 +1505,28 @@ index 811d227d9..3a0535421 100644
              if (iterator != m_itemData.end() && iterator->second.Value == 0)
                  continue; // item is blacklisted
 diff --git a/src/game/BattleGround/BattleGround.cpp b/src/game/BattleGround/BattleGround.cpp
-index dd3374958..0aa90ebc2 100644
+index dd3374958..e1b784960 100644
 --- a/src/game/BattleGround/BattleGround.cpp
 +++ b/src/game/BattleGround/BattleGround.cpp
-@@ -657,8 +657,9 @@ void BattleGround::RewardReputationToTeam(uint32 factionId, uint32 reputation, T
+@@ -16,6 +16,7 @@
+  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+  */
+ 
++#include "Chat/ZeldaCommands.h"
+ #include "Entities/Object.h"
+ #include "Entities/Player.h"
+ #include "BattleGround.h"
+@@ -312,7 +313,8 @@ void BattleGround::Update(uint32 diff)
+     /*********************************************************/
+ 
+     // if less then minimum players are in on one side, then start premature finish timer
+-    if (GetStatus() == STATUS_IN_PROGRESS && sBattleGroundMgr.GetPrematureFinishTime() && (GetPlayersCountByTeam(ALLIANCE) < GetMinPlayersPerTeam() || GetPlayersCountByTeam(HORDE) < GetMinPlayersPerTeam()))
++    // Zelda of Warcraft: a solo battleground never ends early for lack of players
++    if (GetStatus() == STATUS_IN_PROGRESS && !ZeldaSoloBattlegrounds() && sBattleGroundMgr.GetPrematureFinishTime() && (GetPlayersCountByTeam(ALLIANCE) < GetMinPlayersPerTeam() || GetPlayersCountByTeam(HORDE) < GetMinPlayersPerTeam()))
+     {
+         if (!m_prematureCountDown)
+         {
+@@ -657,8 +659,9 @@ void BattleGround::RewardReputationToTeam(uint32 factionId, uint32 reputation, T
          Team team = itr->second.playerTeam;
          if (team != ALLIANCE && team != HORDE) team = player->GetTeam();
  
@@ -1519,6 +1537,28 @@ index dd3374958..0aa90ebc2 100644
      }
  }
  
+diff --git a/src/game/BattleGround/BattleGroundQueue.cpp b/src/game/BattleGround/BattleGroundQueue.cpp
+index 8e6c51885..194a7b698 100644
+--- a/src/game/BattleGround/BattleGroundQueue.cpp
++++ b/src/game/BattleGround/BattleGroundQueue.cpp
+@@ -16,6 +16,7 @@
+  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+  */
+ 
++#include "Chat/ZeldaCommands.h"
+ #include "BattleGround/BattleGroundQueue.h"
+ #include "Tools/Language.h"
+ #include "World/World.h"
+@@ -1053,7 +1054,8 @@ void BgQueueRemoveEvent::Abort(uint64 /*e_time*/)
+     // do nothing
+ }
+ 
+-BattleGroundQueue::BattleGroundQueue() : m_testing(false)
++// Zelda of Warcraft: solo battlegrounds start with whoever queued (the queue's testing mode)
++BattleGroundQueue::BattleGroundQueue() : m_testing(ZeldaSoloBattlegrounds())
+ {
+ 
+ }
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
 index ffa25ba3d..d07f7eeaf 100644
 --- a/src/game/Chat/Chat.cpp
@@ -1566,10 +1606,10 @@ index 00fde0a85..0b4eea0fb 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..16eb3067a
+index 000000000..763f234db
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,3629 @@
+@@ -0,0 +1,3840 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1660,6 +1700,14 @@ index 000000000..16eb3067a
 +        // the pawnbroker's book: what this hero sold since logging in
 +        std::vector<ZeldaSoldItem> sold;
 +        uint32 soldNextId = 1;
++        // solo battlegrounds: the armies marching in the battleground this hero is in
++        uint32 bgInstance = 0;
++        int32 bgWaveTimer = 0;
++        int32 bgTickTimer = 0;
++        std::vector<ObjectGuid> bgSoldiers;
++        ObjectGuid bgGuards[8];
++        uint32 bgGuardDeadAt[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
++        bool crossFactionSuspended = false;
 +        Player const* speedAppliedFor = nullptr;   // the login whose run speed was set
 +        // companions travelling with this hero, by companion (Lyra, Faelin, Durza, Vesper, Navi, Elara)
 +        uint32 followerEntry[6] = { 0, 0, 0, 0, 0, 0 };
@@ -2795,6 +2843,7 @@ index 000000000..16eb3067a
 +
 +static void ZeldaEnemyMechanics(Player* player, ZeldaState& state);
 +static void ZeldaGifts(Player* player);
++static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
 +
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
@@ -2817,6 +2866,7 @@ index 000000000..16eb3067a
 +    // the Gurubashi Arena challenge
 +    ArenaUpdate(player, state, diff);
 +    ZeldaEnemyMechanics(player, state);
++    ZeldaSoloBattleground(player, state, diff);
 +
 +    // the dungeon clear bar under the minimap: sent when it changes, looked at twice a second
 +    if (player->IsInWorld() && !player->IsBeingTeleported())
@@ -3379,6 +3429,207 @@ index 000000000..16eb3067a
 +            MailDraft(proto->Name1, "Hey! Listen! You dropped this - your bags were full, so here it is.")
 +                .AddItem(item).SendMailTo(player, MailSender(MAIL_CREATURE, uint32(190601)), MAIL_CHECK_MASK_COPIED);
 +            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: your %s was sent to your mailbox.|r", proto->Name1);
++        }
++    }
++}
++
++// ---------------------------------------------------------------------------------- solo battlegrounds
++// Battlegrounds start with one hero (Zelda.SoloBattlegrounds; BattleGroundQueue testing mode, no
++// premature end). Armies of elite soldiers march: every wave spawns at both bases and runs to the
++// other base, fighting whatever it meets, like a lane in League of Legends - the hero fights with
++// one side. Mini bosses guard the flags (Warsong Gulch) and the five banners (Arathi Basin) and
++// come back a while after they fall. The other side's factions stop being friendly inside.
++bool ZeldaSoloBattlegrounds()
++{
++    static bool const on = sConfig.GetBoolDefault("Zelda.SoloBattlegrounds", true);
++    return on;
++}
++
++namespace
++{
++    uint32 const BG_SOLDIER_ALLIANCE = 190980;   // Stormpike Soldier (faction 1216)
++    uint32 const BG_SOLDIER_HORDE = 190981;      // Frostwolf Soldier (faction 1214)
++    uint32 const BG_WARDEN_ALLIANCE = 190982;    // guards the Silverwing Flag
++    uint32 const BG_WARDEN_HORDE = 190983;       // guards the Warsong Flag
++    uint32 const BG_NODE_GUARDIAN = 190984;      // guards an Arathi Basin banner (hostile to all)
++
++    struct BgPoint { float x, y, z, o; };
++    struct BgLayout
++    {
++        uint32 map;
++        BgPoint alliance, horde;            // where each side's waves come from, and the other side runs to
++        uint32 waveSize;
++        int32 waveMs;
++        std::vector<std::pair<uint32, BgPoint>> guards;     // (entry, place)
++        int32 guardRespawnMs;
++    };
++
++    std::vector<BgLayout> const& BgLayouts()
++    {
++        static std::vector<BgLayout> const layouts = {
++            // Warsong Gulch: from flag room to flag room; a warden at each flag
++            { 489, { 1519.5f, 1481.9f, 352.0f, 3.14f }, { 933.3f, 1433.7f, 345.5f, 0.0f }, 4, 40000,
++              { { BG_WARDEN_ALLIANCE, { 1535.4f, 1481.3f, 351.8f, 3.14f } },
++                { BG_WARDEN_HORDE, { 921.5f, 1433.8f, 346.4f, 0.0f } } }, 180000 },
++            // Arathi Basin: from gate to gate; a guardian at every banner
++            { 529, { 1284.6f, 1281.2f, -16.0f, 3.93f }, { 708.1f, 708.4f, -17.8f, 0.79f }, 4, 40000,
++              { { BG_NODE_GUARDIAN, { 1170.8f, 1200.1f, -56.7f, 3.14f } },     // stables
++                { BG_NODE_GUARDIAN, { 981.0f, 1046.6f, -44.8f, 3.14f } },      // blacksmith
++                { BG_NODE_GUARDIAN, { 810.2f, 874.3f, -56.0f, 3.14f } },       // farm
++                { BG_NODE_GUARDIAN, { 860.1f, 1148.9f, 11.2f, 3.14f } },       // lumber mill
++                { BG_NODE_GUARDIAN, { 1150.9f, 848.2f, -110.9f, 3.14f } } },   // gold mine
++              300000 },
++            // Alterac Valley: from general to general, its own captains and towers in between
++            { 30, { 722.4f, -11.0f, 50.7f, 3.14f }, { -1370.9f, -220.2f, 98.5f, 0.0f }, 5, 45000, {}, 0 },
++        };
++        return layouts;
++    }
++
++    size_t const BG_MAX_SOLDIERS = 32;           // both sides together
++
++    void SetCrossFactionSuspended(Player* player, ZeldaState& state, bool suspend)
++    {
++        static bool const crossFaction = sConfig.GetBoolDefault("Zelda.CrossFaction", true);
++        if (!crossFaction || state.crossFactionSuspended == suspend)
++            return;
++        state.crossFactionSuspended = suspend;
++        ReputationMgr& rep = player->GetReputationMgr();
++        for (uint32 faction : OppositeFactions(player->GetTeam()))
++            rep.ApplyForceReaction(faction, REP_FRIENDLY, !suspend);
++        rep.SendForceReactions();
++    }
++
++    void ClearBgArmies(Player* player, ZeldaState& state)
++    {
++        if (player->IsInWorld())
++        {
++            for (ObjectGuid const& guid : state.bgSoldiers)
++                if (Creature* c = player->GetMap()->GetAnyTypeCreature(guid))
++                    c->ForcedDespawn();
++            for (ObjectGuid& guid : state.bgGuards)
++                if (Creature* c = guid ? player->GetMap()->GetAnyTypeCreature(guid) : nullptr)
++                    c->ForcedDespawn();
++        }
++        state.bgSoldiers.clear();
++        for (uint32 i = 0; i < 8; ++i)
++        {
++            state.bgGuards[i] = ObjectGuid();
++            state.bgGuardDeadAt[i] = 0;
++        }
++        state.bgInstance = 0;
++    }
++
++    Creature* SpawnBgUnit(Player* player, uint32 entry, BgPoint const& at, BgPoint const* marchTo, uint32 levelBonus)
++    {
++        Creature* c = player->SummonCreature(entry, at.x + frand(-3.0f, 3.0f), at.y + frand(-3.0f, 3.0f), at.z, at.o,
++                                             TEMPSPAWN_CORPSE_TIMED_DESPAWN, 15000, false, marchTo != nullptr);
++        if (!c)
++            return nullptr;
++        c->SelectLevel(std::min<uint32>(63, player->GetLevel() + levelBonus));
++        if (marchTo)
++        {
++            // their "home" is the enemy base: after every fight they carry on there
++            c->SetRespawnCoord(marchTo->x, marchTo->y, marchTo->z, marchTo->o);
++            c->GetMotionMaster()->MovePoint(1, marchTo->x, marchTo->y, marchTo->z);
++        }
++        else
++            c->SetRespawnCoord(at.x, at.y, at.z, at.o);
++        return c;
++    }
++}
++
++static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff)
++{
++    BattleGround* bg = player->InBattleGround() ? player->GetBattleGround() : nullptr;
++    bool const inBg = bg && player->IsInWorld() && player->GetMap()->IsBattleGround();
++    SetCrossFactionSuspended(player, state, inBg);
++    if (!inBg || !ZeldaSoloBattlegrounds())
++    {
++        if (state.bgInstance)
++            ClearBgArmies(player, state);
++        return;
++    }
++    if (state.bgInstance != player->GetInstanceId())
++    {
++        ClearBgArmies(player, state);
++        state.bgInstance = player->GetInstanceId();
++        state.bgWaveTimer = 5000;
++        state.bgTickTimer = 0;
++    }
++    if (bg->GetStatus() != STATUS_IN_PROGRESS)
++    {
++        if (bg->GetStatus() == STATUS_WAIT_LEAVE && !state.bgSoldiers.empty())
++            ClearBgArmies(player, state), state.bgInstance = player->GetInstanceId();
++        return;
++    }
++    BgLayout const* layout = nullptr;
++    for (BgLayout const& l : BgLayouts())
++        if (l.map == player->GetMapId())
++            layout = &l;
++    if (!layout)
++        return;
++
++    state.bgTickTimer -= int32(diff);
++    if (state.bgTickTimer > 0)
++        return;
++    int32 const step = 2000 - state.bgTickTimer;
++    state.bgTickTimer = 2000;
++    Map* map = player->GetMap();
++    uint32 const now = WorldTimer::getMSTime();
++
++    // the soldiers still standing keep marching; the fallen are forgotten
++    uint32 alive = 0;
++    for (auto itr = state.bgSoldiers.begin(); itr != state.bgSoldiers.end();)
++    {
++        Creature* c = map->GetAnyTypeCreature(*itr);
++        if (!c || !c->IsAlive())
++        {
++            itr = state.bgSoldiers.erase(itr);
++            continue;
++        }
++        ++alive;
++        if (!c->IsInCombat() && !c->IsMoving() &&
++            c->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE)
++        {
++            BgPoint const& to = c->GetEntry() == BG_SOLDIER_ALLIANCE ? layout->horde : layout->alliance;
++            if (!c->IsWithinDist3d(to.x, to.y, to.z, 12.0f))
++                c->GetMotionMaster()->MovePoint(1, to.x, to.y, to.z);
++        }
++        ++itr;
++    }
++
++    // the next wave, from both bases
++    state.bgWaveTimer -= step;
++    if (state.bgWaveTimer <= 0)
++    {
++        state.bgWaveTimer = layout->waveMs;
++        for (uint32 i = 0; i < layout->waveSize && state.bgSoldiers.size() + 2 <= BG_MAX_SOLDIERS; ++i)
++        {
++            if (Creature* a = SpawnBgUnit(player, BG_SOLDIER_ALLIANCE, layout->alliance, &layout->horde, 0))
++                state.bgSoldiers.push_back(a->GetObjectGuid());
++            if (Creature* h = SpawnBgUnit(player, BG_SOLDIER_HORDE, layout->horde, &layout->alliance, 0))
++                state.bgSoldiers.push_back(h->GetObjectGuid());
++        }
++        if (alive == 0)
++            player->GetSession()->SendAreaTriggerMessage("|cffffcc33The armies march! Soldiers pour out of both bases.|r");
++    }
++
++    // the guards: one each, back a while after falling
++    for (size_t i = 0; i < layout->guards.size() && i < 8; ++i)
++    {
++        Creature* g = state.bgGuards[i] ? map->GetAnyTypeCreature(state.bgGuards[i]) : nullptr;
++        if (g && g->IsAlive())
++            continue;
++        if (state.bgGuards[i] && !state.bgGuardDeadAt[i])
++            state.bgGuardDeadAt[i] = now ? now : 1;
++        if (state.bgGuards[i] && now - state.bgGuardDeadAt[i] < uint32(layout->guardRespawnMs))
++            continue;
++        if (Creature* fresh = SpawnBgUnit(player, layout->guards[i].first, layout->guards[i].second, nullptr, 2))
++        {
++            if (state.bgGuards[i])
++                player->GetSession()->SendAreaTriggerMessage("|cffff4040%s has returned!|r", fresh->GetName());
++            state.bgGuards[i] = fresh->GetObjectGuid();
++            state.bgGuardDeadAt[i] = 0;
 +        }
 +    }
 +}
@@ -5201,10 +5452,10 @@ index 000000000..16eb3067a
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..551d70220
+index 000000000..114deb27f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,225 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -5370,6 +5621,8 @@ index 000000000..551d70220
 +std::vector<ZeldaSoldItem> ZeldaSoldItems(Player* player);
 +// buys sale `id` back; false (and why) when it cannot
 +bool ZeldaBuyBackSold(Player* player, uint32 id, std::string& why);
++// Zelda of Warcraft: battlegrounds for one hero, with armies of elite soldiers (Zelda.SoloBattlegrounds)
++bool ZeldaSoloBattlegrounds();
 +// Zelda of Warcraft: the in-game day number (Zelda.DayLengthMinutes): the auction house restocks
 +// with new goods every in-game day (Zelda.AuctionDailyRestock)
 +uint32 ZeldaGameDayIndex(time_t now);

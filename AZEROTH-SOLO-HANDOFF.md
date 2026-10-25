@@ -203,6 +203,15 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   everything sold since login (Player::AddItemToBuyBackSlot -> ZeldaRecordSold, keeps random
   property and permanent enchant), bought back for what the vendor paid; a normal buyback also
   takes it off the list; cleared at each login.
+- Solo battlegrounds (Zelda.SoloBattlegrounds; ZeldaSoloBattleground in ZeldaPlayerUpdate, content
+  build_battlegrounds.py -> 017_battlegrounds.sql): BattleGroundQueue starts in testing mode (one
+  hero starts a battleground) and BattleGround::Update skips the premature finish. Inside, the
+  cross-faction friendliness is lifted. Every 40-45 s each base sends a wave of elite soldiers
+  (Stormpike 190980 / Frostwolf 190981, level = hero's) that march to the other base (their respawn
+  coords are the enemy base, so after each fight they go on; idle ones are re-sent every 2 s), at
+  most 32 alive. Warsong Gulch: Silverwing Warden 190982 / Warsong Warlord 190983 beside the flags;
+  Arathi Basin: an Ironhide Brute 190984 (hostile to all) at each banner; guards come back 3 / 5 min
+  after falling. Alterac Valley: waves from Vanndar to Drek'Thar and back, its own NPCs as usual.
 - One-time gifts (Zelda.Gifts, default "Kale:6975"): Kale gets a Whirlwind Axe back (bags, else
   mail from Navi), marker gift:<item>.
 - Potion goblin Fizzbang Bottlecork (190651, guids 9103001-7, build_vendors.py -> 004_vendors):
