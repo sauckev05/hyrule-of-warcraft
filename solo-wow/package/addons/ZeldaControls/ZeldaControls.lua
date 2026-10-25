@@ -13,6 +13,11 @@ BINDING_NAME_ZELDA_FLIP = "Backflip"
 BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon"
 BINDING_NAME_ZELDA_HOOK = "Boomerang (stuns or disarms)"
 BINDING_NAME_ZELDA_POTION = "Drink the potion in the potion slot"
+BINDING_NAME_ZELDA_MOUNT = "Ride the mount in the mount slot (again to get off)"
+BINDING_NAME_ZELDA_INVENTORY = "Character, bags and key ring"
+BINDING_NAME_ZELDA_SUBSCREEN = "Subscreen (spellbook, talents, quests, map, menu)"
+BINDING_NAME_ZELDA_SUB_PREV = "Subscreen: previous screen"
+BINDING_NAME_ZELDA_SUB_NEXT = "Subscreen: next screen"
 BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on) - tapping Shift already toggles it"
 
 local SPIN_HOLD = 0.8
@@ -286,14 +291,17 @@ local DEFAULT_KEYS = {
 	{ "4", "ZELDA_HOOK" },
 	{ "5", "ZELDA_ROLL" },
 	{ "6", "ZELDA_POTION" },
+	{ "7", "ZELDA_MOUNT" },
+	{ "8", "ZELDA_INVENTORY" },
+	{ "9", "ZELDA_SUBSCREEN" },
 	{ "SHIFT-Q", "ZELDA_ROLL_LEFT" },
 	{ "SHIFT-E", "ZELDA_ROLL_RIGHT" },
 	{ "SHIFT-S", "ZELDA_FLIP" },
 }
 -- keys older versions used; freed if they still hold a Zelda move
 local OLD_KEYS = { "F", "G", "R", "V", "H", "Z", "SHIFT-W", "SHIFT-A", "SHIFT-D" }
-local KEYS_VERSION = 6
-local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), Shift+Q/E side roll, Shift+S backflip."
+local KEYS_VERSION = 7
+local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), 7 mount slot (right-click a mount), 8 character and bags, 9 Subscreen (Left/Right to turn), Shift+Q/E side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
@@ -301,9 +309,14 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function()
 	if event == "VARIABLES_LOADED" then
 		if not ZeldaControlsDB then ZeldaControlsDB = {} end
-		if (ZeldaControlsDB.keysVersion or 0) == 5 then
-			-- version 6 only adds the potion key: keep everything else as it was set
-			SetBinding("6", "ZELDA_POTION")
+		local was = ZeldaControlsDB.keysVersion or 0
+		if was == 5 or was == 6 then
+			-- versions 6 and 7 only add keys (6 potion; 7 mount, 8 inventory, 9 Subscreen): the
+			-- rest stays as it was set
+			if was == 5 then SetBinding("6", "ZELDA_POTION") end
+			SetBinding("7", "ZELDA_MOUNT")
+			SetBinding("8", "ZELDA_INVENTORY")
+			SetBinding("9", "ZELDA_SUBSCREEN")
 			SaveBindings(1)
 			ZeldaControlsDB.keysVersion = KEYS_VERSION
 		elseif (ZeldaControlsDB.keysVersion or 0) < KEYS_VERSION then

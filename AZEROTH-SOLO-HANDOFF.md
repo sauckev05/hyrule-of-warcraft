@@ -169,6 +169,14 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
 - Potion slot (ZeldaControls potion.lua): right-click a healing/mana potion in the bags to slot it
   (not drunk; not at vendor/bank/mail/AH/trade), key 6 (ZELDA_POTION, keys version 6) or a click
   drinks one; per-character in ZeldaControlsDB.potion.
+- Mount slot (ZeldaControls mount.lua, key 7 ZELDA_MOUNT): right-click a mount item (generated list of
+  every item whose spell has aura 78) to slot it; 7 sends `.zmount <item>` - the server dismounts
+  when mounted, otherwise uses that bag item itself (CanUseItem, CastItemUseSpell).
+- Key 8 (subscreen.lua ZELDA_INVENTORY): character sheet + all bags + key ring together. The key
+  ring is always 16 slots (Benilla ui_items keyring_size; the server always had 16).
+- Key 9 (ZELDA_SUBSCREEN): the Subscreen, one screen at a time - Spellbook, Talents, Quest Log,
+  World Map, Main Menu - with a title bar; Left/Right arrows are rebound to ZELDA_SUB_PREV/NEXT
+  while it is open (restored on close); 9 or Escape closes it. Keys version 7 adds 7/8/9 only.
 - Harder enemies: Zelda.EnemyMeleeDamageRate 4 (world normals), Zelda.EliteMeleeDamageRate 1.75
   (world elites/bosses), SoloCraft.DungeonHealth 0.65 / DungeonDamage 0.9 with raid exponents
   1.08 / 0.79 (raids as before). Heavy blows (ZeldaEnemyMechanics in ZeldaPlayerUpdate, one windup

@@ -4,3 +4,5 @@
 ## SavedVariables: ZeldaControlsDB
 ZeldaControls.lua
 potion.lua
+mount.lua
+subscreen.lua

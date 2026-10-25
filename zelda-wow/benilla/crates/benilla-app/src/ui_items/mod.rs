@@ -72,13 +72,10 @@ pub(super) const BAG_FAMILY_KEYS: u32 = 9;
 /// Keyring slots usable at `level`, the ladder `GetKeyRingSize` (`ContainerFrame.lua:773`) and the
 /// server's `Player::GetMaxKeyringSize` (`Player.h:985`) share: 4 below 40, 8 at 40, 12 at 50,
 /// 16 above 60. The feed sizes the keyring container with it.
-pub(crate) fn keyring_size(level: u32) -> u32 {
-    match level {
-        61.. => 16,
-        50..=60 => 12,
-        40..=49 => 8,
-        _ => 4,
-    }
+/// Zelda of Warcraft: the key ring is always its full 16 slots (the server's whole range), at any
+/// level - the reference opened 4, 8 and 12 at levels 1, 40 and 50.
+pub(crate) fn keyring_size(_level: u32) -> u32 {
+    16
 }
 
 /// Lua `(bag, 1-based slot)` to the wire `(bag_index, slot)`, the one mapping every drain shares.
@@ -980,14 +977,10 @@ mod tests {
 
     /// Both ends of every rung of `GetKeyRingSize` (`ContainerFrame.lua:773`).
     #[test]
-    fn keyring_size_walks_the_reference_ladder() {
-        assert_eq!(keyring_size(1), 4);
-        assert_eq!(keyring_size(39), 4, "the rung ends at 39");
-        assert_eq!(keyring_size(40), 8, "40 opens the second rung");
-        assert_eq!(keyring_size(49), 8);
-        assert_eq!(keyring_size(50), 12);
-        assert_eq!(keyring_size(60), 12, "the level cap still sits on 12");
-        assert_eq!(keyring_size(61), 16, "> 60, unreachable in 1.12");
+    fn keyring_size_is_always_full() {
+        assert_eq!(keyring_size(1), 16);
+        assert_eq!(keyring_size(39), 16);
+        assert_eq!(keyring_size(60), 16);
     }
 
     /// The wire's 16 positions (vmangos `KEYRING_SLOT_END` 97), not the level-gated count.

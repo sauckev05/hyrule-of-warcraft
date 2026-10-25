@@ -1560,10 +1560,10 @@ index 8e6c51885..194a7b698 100644
  
  }
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba3d..d07f7eeaf 100644
+index ffa25ba3d..d8a89eb00 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,17 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,18 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
@@ -1575,6 +1575,7 @@ index ffa25ba3d..d07f7eeaf 100644
 +        { "zroll",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaRollCommand,           "", nullptr },
 +        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
 +        { "zshield",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShieldCommand,         "", nullptr },
++        { "zmount",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaMountCommand,          "", nullptr },
 +        { "zhook",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaHookCommand,           "", nullptr },
 +        { "zbow",           SEC_PLAYER,         false, &ChatHandler::HandleZeldaBowCommand,            "", nullptr },
 +        { "zboomerang",     SEC_PLAYER,         false, &ChatHandler::HandleZeldaBoomerangCommand,      "", nullptr },
@@ -1582,10 +1583,10 @@ index ffa25ba3d..d07f7eeaf 100644
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a85..0b4eea0fb 100644
+index 00fde0a85..199cad2b0 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,18 @@ class ChatHandler
+@@ -679,6 +679,19 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
@@ -1598,6 +1599,7 @@ index 00fde0a85..0b4eea0fb 100644
 +        bool HandleZeldaRollCommand(char* args);
 +        bool HandleZeldaFlipCommand(char* args);
 +        bool HandleZeldaShieldCommand(char* args);
++        bool HandleZeldaMountCommand(char* args);
 +        bool HandleZeldaHookCommand(char* args);
 +        bool HandleZeldaBowCommand(char* args);
 +        bool HandleZeldaBoomerangCommand(char* args);
@@ -1606,10 +1608,10 @@ index 00fde0a85..0b4eea0fb 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..763f234db
+index 000000000..c9986e6ca
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,3840 @@
+@@ -0,0 +1,3874 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4285,6 +4287,40 @@ index 000000000..763f234db
 +    if (!CanAct(player) || player->IsInWater())
 +        return true;
 +    ZeldaDodge(player, M_PI_F, 8.0f, 7.0f);
++    return true;
++}
++
++// ".zmount <item>": the mount slot (ZeldaControls potion.lua, key 7). Mounted, it gets off;
++// otherwise it uses that mount from the bags.
++bool ChatHandler::HandleZeldaMountCommand(char* args)
++{
++    Player* player = m_session->GetPlayer();
++    if (player->IsMounted())
++    {
++        player->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
++        return true;
++    }
++    uint32 const itemId = args ? uint32(std::strtoul(args, nullptr, 10)) : 0;
++    Item* item = itemId ? player->GetItemByEntry(itemId) : nullptr;
++    if (!item || item->IsEquipped())
++    {
++        m_session->SendNotification("That mount is not in your bags.");
++        return true;
++    }
++    InventoryResult const msg = player->CanUseItem(item);
++    if (msg != EQUIP_ERR_OK)
++    {
++        player->SendEquipError(msg, item, nullptr);
++        return true;
++    }
++    if (player->IsInCombat() || player->IsNonMeleeSpellCasted(false))
++    {
++        m_session->SendNotification("You can't mount right now.");
++        return true;
++    }
++    SpellCastTargets targets;
++    targets.setUnitTarget(player);
++    player->CastItemUseSpell(item, targets, 0);
 +    return true;
 +}
 +
