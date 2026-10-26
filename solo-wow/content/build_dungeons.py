@@ -14,6 +14,8 @@ creatures that also live outside the dungeon (snakes, toads).
 
   - Blackfathom Deeps (009_blackfathom.sql): level 30-35, Aku'mai 35
   - Wailing Caverns (011_wailing_caverns.sql): level 28-33, Mutanus the Devourer 33
+  - Scarlet Monastery (018_scarlet_monastery.sql): level 40-45 - Graveyard, Library, Armory, then
+    the Cathedral, whose Mograine and Whitemane are 45
 
 usage: build_dungeons.py <world database dump (.sql) without these files applied>
 """
@@ -41,6 +43,14 @@ DUNGEONS = [
          summoned={3671, 3654, 5762, 5763},
          bosses={3671: 30, 3669: 30, 3653: 30, 3670: 31, 3674: 31, 5912: 31, 3673: 32, 5775: 32, 3654: 33},
          trash=(17, 28, 3 / 4, 28, 31), max_req=33),
+    # the four wings rise through 40-45 in their own order: Graveyard 40-42, Library 41-43, Armory
+    # 42-44, Cathedral 43-45 (the old levels already climbed wing by wing, so one slope keeps that)
+    dict(name='Scarlet Monastery', file='018_scarlet_monastery.sql', range='40-45', map=189,
+         not_enemies={3981, 6547},              # Vorrel Sengutz (quest giver), Suffering Victim (prisoners)
+         summoned={6575},                       # Scarlet Trainees, called by Herod's fall
+         bosses={3983: 41, 6488: 42, 6489: 42, 6490: 42, 4543: 42, 3974: 42, 6487: 43, 6575: 43,
+                 3975: 44, 4542: 44, 3976: 45, 3977: 45},
+         trash=(30, 40, 1 / 2, 40, 44), max_req=45),
 ]
 WORLD_DROP_REFS = range(60000, 61000)   # level-bracket world drop tables (series = id // 100)
 
