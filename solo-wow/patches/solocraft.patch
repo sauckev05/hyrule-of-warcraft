@@ -1734,10 +1734,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..83c17deb7
+index 000000000..2b9282202
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4420 @@
+@@ -0,0 +1,4436 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3640,7 +3640,7 @@ index 000000000..83c17deb7
 +// when they are full, by mail from Navi; marker 'gift:<item>' per character.
 +static void ZeldaGifts(Player* player)
 +{
-+    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975");
++    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975 Kale:191140");
 +    std::istringstream in(gifts);
 +    std::string word;
 +    while (in >> word)
@@ -3731,6 +3731,22 @@ index 000000000..83c17deb7
 +    if (!marks)
 +        return 0;
 +    return uint32(player->GetUInt32Value(PLAYER_NEXT_LEVEL_XP) * pct / 100.0f * marks);
++}
++
++bool ZeldaDoorKeyHeld(Player* player, uint32 doorEntry)
++{
++    uint32 key = 0;
++    switch (doorEntry)
++    {
++        case 101854: key = 191140; break;           // Herod's Door: the Scarlet Armory Key
++        case 104591: key = 191141; break;           // the Chapel Door: the Scarlet Cathedral Key
++        default: return true;
++    }
++    if (!player || player->HasItemCount(key, 1))
++        return true;
++    if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(key))
++        player->GetSession()->SendNotification("Requires %s", proto->Name1);
++    return false;
 +}
 +
 +uint32 ZeldaBattlegroundPortal(Player* player, uint32 triggerId)
@@ -6160,10 +6176,10 @@ index 000000000..83c17deb7
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..d7e1332ac
+index 000000000..62509a31e
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,260 @@
+@@ -0,0 +1,265 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6358,6 +6374,11 @@ index 000000000..d7e1332ac
 +// Zelda of Warcraft: a mana potion's mana becomes an absorb shield (Zelda.ManaPotionShield)
 +bool ZeldaManaPotionShieldItem(ItemPrototype const* item, SpellEntry const& spell);
 +bool ZeldaManaPotionShield(Unit* target, ItemPrototype const* item, SpellEntry const& spell, int32 mana);
++// Zelda of Warcraft: the Scarlet Monastery's Armory door (Herod's Door) takes the Scarlet Armory Key
++// from Arcanist Doan, its Cathedral door (the Chapel Door) the Scarlet Cathedral Key from Herod.
++// True when the door needs no key of ours or the hero carries it (else the hero is told which).
++bool ZeldaDoorKeyHeld(Player* player, uint32 doorEntry);
++
 +// Zelda of Warcraft: the battleground entrances (Warsong Gulch in Ashenvale and the Barrens, Arathi
 +// Basin in the Arathi Highlands, Alterac Valley in the Alterac Mountains and Hillsbrad) join the
 +// battleground's queue when walked into. Returns the battleground's map for such an area trigger
@@ -6601,7 +6622,7 @@ index a378c4e1e..f53dd6559 100644
 +
  #endif
 diff --git a/src/game/Entities/GameObject.cpp b/src/game/Entities/GameObject.cpp
-index 043cad6ef..232434e64 100644
+index 043cad6ef..557b60fb2 100644
 --- a/src/game/Entities/GameObject.cpp
 +++ b/src/game/Entities/GameObject.cpp
 @@ -17,6 +17,7 @@
@@ -6612,7 +6633,18 @@ index 043cad6ef..232434e64 100644
  #include "Quests/QuestDef.h"
  #include "Globals/ObjectMgr.h"
  #include "Globals/ObjectAccessor.h"
-@@ -1787,7 +1788,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1498,6 +1499,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+     {
+         case GAMEOBJECT_TYPE_DOOR:                          // 0
+         {
++            // Zelda of Warcraft: a door that takes one of the dungeon keys of our own
++            if (user && user->GetTypeId() == TYPEID_PLAYER && !ZeldaDoorKeyHeld(static_cast<Player*>(user), GetEntry()))
++                return;
++
+             // doors never really despawn, only reset to default state/flags
+             UseDoorOrButton();
+ 
+@@ -1787,7 +1792,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                          // TODO: find reasonable value for fishing hole search
                          fishingHole = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
  
@@ -7470,7 +7502,7 @@ index 591908ab5..5cb585b23 100644
      if (!noSpillover)
      {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..68d4d637f 100644
+index bf5c5c578..38d5d6bc4 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -7543,7 +7575,18 @@ index bf5c5c578..68d4d637f 100644
  
          uint32 itemid = m_spellInfo->Reagent[x];
          uint32 itemcount = m_spellInfo->ReagentCount[x];
-@@ -5998,6 +6017,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5556,6 +5575,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+                     if (!lockId)
+                         return SPELL_FAILED_ALREADY_OPEN;
+ 
++                    // Zelda of Warcraft: a door that takes one of the dungeon keys of our own
++                    if (!ZeldaDoorKeyHeld(static_cast<Player*>(m_caster), go->GetEntry()))
++                        return SPELL_FAILED_DONT_REPORT;
++
+                     // check if its in use only when cast is finished (called from spell::cast() with strict = false)
+                     if (!strict && go->IsInUse())
+                         return SPELL_FAILED_CHEST_IN_USE;
+@@ -5998,6 +6021,10 @@ SpellCastResult Spell::CheckCast(bool strict)
          }
      }
  
@@ -7554,7 +7597,7 @@ index bf5c5c578..68d4d637f 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6499,6 +6522,12 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6526,12 @@ SpellCastResult Spell::CheckItems()
                      }
  
                      Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
@@ -7567,7 +7610,7 @@ index bf5c5c578..68d4d637f 100644
                      if (target->GetPower(power) == target->GetMaxPower(power))
                      {
                          failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
-@@ -6565,6 +6594,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6565,6 +6598,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;
