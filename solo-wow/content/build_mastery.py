@@ -110,6 +110,11 @@ SPELL_EDITS = {
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=_n % 5)   # SPELL_AURA_DUMMY, rank - 1
 
+# helmet looks whose hair stayed visible: {ItemDisplayInfo id: (male, female HelmetGeosetVisData)}
+HELM_HIDES_HAIR = {
+    4415: (248, 306),       # Helm_Plate_A_01Crusader: the Helm of the Scarlet Crusade (sets.py)
+}
+
 # mounts (an aura 78 MOUNTED spell with its aura 32 MOD_INCREASE_MOUNTED_SPEED in effect 2): the
 # regular ones go 150% faster instead of 60%, the epic ones 200% instead of 100%
 MOUNT_SPEED = {59: 149, 99: 199}
@@ -309,6 +314,10 @@ def patch_display(path):
     row[0] = UNFINISHED_LOOK
     row[22] = BLUE_GLOW
     rows.append(row)
+    # helmets that showed the hair through them: the plate helms' usual hair-and-ears covering
+    # (HelmetGeosetVisData, male / female, ItemDisplayInfo fields 12-13)
+    for display, vis in HELM_HIDES_HAIR.items():
+        byid[display][12], byid[display][13] = vis
     # the dungeon clears' Crystal Shards (shards.py)
     import shards
     shards.add_displays(rows, lambda text: add_string(strings, text))
