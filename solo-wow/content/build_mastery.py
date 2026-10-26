@@ -78,11 +78,15 @@ SPELLS = [
     (40012, 17393, 'Charged Bolt', 'A slow, heavy bolt. Raise your shield or roll away!',
      dict(Effect1=3, EffectBasePoints1=0, EffectDieSides1=0, EffectImplicitTargetA1=6, DmgClass=0, ManaCost=0,
           InterruptFlags=0, School=6, SpellFamilyName=0, SpellFamilyFlags=0)),
+] + [
     # Mace Specialization's armor crush (ZeldaAfterMeleeHit): each mace hit lowers the enemy's armor by
-    # the talent's points in percent (the core sets the amount), stacking up to five times
-    (40013, 11971, 'Crushing Blows', "Armor reduced by $s1%.",
-     dict(EffectApplyAuraName1=101, EffectBasePoints1=-2, EffectMiscValue1=1, DmgClass=0, PowerType=0, ManaCost=0,
-          EquippedItemClass=-1, SpellFamilyName=0, SpellFamilyFlags=0, tooltip="Armor reduced by $s1%.")),
+    # the talent's points in percent, stacking up to five times - one spell per rank (40013 = rank 1
+    # ... 40017 = rank 5), so every stack counts its full amount
+    (40012 + rank, 11971, 'Crushing Blows', 'Lowers armor by $s1% per stack, up to 5 stacks.',
+     dict(EffectApplyAuraName1=101, EffectBasePoints1=-(rank + 1), EffectDieSides1=1, EffectMiscValue1=1, DmgClass=0,
+          PowerType=0, ManaCost=0, EquippedItemClass=-1, SpellFamilyName=0, SpellFamilyFlags=0,
+          tooltip='Armor reduced by $s1% per stack.'))
+    for rank in range(1, 6)
 ]
 
 # stock spell texts changed in the client (patch-Z only): mana potions are shields now

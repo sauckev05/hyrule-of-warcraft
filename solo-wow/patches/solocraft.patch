@@ -197,6 +197,30 @@ index 75c30f094..6873b2e00 100644
      protected:
          uint32 m_auiEncounter[MAX_ENCOUNTER];
          std::string m_strInstData;
+diff --git a/src/game/AI/ScriptDevAI/scripts/world/npcs_special.cpp b/src/game/AI/ScriptDevAI/scripts/world/npcs_special.cpp
+index 91c212e50..118ca42a3 100644
+--- a/src/game/AI/ScriptDevAI/scripts/world/npcs_special.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/world/npcs_special.cpp
+@@ -434,7 +434,9 @@ void npc_doctorAI::PatientSaved(Creature* /*soldier*/, Player* pPlayer, Position
+ 
+ void npc_doctorAI::UpdateAI(const uint32 uiDiff)
+ {
+-    if (m_bIsEventInProgress && m_uiSummonPatientCount >= 21)	// worst case scenario : 5 deads + 15 saved
++    // Zelda of Warcraft: the count is of patients brought in, not of checks - counting every two-second
++    // check ended the event (and the beds stayed empty) while the quest was still going
++    if (m_bIsEventInProgress && m_uiSummonPatientCount >= 40)	// worst case scenario : 5 deads + 15 saved, with room
+     {
+         Reset();
+         return;
+@@ -508,7 +510,7 @@ void npc_doctorAI::UpdateAI(const uint32 uiDiff)
+             else
+                 m_uiSummonPatientTimer = 10000;
+ 
+-            ++m_uiSummonPatientCount;
++            m_uiSummonPatientCount += totalSpawned;
+         }
+         else
+             m_uiSummonPatientTimer -= uiDiff;
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
 index 000000000..c5ab9777b
@@ -1710,7 +1734,7 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..a0c8310bb
+index 000000000..772febac7
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,4409 @@
@@ -3452,9 +3476,9 @@ index 000000000..a0c8310bb
 +        if (weapon && weapon->GetProto()->Class == ITEM_CLASS_WEAPON &&
 +            (weapon->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_MACE || weapon->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_MACE2))
 +        {
-+            const uint32 CRUSHING_BLOWS = 40013;
-+            int32 const bp = -int32(rank);
-+            player->CastCustomSpell(victim, CRUSHING_BLOWS, &bp, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
++            // one spell per rank (40013 = 1% ... 40017 = 5% a stack), each stack its full amount
++            const uint32 CRUSHING_BLOWS_RANK1 = 40013;
++            player->CastSpell(victim, CRUSHING_BLOWS_RANK1 + rank - 1, TRIGGERED_OLD_TRIGGERED);
 +        }
 +    }
 +
