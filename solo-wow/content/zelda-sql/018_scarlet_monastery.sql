@@ -6,6 +6,7 @@ UPDATE `creature_template` SET `MinLevel` = 44, `MaxLevel` = 44, `MinLootGold` =
 UPDATE `creature_template` SET `MinLevel` = 45, `MaxLevel` = 45, `MinLootGold` = 366, `MaxLootGold` = 484 WHERE `Entry` = 3976; -- Scarlet Commander Mograine (was 42-42)
 UPDATE `creature_template` SET `MinLevel` = 45, `MaxLevel` = 45, `MinLootGold` = 342, `MaxLootGold` = 452 WHERE `Entry` = 3977; -- High Inquisitor Whitemane (was 42-42)
 UPDATE `creature_template` SET `MinLevel` = 41, `MaxLevel` = 41, `MinLootGold` = 461, `MaxLootGold` = 611 WHERE `Entry` = 3983; -- Interrogator Vishas (was 32-32)
+UPDATE `creature_template` SET `MinLevel` = 40, `MaxLevel` = 41, `MinLootGold` = 331, `MaxLootGold` = 443 WHERE `Entry` = 4283; -- Scarlet Sentry (was 30-31)
 UPDATE `creature_template` SET `MinLevel` = 43, `MaxLevel` = 43, `MinLootGold` = 333, `MaxLootGold` = 442 WHERE `Entry` = 4286; -- Scarlet Soldier (was 35-36)
 UPDATE `creature_template` SET `MinLevel` = 42, `MaxLevel` = 42, `MinLootGold` = 291, `MaxLootGold` = 387 WHERE `Entry` = 4287; -- Scarlet Gallant (was 33-34)
 UPDATE `creature_template` SET `MinLevel` = 42, `MaxLevel` = 43, `MinLootGold` = 328, `MaxLootGold` = 436 WHERE `Entry` = 4288; -- Scarlet Beastmaster (was 34-35)
@@ -38,8 +39,13 @@ UPDATE `creature_template` SET `MinLevel` = 42, `MaxLevel` = 42, `MinLootGold` =
 UPDATE `creature_template` SET `MinLevel` = 42, `MaxLevel` = 42, `MinLootGold` = 102, `MaxLootGold` = 509 WHERE `Entry` = 6490; -- Azshir the Sleepless (was 33-33)
 UPDATE `creature_template` SET `MinLevel` = 43, `MaxLevel` = 43, `MinLootGold` = 27, `MaxLootGold` = 129 WHERE `Entry` = 6575; -- Scarlet Trainee (was 30-30)
 
-DELETE FROM `creature_loot_template` WHERE `entry` IN (3974,3975,3976,3977,3983,4286,4287,4288,4289,4290,4291,4292,4293,4294,4295,4296,4297,4298,4299,4300,4301,4302,4303,4304,4306,4308,4540,4542,4543,6426,6427,6487,6488,6489,6490,6575) AND `mincountOrRef` < 0 AND `item` BETWEEN 60000 AND 60999;
+DELETE FROM `creature_loot_template` WHERE `entry` IN (3974,3975,3976,3977,3983,4283,4286,4287,4288,4289,4290,4291,4292,4293,4294,4295,4296,4297,4298,4299,4300,4301,4302,4303,4304,4306,4308,4540,4542,4543,6426,6427,6487,6488,6489,6490,6575) AND `mincountOrRef` < 0 AND `item` BETWEEN 60000 AND 60999;
 INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`groupid`,`mincountOrRef`,`maxcount`,`condition_id`,`comments`) VALUES
+(4283,60007,6.0,0,-60007,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),
+(4283,60165,2.0,0,-60165,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),
+(4283,60241,0.1,0,-60241,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),
+(4283,60444,0.25,0,-60444,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),
+(4283,60445,0.2,0,-60445,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),
 (4286,60007,6.0,0,-60007,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),
 (4286,60170,2.0,0,-60170,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),
 (4286,60246,0.1,0,-60246,1,0,'Zelda: Scarlet Monastery level 40-45 world drops'),

@@ -48,6 +48,7 @@ DUNGEONS = [
     dict(name='Scarlet Monastery', file='018_scarlet_monastery.sql', range='40-45', map=189,
          not_enemies={3981, 6547},              # Vorrel Sengutz (quest giver), Suffering Victim (prisoners)
          summoned={6575},                       # Scarlet Trainees, called by Herod's fall
+         also_outside={4283},                   # Scarlet Sentry: also guards the monastery's courtyard
          bosses={3983: 41, 6488: 42, 6489: 42, 6490: 42, 4543: 42, 3974: 42, 6487: 43, 6575: 43,
                  3975: 44, 4542: 44, 3976: 45, 3977: 45},
          trash=(30, 40, 1 / 2, 40, 44), max_req=45),
@@ -93,7 +94,7 @@ def compute(db, d):
     spawned |= {r['entry'] for r in db['creature_spawn_entry'] if r['guid'] in random_guids}
     elsewhere_spawn = {r['id'] for r in db['creature'] if r['map'] != MAP and r['id']}
     enemies = sorted(e for e in (spawned | d['summoned']) if e < CUSTOM_FROM and e not in d['not_enemies']
-                     and e not in elsewhere_spawn)
+                     and (e not in elsewhere_spawn or e in d.get('also_outside', ())))
 
     creatures = {}
     for e in enemies:
