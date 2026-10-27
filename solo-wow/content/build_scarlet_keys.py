@@ -3,7 +3,7 @@
 Writes zelda-sql/020_scarlet_keys.sql. Arcanist Doan, the Library's last boss, drops the Scarlet
 Armory Key, which opens the Armory Door outside (and Herod's Door inside); Herod, the Armory's last
 boss, drops the Scarlet Cathedral Key, which opens the Cathedral Door outside (and the Chapel Door
-inside). The doors take a plain lock now and the core asks for the right key;
+inside). The doors take no lock now (and lose their locked flag) and the core asks for the right key;
 The Scarlet Key no longer lies in Doan's Strongbox.
 """
 import os
@@ -12,7 +12,6 @@ from build_mastery import ITEM_COLUMNS, clone, sql_str
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCARLET_KEY = 7146
-PLAIN_LOCK = 57                     # Lock.dbc: open, treasure
 KEYS = [
     # (item, name, description, boss loot id, doors: the wing's entrance outside, the one inside)
     (191140, 'Scarlet Armory Key', "Opens the door to the Scarlet Monastery's Armory.", 6487, (101851, 101854)),
@@ -32,7 +31,9 @@ def main():
                    "`mincountOrRef`,`maxcount`,`condition_id`,`comments`) VALUES (%d,%d,100,0,1,1,0,%s);"
                    % (loot, item, sql_str('Zelda: ' + name)))
         for door in doors:
-            out.append('UPDATE `gameobject_template` SET `data1` = %d WHERE `entry` = %d AND `type` = 0;' % (PLAIN_LOCK, door))
+            # no lock and no locked flag: the click reaches the server, which asks for the key
+            # (a lock or GO_FLAG_LOCKED makes the client refuse the door by itself)
+            out.append('UPDATE `gameobject_template` SET `data1` = 0, `flags` = `flags` & ~2 WHERE `entry` = %d AND `type` = 0;' % door)
     out.append('DELETE FROM `gameobject_loot_template` WHERE `entry` = 4668 AND `item` = %d; -- Doan\'s Strongbox'
                % SCARLET_KEY)
     path = os.path.join(HERE, 'zelda-sql', '020_scarlet_keys.sql')
