@@ -1102,3 +1102,13 @@ fn the_prowl_creep_is_not_rate_scaled() {
     assert_eq!(playback_rate(&clip(STEALTH_WALK, 2.5), 7.0, 1.0), 1.0);
     assert_ne!(playback_rate(&clip(4, 2.5), 7.0, 1.0), 1.0);
 }
+
+/// Zelda: a mount past the epic mount's speed keeps the epic mount's gait rate.
+#[test]
+fn a_fast_mount_keeps_the_epic_gait_rate() {
+    assert_eq!(super::mount_rate_scale(1.0, 7.0), 1.0);
+    assert_eq!(super::mount_rate_scale(1.2, super::MOUNT_RATE_CAP), 1.2);
+    let fast = 2.5 * 7.0;
+    let scale = super::mount_rate_scale(1.0, fast);
+    assert!((fast / scale - super::MOUNT_RATE_CAP).abs() < 1e-4);
+}

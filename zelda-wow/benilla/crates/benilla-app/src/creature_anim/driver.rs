@@ -1170,6 +1170,14 @@ pub(super) fn drive_animations(
             drv.interact_hold = false;
         }
 
+        // Zelda: a mount's gait rate stops growing past the epic mount's speed, so the faster mounts
+        // here don't race their legs (`select::MOUNT_RATE_CAP`).
+        let model_scale = if mount_body.is_some() {
+            select::mount_rate_scale(model_scale, mv.speed)
+        } else {
+            model_scale
+        };
+
         // ── The mode machine: the base track's decision.
         mode::run(
             mode::Frame {

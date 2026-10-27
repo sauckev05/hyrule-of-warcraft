@@ -808,6 +808,21 @@ pub(super) fn scaled_rate(clip: &AnimClip, speed: f32, model_scale: f32) -> Opti
     (divisor > 0.0 && RATE_SCALED.contains(&clip.anim_id)).then(|| speed / divisor)
 }
 
+/// Zelda: the mounted speed (yd/s, the reference's epic mount) past which a mount's gait stops
+/// speeding up. Every mount here runs 150-200% faster, and a gait rate scaled all the way up races
+/// the legs; past this speed the rate holds and the mount simply covers more ground.
+pub(super) const MOUNT_RATE_CAP: f32 = 14.0;
+
+/// The `|modelScale|` a mount child's rate divides by: its own, grown with the speed past
+/// [`MOUNT_RATE_CAP`] so [`scaled_rate`] gives the capped speed's rate.
+pub(super) fn mount_rate_scale(model_scale: f32, speed: f32) -> f32 {
+    if speed > MOUNT_RATE_CAP {
+        model_scale * (speed / MOUNT_RATE_CAP)
+    } else {
+        model_scale
+    }
+}
+
 /// The unified movement view, first present winning: the controller's [`MovementState`], a
 /// remote's relayed flags ([`RemoteMotion`]), a creature's spline, else still.
 /// `creature_swimming` supplies the `SWIMMING` the wire never sends for a creature; `modes`, the
