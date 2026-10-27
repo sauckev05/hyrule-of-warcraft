@@ -12,9 +12,9 @@ CREATE TABLE IF NOT EXISTS `zelda_itemset_bonus` (
   `value` float NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COMMENT='Zelda of Warcraft: armor set bonuses (see ZeldaCommands.cpp)';
 
-DELETE FROM `item_template` WHERE `entry` IN (190701,190702,190703,190704,190705,190706,190711,190712,190713,190714,190715,190716,190721,190722,190723,190724,190725,190726,190727,190728,190731,190732,190733,190734,190735,190736);
+DELETE FROM `item_template` WHERE `entry` IN (190701,190702,190703,190704,190705,190706,190711,190712,190713,190714,190715,190716,190721,190722,190723,190724,190725,190726,190727,190728,10329,190731,190732,190733,190734,190735,190736);
 
-DELETE FROM `creature_loot_template` WHERE `item` IN (190701,190702,190703,190704,190705,190706,190711,190712,190713,190714,190715,190716,190721,190722,190723,190724,190725,190726,190727,190728,190731,190732,190733,190734,190735,190736);
+DELETE FROM `creature_loot_template` WHERE `item` IN (190701,190702,190703,190704,190705,190706,190711,190712,190713,190714,190715,190716,190721,190722,190723,190724,190725,190726,190727,190728,10329,190731,190732,190733,190734,190735,190736);
 
 DELETE FROM `zelda_itemset_item`;
 DELETE FROM `zelda_itemset_bonus`;
@@ -40,6 +40,7 @@ INSERT INTO `item_template` (`entry`,`class`,`name`,`displayid`,`Quality`,`Flags
 (190726,4,'Legplates of the Scarlet Crusade',34917,3,0,1,7,-1,-1,45,40,0,1,1,'',0,443,0,100,0,0,4,6,7,13,4,13,3,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6075,30375),
 (190727,4,'Tabard of the Crusade',15817,3,0,1,19,-1,-1,45,40,0,1,1,'',0,0,0,0,0,0,0,7,3,6,4,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3037,15185),
 (190728,4,'Shield of the Crusade',23446,3,0,1,14,-1,-1,45,40,0,1,1,'',4,1523,25,100,0,0,6,1,3,6,4,7,7,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3645,18225),
+(10329,4,'Scarlet Belt',27951,3,0,1,6,-1,-1,45,40,0,1,1,'',0,236,0,45,0,0,4,6,4,8,7,7,3,10,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4556,22780),
 (190731,4,'Hylian Knight''s Helm',27186,3,0,1,1,-1,-1,55,50,0,1,1,'',0,509,0,80,0,0,4,6,3,16,7,14,4,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9075,45375),
 (190732,4,'Hylian Knight''s Pauldrons',27378,3,0,1,3,-1,-1,55,50,0,1,1,'',0,447,0,80,0,0,4,6,6,11,3,7,7,13,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6806,34030),
 (190733,4,'Hylian Knight''s Breastplate',27372,3,0,1,5,-1,-1,55,50,0,1,1,'',0,608,0,135,0,0,4,6,3,11,7,13,4,18,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9075,45375),
@@ -68,6 +69,8 @@ INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`grou
 (3976,190726,100,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
 (3977,190727,100,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
 (4542,190728,100,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
+(4295,10329,10,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
+(4298,10329,10,0,1,1,0,'Zelda armor set: Battlegear of the Scarlet Crusade'),
 (7271,190731,100,0,1,1,0,'Zelda armor set: Armor of the Hylian Knight'),
 (12201,190732,100,0,1,1,0,'Zelda armor set: Armor of the Hylian Knight'),
 (2748,190733,100,0,1,1,0,'Zelda armor set: Armor of the Hylian Knight'),
@@ -96,6 +99,7 @@ INSERT INTO `zelda_itemset_item` (`item`,`set_id`) VALUES
 (190726,3),
 (190727,3),
 (190728,3),
+(10329,3),
 (190731,4),
 (190732,4),
 (190733,4),

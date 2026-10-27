@@ -11,7 +11,7 @@
     8 stun          % chance a hit stuns the enemy for 1 second
     9 weapon_flat   flat weapon damage on every hit (shown on the character sheet)
 
-Every piece drops from one dungeon boss. Stats are rolled once (fixed seed) from the set's level.
+Every piece drops from one dungeon boss (or, given as ((entry, chance), ...), from those enemies). Stats are rolled once (fixed seed) from the set's level.
 """
 
 BONUS_TYPES = {'crit': 1, 'crit_damage': 2, 'weapon': 3, 'knockback': 4, 'extra_swing': 5, 'spin_rage': 6,
@@ -34,7 +34,7 @@ DROP_CHANCE = 100         # % per kill: every piece always drops from its boss
 # slot -> (InventoryType, stat budget factor)
 SLOTS = {
     'head': (1, 1.0), 'shoulder': (3, 0.75), 'chest': (5, 1.0), 'hands': (10, 0.75), 'legs': (7, 1.0),
-    'feet': (8, 0.75), 'tabard': (19, 0.4), 'shield': (14, 0.6),
+    'feet': (8, 0.75), 'tabard': (19, 0.4), 'shield': (14, 0.6), 'waist': (6, 0.75),
 }
 
 SETS = [
@@ -71,6 +71,10 @@ SETS = [
              (190726, 'legs', 'Legplates of the Scarlet Crusade', 34917, 3976, 'Scarlet Commander Mograine (Scarlet Monastery Cathedral)'),
              (190727, 'tabard', 'Tabard of the Crusade', 15817, 3977, 'High Inquisitor Whitemane (Scarlet Monastery Cathedral)'),
              (190728, 'shield', 'Shield of the Crusade', 23446, 4542, 'High Inquisitor Fairbanks (Scarlet Monastery Cathedral)'),
+             # the old Scarlet Belt (10329) joins the set, a plate belt now; it still drops from the
+             # Armory's Myrmidons and Defenders, more often
+             (10329, 'waist', 'Scarlet Belt', 27951, ((4295, 10), (4298, 10)),
+              'Scarlet Myrmidons and Defenders (Scarlet Monastery Armory)'),
          ]),
     dict(id=4, name='Armor of the Hylian Knight', level=50, subclass=4, material=6,
          bonuses=[(2, 'weapon_flat', 5), (2, 'heal_on_kill', 5), (3, 'crit', 3), (3, 'spin_rage', 15),

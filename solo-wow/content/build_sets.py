@@ -101,8 +101,10 @@ CREATE TABLE IF NOT EXISTS `zelda_itemset_bonus` (
     for s in SETS:
         for piece in s['pieces']:
             items.append(item_row(s, piece))
-            loot.append(dict(entry=piece[4], item=piece[0], ChanceOrQuestChance=DROP_CHANCE, groupid=0,
-                             mincountOrRef=1, maxcount=1, condition_id=0, comments='Zelda armor set: ' + s['name']))
+            sources = piece[4] if isinstance(piece[4], tuple) else ((piece[4], DROP_CHANCE),)
+            for source, chance in sources:
+                loot.append(dict(entry=source, item=piece[0], ChanceOrQuestChance=chance, groupid=0,
+                                 mincountOrRef=1, maxcount=1, condition_id=0, comments='Zelda armor set: ' + s['name']))
             set_items.append(dict(item=piece[0], set_id=s['id']))
         for pieces, kind, value in s['bonuses']:
             bonuses.append(dict(set_id=s['id'], pieces=pieces, bonus_type=BONUS_TYPES[kind], value=float(value)))

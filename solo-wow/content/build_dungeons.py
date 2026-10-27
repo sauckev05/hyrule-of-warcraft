@@ -26,6 +26,7 @@ import re
 import sys
 
 from build_warrior_gear import parse_values
+from sets import SETS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CUSTOM_FROM = 190000
@@ -160,7 +161,7 @@ def compute(db, d):
         for k in ['RewChoiceItemId%d' % i for i in range(1, 7)] + ['RewItemId%d' % i for i in range(1, 5)]:
             if q[k]:
                 elsewhere[q[k]] += 1
-    removed = removed_items()
+    removed = removed_items() | {p[0] for s in SETS for p in s['pieces']}     # set pieces keep sets.py's stats
     items = {r['entry']: r for r in db['item_template']}
     scaled = []
     for entry, owners in sorted(drops.items()):
