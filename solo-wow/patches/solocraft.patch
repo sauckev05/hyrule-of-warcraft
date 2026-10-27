@@ -1734,10 +1734,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..2b9282202
+index 000000000..2941025ab
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4436 @@
+@@ -0,0 +1,4438 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3738,7 +3738,9 @@ index 000000000..2b9282202
 +    uint32 key = 0;
 +    switch (doorEntry)
 +    {
++        case 101851:                                // the Armory Door, outside in Tirisfal
 +        case 101854: key = 191140; break;           // Herod's Door: the Scarlet Armory Key
++        case 101850:                                // the Cathedral Door, outside in Tirisfal
 +        case 104591: key = 191141; break;           // the Chapel Door: the Scarlet Cathedral Key
 +        default: return true;
 +    }
