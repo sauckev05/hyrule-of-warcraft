@@ -1734,10 +1734,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..2941025ab
+index 000000000..2a5072928
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4438 @@
+@@ -0,0 +1,4452 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3459,6 +3459,20 @@ index 000000000..2941025ab
 +    uint32 const warrior = ZeldaTalentRank(player, { 23584, 23585, 23586, 23587, 23588 });
 +    uint32 const rogue = ZeldaTalentRank(player, { 13715, 13848, 13849, 13851, 13852 });
 +    return float(std::max(warrior, rogue));
++}
++
++void ZeldaCritHeal(Unit* attacker)
++{
++    const uint32 VANQUISHERS_MERCY = 40018;
++    if (!attacker || !attacker->IsAlive() || attacker->GetHealth() >= attacker->GetMaxHealth())
++        return;
++    Aura* mercy = attacker->GetAura(VANQUISHERS_MERCY, EFFECT_INDEX_0);
++    if (!mercy)
++        return;
++    int32 const pct = std::max(1, mercy->GetModifier()->m_amount);
++    uint32 const amount = std::max<uint32>(1, attacker->GetMaxHealth() * uint32(pct) / 100);
++    if (SpellEntry const* info = sSpellTemplate.LookupEntry<SpellEntry>(VANQUISHERS_MERCY))
++        attacker->DealHeal(attacker, amount, info);
 +}
 +
 +void ZeldaAfterMeleeHit(Unit* attacker, Unit* victim, bool hit, uint8 attType)
@@ -6178,10 +6192,10 @@ index 000000000..2941025ab
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..62509a31e
+index 000000000..baa2f8428
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,265 @@
+@@ -0,0 +1,268 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6222,6 +6236,9 @@ index 000000000..62509a31e
 +// Zelda of Warcraft: Dual Wield Specialization gives 1% melee hit per point while two weapons are
 +// held (instead of off-hand damage); the extra hit chance of `unit`
 +float ZeldaDualWieldHit(Unit const* unit);
++// Zelda of Warcraft: Vanquisher's Mercy (40018, the Vanquisher's Sword's equip effect): every melee
++// critical strike heals its $s1% (5%) of the hero's maximum health
++void ZeldaCritHeal(Unit* attacker);
 +void ZeldaOnKill(Player* killer, Creature* victim);
 +// Gathering: how many times the normal herbs, ore, leather, fish and enchanting materials
 +// (Zelda.GatherLootRate, 5); a mining vein gives one load and is gone (Zelda.MineOnce).
@@ -7035,7 +7052,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..977a19d23 100644
+index 00986af9e..a167d2696 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -7068,7 +7085,18 @@ index 00986af9e..977a19d23 100644
      if (responsiblePlayer)                                  // killedby Player, inform BG
          if (BattleGround* bg = responsiblePlayer->GetBattleGround())
              bg->HandleKillUnit(victim, responsiblePlayer);
-@@ -1933,6 +1942,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -1863,6 +1872,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
+ 
+     // Call default DealDamage (send critical in hit info for threat calculation)
+     CleanDamage cleanDamage(spellDamageInfo->damage, BASE_ATTACK, spellDamageInfo->HitInfo & SPELL_HIT_TYPE_CRIT ? MELEE_HIT_CRIT : MELEE_HIT_NORMAL, (spellDamageInfo->damage > 0 || spellDamageInfo->absorb > 0));
++    // Zelda of Warcraft: a melee ability's critical strike counts for the crit heal too
++    if ((spellDamageInfo->HitInfo & SPELL_HIT_TYPE_CRIT) && spellProto->DmgClass == SPELL_DAMAGE_CLASS_MELEE &&
++        spellDamageInfo->attacker && spellDamageInfo->attacker->GetTypeId() == TYPEID_PLAYER && spellDamageInfo->damage > 0)
++        ZeldaCritHeal(static_cast<Unit*>(spellDamageInfo->attacker));
+     DealDamage(affectiveCaster, victim, spellDamageInfo->damage, &cleanDamage, resetLeash ? SPELL_DIRECT_DAMAGE : SPELL_DAMAGE_SHIELD, GetSchoolMask(spellDamageInfo->school), spellProto, durabilityLoss, spellDamageInfo->spell);
+ }
+ 
+@@ -1933,6 +1946,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
          // Add melee damage bonus
          subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
@@ -7081,7 +7109,7 @@ index 00986af9e..977a19d23 100644
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2045,6 +2060,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -2045,6 +2064,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
              calcDamageInfo->TargetState = VICTIMSTATE_NORMAL;
              calcDamageInfo->procEx |= PROC_EX_BLOCK;
              calcDamageInfo->blocked_amount = calcDamageInfo->target->GetShieldBlockValue();
@@ -7091,7 +7119,7 @@ index 00986af9e..977a19d23 100644
  
              if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
              {
-@@ -2656,10 +2674,21 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2678,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -7109,11 +7137,14 @@ index 00986af9e..977a19d23 100644
 +                           meleeDamageInfo.hitOutCome == MELEE_HIT_CRIT || meleeDamageInfo.hitOutCome == MELEE_HIT_CRUSHING ||
 +                           meleeDamageInfo.hitOutCome == MELEE_HIT_GLANCING || meleeDamageInfo.hitOutCome == MELEE_HIT_BLOCK),
 +                           uint8(meleeDamageInfo.attackType));
++    // Zelda of Warcraft: a weapon that heals on every critical strike (Vanquisher's Sword)
++    if (GetTypeId() == TYPEID_PLAYER && meleeDamageInfo.hitOutCome == MELEE_HIT_CRIT && meleeDamageInfo.totalDamage > 0)
++        ZeldaCritHeal(this);
 +
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -2711,6 +2740,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+@@ -2711,6 +2747,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
      if (pVictim->GetCombatManager().IsInEvadeMode())
          return MELEE_HIT_EVADE;
  
@@ -7127,7 +7158,7 @@ index 00986af9e..977a19d23 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
      if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
-@@ -2829,6 +2865,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+@@ -2829,6 +2872,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
  
  SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
  {
@@ -7141,7 +7172,7 @@ index 00986af9e..977a19d23 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
      die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
-@@ -3628,7 +3671,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3678,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -7151,7 +7182,7 @@ index 00986af9e..977a19d23 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3687,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3694,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -7160,7 +7191,7 @@ index 00986af9e..977a19d23 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5020,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5027,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -7172,7 +7203,7 @@ index 00986af9e..977a19d23 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6146,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6153,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -7181,7 +7212,7 @@ index 00986af9e..977a19d23 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7099,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7106,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -7190,7 +7221,7 @@ index 00986af9e..977a19d23 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7216,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7223,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -7200,7 +7231,7 @@ index 00986af9e..977a19d23 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7361,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7368,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -7210,7 +7241,7 @@ index 00986af9e..977a19d23 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8150,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8157,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -7224,7 +7255,7 @@ index 00986af9e..977a19d23 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8466,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8473,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
