@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Zelda of Warcraft: Beedle, a friendly travelling merchant who repairs and sells potions, food,
-water and ammunition at the entrance and the middle of every dungeon and raid, and outside the final boss's chamber where a spot
-well clear of the boss exists (never beside the boss itself). Spots
+water and ammunition at the entrance and the middle of every dungeon and raid (no longer at the
+final boss's door). Spots
 come from dungeon_vendors.json (solo-wow/tools/compute_dungeon_vendors.py); writes
 zelda-sql/004_vendors.sql."""
 import json
@@ -52,6 +52,8 @@ def main():
     spots = json.load(open(os.path.join(HERE, 'dungeon_vendors.json')))
     seen, unique = set(), []
     for s in spots:
+        if s['spot'] == 'boss door':
+            continue                    # none at the end: only at the entrance and the middle
         key = (s['map'], round(s['x']), round(s['y']))
         if key not in seen:
             seen.add(key)
