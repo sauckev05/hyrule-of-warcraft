@@ -716,7 +716,7 @@ quest(id=90403, level=45, min=40, kind='dungeon', zone=722, giver=190402, ender=
              "His phylactery hums with a single name: Kel'Thuzad. He hides in a floating citadel, they say, "
              "high above the Plaguelands.$B$BI am going to find him. And when I do, I am going to be VERY "
              "polite. Right up until the end.",
-      kills=[(7358, 1, None)], items=[(190532, 1)], rep=(68, 350), next=90416)
+      kills=[(7358, 1, None)], items=[(190532, 1)], reward_item=191161, rep=(68, 350), next=90416)
 
 quest(id=90416, level=50, min=50, kind='', zone=405, giver=190402, ender=190302, prev=90403,
       title='The Shaman Who Shouts at Fire',

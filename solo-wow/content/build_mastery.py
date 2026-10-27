@@ -39,6 +39,14 @@ BLUE_GLOW = 42              # ItemVisuals: the blue glow of Azuresong Mageblade 
 MASTERY_LOOK = 31966        # Grand Marshal's Longsword
 
 STR, AGI, STA, INT, SPI = 4, 3, 7, 5, 6
+# the Scarlet Warhorse (Cold Words in the Downs' reward, story.py): the paladin warhorse in the level 40
+# set's crimson and gold (scarlet_horse.py), a 150% mount
+SCARLET_HORSE_LOOK = 17549          # CreatureDisplayInfo, after the stock 17548
+SCARLET_HORSE_TEXTURE = 'ZeldaScarletWarHorse'
+SCARLET_HORSE_NPC = 191160          # the ridden creature, from Riding Horse (Warhorse) 9158
+SCARLET_HORSE_SPELL = 40019
+SCARLET_HORSE_ITEM = 191161         # the reins, from the Black War Steed Bridle 18241
+WARHORSE_LOOK, WARHORSE_NPC, WARHORSE_SPELL, WAR_STEED_BRIDLE = 8469, 9158, 13819, 18241
 EXTRA_ATTACKS = 15494       # Ironfoe's Fury of Forgewright: 2 extra attacks on the next swing
 
 # custom spells: (id, cloned from, name, tooltip text, changes)
@@ -82,6 +90,8 @@ SPELLS = [
     # the hero's maximum health
     (40018, 9335, "Vanquisher's Mercy", 'Your melee critical strikes heal you for $s1% of your maximum health.',
      dict(EffectApplyAuraName1=4, EffectBasePoints1=4, EffectMiscValue1=0)),
+    (SCARLET_HORSE_SPELL, 13819, 'Scarlet Warhorse', 'Summons a Scarlet Warhorse, a fast mount. Increases speed by 150%.',
+     dict(EffectMiscValue1=SCARLET_HORSE_NPC, EffectBasePoints2=149)),
 ] + [
     # Mace Specialization's armor crush (ZeldaAfterMeleeHit): each mace hit lowers the enemy's armor by
     # the talent's points in percent, stacking up to five times - one spell per rank (40013 = rank 1
@@ -188,6 +198,25 @@ ITEM_COLUMNS = ['entry', 'class', 'subclass', 'name', 'displayid', 'Quality', 'F
     'ScriptName', 'DisenchantID', 'FoodType', 'minMoneyLoot', 'maxMoneyLoot', 'Duration', 'ExtraFlags']
 
 # Spell.dbc (1.12.1, 173 fields): where the spell_template columns sit
+CREATURE_COLUMNS = ['Entry', 'Name', 'SubName', 'MinLevel', 'MaxLevel', 'DisplayId1', 'DisplayId2', 'DisplayId3',
+                    'DisplayId4', 'DisplayIdProbability1', 'DisplayIdProbability2', 'DisplayIdProbability3',
+                    'DisplayIdProbability4', 'Faction', 'Scale', 'Family', 'CreatureType', 'InhabitType',
+                    'RegenerateStats', 'RacialLeader', 'NpcFlags', 'UnitFlags', 'DynamicFlags', 'ExtraFlags',
+                    'CreatureTypeFlags', 'StaticFlags1', 'StaticFlags2', 'StaticFlags3', 'StaticFlags4', 'SpeedWalk',
+                    'SpeedRun', 'Detection', 'CallForHelp', 'Pursuit', 'Leash', 'Timeout', 'UnitClass', 'Rank',
+                    'HealthMultiplier', 'PowerMultiplier', 'DamageMultiplier', 'DamageVariance', 'ArmorMultiplier',
+                    'ExperienceMultiplier', 'StrengthMultiplier', 'AgilityMultiplier', 'StaminaMultiplier',
+                    'IntellectMultiplier', 'SpiritMultiplier', 'MinLevelHealth', 'MaxLevelHealth', 'MinLevelMana',
+                    'MaxLevelMana', 'MinMeleeDmg', 'MaxMeleeDmg', 'MinRangedDmg', 'MaxRangedDmg', 'Armor',
+                    'MeleeAttackPower', 'RangedAttackPower', 'MeleeBaseAttackTime', 'RangedBaseAttackTime',
+                    'DamageSchool', 'MinLootGold', 'MaxLootGold', 'LootId', 'PickpocketLootId', 'SkinningLootId',
+                    'KillCredit1', 'KillCredit2', 'MechanicImmuneMask', 'SchoolImmuneMask', 'ResistanceHoly',
+                    'ResistanceFire', 'ResistanceNature', 'ResistanceFrost', 'ResistanceShadow', 'ResistanceArcane',
+                    'PetSpellDataId', 'MovementType', 'TrainerType', 'TrainerSpell', 'TrainerClass', 'TrainerRace',
+                    'TrainerTemplateId', 'VendorTemplateId', 'GossipMenuId', 'InteractionPauseTimer', 'CorpseDecay',
+                    'SpellList', 'CharmedSpellList', 'StringId1', 'StringId2', 'EquipmentTemplateId', 'Civilian',
+                    'AIName', 'ScriptName', 'DamageMultiplierOLD', 'DamageVarianceOLD']
+
 DBC_FIELD = {'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
              'SpellIconID': 117, 'School': 1, 'Attributes': 6, 'AttributesEx': 7, 'AttributesEx3': 9, 'CastingTimeIndex': 18, 'InterruptFlags': 21, 'PowerType': 31,
              'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'SpellFamilyName': 160,
@@ -282,6 +311,22 @@ def item_sql():
                               (40002, 2, 2.0, 0),                # holy light, 150-300
                               (EXTRA_ATTACKS, 2, 3.1, 0)]),      # 2 extra attacks: 15% of swings at 2.90
                   sql_str("Linken's courage and Quel'Serrar's steel, made one."), MASTERY))
+    # the Scarlet Warhorse: its ridden creature, its model's size, and its reins
+    out.append('DELETE FROM `creature_model_info` WHERE `modelid` = %d;\n'
+               'INSERT INTO `creature_model_info` (`modelid`, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, '
+               '`gender`, `modelid_other_gender`, `modelid_alternative`) SELECT %d, `bounding_radius`, `combat_reach`, `SpeedWalk`, '
+               '`SpeedRun`, `gender`, 0, 0 FROM `creature_model_info` WHERE `modelid` = %d;\n'
+               % (SCARLET_HORSE_LOOK, SCARLET_HORSE_LOOK, WARHORSE_LOOK))
+    out.append(clone('creature_template', 'Entry', SCARLET_HORSE_NPC, WARHORSE_NPC, CREATURE_COLUMNS))
+    out.append('UPDATE `creature_template` SET `Name` = %s, `DisplayId1` = %d, `DisplayId2` = 0, `DisplayId3` = 0, '
+               '`DisplayId4` = 0, `DisplayIdProbability1` = 100, `DisplayIdProbability2` = 0 WHERE `Entry` = %d;\n'
+               % (sql_str('Scarlet Warhorse'), SCARLET_HORSE_LOOK, SCARLET_HORSE_NPC))
+    out.append(clone('item_template', 'entry', SCARLET_HORSE_ITEM, WAR_STEED_BRIDLE, ITEM_COLUMNS))
+    out.append('UPDATE `item_template` SET `name` = %s, `Quality` = 4, `RequiredLevel` = 40, `RequiredSkill` = 0, '
+               '`RequiredSkillRank` = 0, `AllowableClass` = -1, `AllowableRace` = -1, `BuyPrice` = 0, `SellPrice` = 0, '
+               '`bonding` = 1, `maxcount` = 1, %s, `description` = %s WHERE `entry` = %d;\n'
+               % (sql_str('Reins of the Scarlet Warhorse'), spells_sql([(SCARLET_HORSE_SPELL, 0, 0, 0)]),
+                  sql_str("Vesper's thanks: a crusader's charger, freed of its crusade."), SCARLET_HORSE_ITEM))
     return ''.join(out)
 
 
@@ -339,6 +384,19 @@ def patch_display(path):
     return write_dbc(f, rows, strings)
 
 
+def patch_creature_display(path):
+    """CreatureDisplayInfo with the Scarlet Warhorse's look: the warhorse's row, its own skin."""
+    f, rows, strings = read_dbc(path)
+    assert f == 12, f
+    rows = [r for r in rows if r[0] != SCARLET_HORSE_LOOK]
+    row = list(next(r for r in rows if r[0] == WARHORSE_LOOK))
+    row[0] = SCARLET_HORSE_LOOK
+    row[6] = add_string(strings, SCARLET_HORSE_TEXTURE)     # texture variation 1, beside the model
+    rows.append(row)
+    rows.sort(key=lambda r: r[0])
+    return write_dbc(f, rows, strings)
+
+
 def patch_spells(path):
     f, rows, strings = read_dbc(path)
     assert f == 173, f
@@ -380,18 +438,29 @@ def patch_spells(path):
     return write_dbc(f, rows, strings)
 
 
-def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None):
+def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None, creature_display_dbc=None, warhorse_blp=None):
+    """patch-Z.MPQ; with the stock CreatureDisplayInfo.dbc and WarHorse.blp also the Scarlet Warhorse,
+    whose CreatureDisplayInfo.dbc the server needs too (written beside out_mpq)."""
     import mpq
     import shards
     files = {'DBFilesClient\\ItemDisplayInfo.dbc': patch_display(display_dbc),
              'DBFilesClient\\Spell.dbc': patch_spells(spell_dbc)}
     if shard_icon:
         files.update(shards.icon_files(open(shard_icon, 'rb').read()))
+    if creature_display_dbc and warhorse_blp:
+        import scarlet_horse
+        dbc = patch_creature_display(creature_display_dbc)
+        files['DBFilesClient\\CreatureDisplayInfo.dbc'] = dbc
+        files['Creature\\WarHorse\\%s.blp' % SCARLET_HORSE_TEXTURE] = scarlet_horse.build(open(warhorse_blp, 'rb').read())
+        server = os.path.join(os.path.dirname(os.path.abspath(out_mpq)), 'server-CreatureDisplayInfo.dbc')
+        with open(server, 'wb') as fh:
+            fh.write(dbc)
+        print('wrote', server)
     mpq.write_archive(out_mpq, files)
     print('wrote', out_mpq, os.path.getsize(out_mpq), 'bytes')
 
 
 if __name__ == '__main__':
     write_sql()
-    if len(sys.argv) in (4, 5):
+    if len(sys.argv) in (4, 5, 7):
         build_patch(*sys.argv[1:])
