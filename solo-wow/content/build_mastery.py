@@ -105,9 +105,12 @@ SPELLS = [
 
 # stock items changed in place: {item entry: {item_template column: value}}
 ITEM_EDITS = {
-    # Vanquisher's Sword: 65-120 at 2.70 speed, its attack power kept, Vanquisher's Mercy added
+    # Vanquisher's Sword: 65-120 at 2.70 speed, its attack power kept, Vanquisher's Mercy added, and the
+    # Shortsword of Vengeance's chance on hit (13519: smites the enemy for 30 Holy damage)
     10823: dict(dmg_min1=65, dmg_max1=120, delay=2700, spellid_2=40018, spelltrigger_2=1, spellcharges_2=0,
-                spellcooldown_2=-1, spellcategory_2=0, spellcategorycooldown_2=-1),
+                spellcooldown_2=-1, spellcategory_2=0, spellcategorycooldown_2=-1,
+                spellid_3=13519, spelltrigger_3=2, spellppmRate_3=0, spellcharges_3=0, spellcooldown_3=-1,
+                spellcategory_3=0, spellcategorycooldown_3=-1),
 }
 
 # stock spell texts changed in the client (patch-Z only): mana potions are shields now
@@ -322,7 +325,9 @@ def item_sql():
                '`DisplayId4` = 0, `DisplayIdProbability1` = 100, `DisplayIdProbability2` = 0 WHERE `Entry` = %d;\n'
                % (sql_str('Scarlet Warhorse'), SCARLET_HORSE_LOOK, SCARLET_HORSE_NPC))
     out.append(clone('item_template', 'entry', SCARLET_HORSE_ITEM, WAR_STEED_BRIDLE, ITEM_COLUMNS))
-    out.append('UPDATE `item_template` SET `name` = %s, `Quality` = 4, `RequiredLevel` = 40, `RequiredSkill` = 0, '
+    out.append('UPDATE `item_template` SET `name` = %s, `Quality` = 3, `ItemLevel` = 40, `RequiredLevel` = 40, '
+               '`requiredhonorrank` = 0, `RequiredCityRank` = 0, `RequiredReputationFaction` = 0, '
+               '`RequiredReputationRank` = 0, `requiredspell` = 0, `RequiredSkill` = 0, '
                '`RequiredSkillRank` = 0, `AllowableClass` = -1, `AllowableRace` = -1, `BuyPrice` = 0, `SellPrice` = 0, '
                '`bonding` = 1, `maxcount` = 1, %s, `description` = %s WHERE `entry` = %d;\n'
                % (sql_str('Reins of the Scarlet Warhorse'), spells_sql([(SCARLET_HORSE_SPELL, 0, 0, 0)]),

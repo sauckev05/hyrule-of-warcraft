@@ -16,6 +16,7 @@ creatures that also live outside the dungeon (snakes, toads).
   - Wailing Caverns (011_wailing_caverns.sql): level 28-33, Mutanus the Devourer 33
   - Scarlet Monastery (018_scarlet_monastery.sql): level 40-45 - Graveyard, Library, Armory, then
     the Cathedral, whose Mograine and Whitemane are 45
+  - Razorfen Downs (021_razorfen_downs.sql): level 43-45, Lady Falther'ess and Amnennar 45
 
 usage: build_dungeons.py <world database dump (.sql) without these files applied>
 """
@@ -53,6 +54,14 @@ DUNGEONS = [
          bosses={3983: 41, 6488: 42, 6489: 42, 6490: 42, 4543: 42, 3974: 42, 6487: 43, 6575: 43,
                  3975: 44, 4542: 44, 3976: 45, 3977: 45},
          trash=(30, 40, 1 / 2, 40, 44), max_req=45),
+    # Razorfen Downs, 43-45: the quilboar and the Scourge's dead climb from 43 at the door to 44 near
+    # the end; Lady Falther'ess and Amnennar the Coldbringer are 45
+    dict(name='Razorfen Downs', file='021_razorfen_downs.sql', range='43-45', map=129,
+         not_enemies={8516, 8696, 8767, 8662, 8611},   # Belnistrasz, Henry Stern, Sah'rhee, the idol's markers
+         # the gong's Tomb Fiends, Tomb Reavers and Tuten'kash; Plaguemaw from the idol's waves
+         summoned={7349, 7351, 7355, 7356},
+         bosses={7355: 43, 7357: 44, 8567: 44, 7354: 44, 7356: 44, 14686: 45, 7358: 45},
+         trash=(34, 43, 1 / 3, 43, 44), max_req=45),
 ]
 WORLD_DROP_REFS = range(60000, 61000)   # level-bracket world drop tables (series = id // 100)
 
