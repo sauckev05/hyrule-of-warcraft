@@ -52,6 +52,12 @@ WARHORSE_LOOK, WARHORSE_NPC, WARHORSE_SPELL, WAR_STEED_BRIDLE = 8469, 9158, 1381
 VANQUISHER_SMITE = 40020
 HOLY_SMITE, HOLY_SMITE_VISUAL = 13519, 128
 SMITE_IMPACT_VISUAL = 7892          # SpellVisual, after the stock 7891
+# Reforged in the Black Anvil (story.py): using the anvil starts a 30-second blacksmithing cast - Copper
+# Bracers' hammering at the anvil (SpellVisual 395), without its hammer, anvil, bars or bracers - and
+# its end completes the quest (ZeldaCommands.cpp, ZeldaGameObjectUse / ZeldaSpellFinished)
+REFORGING = 40021
+COPPER_BRACERS = 2663
+CAST_30_SECONDS = 9                 # SpellCastTimes
 EXTRA_ATTACKS = 15494       # Ironfoe's Fury of Forgewright: 2 extra attacks on the next swing
 
 # custom spells: (id, cloned from, name, tooltip text, changes)
@@ -99,6 +105,9 @@ SPELLS = [
      dict(EffectMiscValue1=SCARLET_HORSE_NPC, EffectBasePoints2=149)),
     (VANQUISHER_SMITE, HOLY_SMITE, 'Holy Smite', 'Smites an enemy for $s1 Holy damage.',
      dict(EffectBasePoints1=49, SpellVisual=SMITE_IMPACT_VISUAL)),
+    (REFORGING, COPPER_BRACERS, 'Reforging', "Reforges Linken's sword on the Black Anvil.",
+     dict(Effect1=3, EffectItemType1=0, EffectImplicitTargetA1=1, Totem1=0, RequiresSpellFocus=0, Reagent1=0,
+          ReagentCount1=0, CastingTimeIndex=CAST_30_SECONDS)),
 ] + [
     # Mace Specialization's armor crush (ZeldaAfterMeleeHit): each mace hit lowers the enemy's armor by
     # the talent's points in percent, stacking up to five times - one spell per rank (40013 = rank 1
@@ -227,7 +236,7 @@ CREATURE_COLUMNS = ['Entry', 'Name', 'SubName', 'MinLevel', 'MaxLevel', 'Display
                     'SpellList', 'CharmedSpellList', 'StringId1', 'StringId2', 'EquipmentTemplateId', 'Civilian',
                     'AIName', 'ScriptName', 'DamageMultiplierOLD', 'DamageVarianceOLD']
 
-DBC_FIELD = {'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
+DBC_FIELD = {'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
              'SpellIconID': 117, 'School': 1, 'Attributes': 6, 'AttributesEx': 7, 'AttributesEx3': 9, 'CastingTimeIndex': 18, 'InterruptFlags': 21, 'PowerType': 31,
              'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'SpellFamilyName': 160,
              'SpellFamilyFlags': 161, 'DmgClass': 164}
@@ -477,7 +486,11 @@ def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None, creature_displ
         import scarlet_horse
         dbc = patch_creature_display(creature_display_dbc)
         files['DBFilesClient\\CreatureDisplayInfo.dbc'] = dbc
-        files['Creature\\WarHorse\\%s.blp' % SCARLET_HORSE_TEXTURE] = scarlet_horse.build(open(warhorse_blp, 'rb').read())
+        skin = open(warhorse_blp, 'rb').read()
+        # the stock WarHorse.blp is recoloured; a ZeldaScarletWarHorse.blp (from an earlier patch-Z) is taken as is
+        if not os.path.basename(warhorse_blp).lower().startswith(SCARLET_HORSE_TEXTURE.lower()):
+            skin = scarlet_horse.build(skin)
+        files['Creature\\WarHorse\\%s.blp' % SCARLET_HORSE_TEXTURE] = skin
         server = os.path.join(os.path.dirname(os.path.abspath(out_mpq)), 'server-CreatureDisplayInfo.dbc')
         with open(server, 'wb') as fh:
             fh.write(dbc)

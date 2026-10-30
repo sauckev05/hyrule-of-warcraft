@@ -1757,10 +1757,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..6134658d5
+index 000000000..09301816f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4664 @@
+@@ -0,0 +1,4696 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4303,6 +4303,7 @@ index 000000000..6134658d5
 +    uint32 const QUEST_BLACK_ANVIL = 90521;
 +    uint32 const GO_BLACK_ANVIL = 191170;
 +    uint32 const ITEM_SHARD_BOUND_HILT = 190534;
++    uint32 const SPELL_REFORGING = 40021;           // 30 seconds of hammering (build_mastery.py)
 +    uint32 const FIRST_DUNGEON_SHARD = 191100, LAST_DUNGEON_SHARD = 191123;     // shards.py, raids excluded
 +}
 +
@@ -4329,32 +4330,63 @@ index 000000000..6134658d5
 +        player->DestroyItemCount(shard, 1, true);
 +}
 +
++namespace
++{
++    // Reforged in the Black Anvil can be finished now: on the quest, the hilt in the bags, room for the
++    // sword (told to the hero when not)
++    Quest const* ReforgeReady(Player* player)
++    {
++        Quest const* quest = sObjectMgr.GetQuestTemplate(QUEST_BLACK_ANVIL);
++        if (!quest || player->GetQuestStatus(QUEST_BLACK_ANVIL) != QUEST_STATUS_INCOMPLETE)
++            return nullptr;
++        if (!player->HasItemCount(ITEM_SHARD_BOUND_HILT, 1))
++        {
++            player->GetSession()->SendNotification("You need the Shard-Bound Hilt.");
++            return nullptr;
++        }
++        for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
++        {
++            ItemPosCountVec dest;
++            if (quest->RewItemId[i] &&
++                player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewItemId[i], quest->RewItemCount[i]) != EQUIP_ERR_OK)
++            {
++                player->GetSession()->SendNotification("Your bags are full.");
++                return nullptr;
++            }
++        }
++        return quest;
++    }
++}
++
 +bool ZeldaGameObjectUse(Player* player, GameObject* go)
 +{
 +    if (!player || !go || go->GetEntry() != GO_BLACK_ANVIL)
 +        return false;
-+    Quest const* quest = sObjectMgr.GetQuestTemplate(QUEST_BLACK_ANVIL);
-+    if (!quest || player->GetQuestStatus(QUEST_BLACK_ANVIL) != QUEST_STATUS_INCOMPLETE)
-+        return true;                                // nothing to forge
-+    if (!player->HasItemCount(ITEM_SHARD_BOUND_HILT, 1))
-+    {
-+        player->GetSession()->SendNotification("You need the Shard-Bound Hilt.");
++    // thirty seconds of hammering on the anvil (the cast's end forges the sword: ZeldaSpellFinished);
++    // moving or being struck stops it
++    if (player->IsNonMeleeSpellCasted(false) || !ReforgeReady(player))
 +        return true;
-+    }
-+    for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
++    if (SpellEntry const* reforging = sSpellTemplate.LookupEntry<SpellEntry>(SPELL_REFORGING))
 +    {
-+        ItemPosCountVec dest;
-+        if (quest->RewItemId[i] &&
-+            player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewItemId[i], quest->RewItemCount[i]) != EQUIP_ERR_OK)
-+        {
-+            player->GetSession()->SendNotification("Your bags are full.");
-+            return true;
-+        }
++        Spell* spell = new Spell(player, reforging, TRIGGERED_NONE);
++        SpellCastTargets targets;
++        targets.setUnitTarget(player);
++        spell->SpellStart(&targets);
 +    }
-+    player->CompleteQuest(QUEST_BLACK_ANVIL);
-+    player->RewardQuest(quest, 0, go, true);
-+    player->GetSession()->SendAreaTriggerMessage("|cffffcc33The Black Anvil roars to life - Linken's blade is reforged!|r");
 +    return true;
++}
++
++void ZeldaSpellFinished(Spell* spell)
++{
++    if (!spell || spell->m_spellInfo->Id != SPELL_REFORGING || !spell->GetCaster() || !spell->GetCaster()->IsPlayer())
++        return;
++    Player* player = static_cast<Player*>(spell->GetCaster());
++    if (Quest const* quest = ReforgeReady(player))
++    {
++        player->CompleteQuest(QUEST_BLACK_ANVIL);
++        player->RewardQuest(quest, 0, player, true);
++        player->GetSession()->SendAreaTriggerMessage("|cffffcc33The Black Anvil roars to life - Linken's blade is reforged!|r");
++    }
 +}
 +
 +// ---------------------------------------------------------------------------------- pawnbroker
@@ -6427,10 +6459,10 @@ index 000000000..6134658d5
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..b3cdc70a0
+index 000000000..c6d7a5fab
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,284 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6674,6 +6706,8 @@ index 000000000..b3cdc70a0
 +// the charge-up went off: blocked with the shield (or parried, for a melee one) it fills 25% of the
 +// rage bar (Zelda.GuardRagePercent)
 +void ZeldaChargeLanded(Spell* spell);
++// A cast of ours went off: Reforging (40021) at the Black Anvil completes Reforged in the Black Anvil
++void ZeldaSpellFinished(Spell* spell);
 +// the charge-up was cut short (interrupted, stunned, killed): "ZCAST:caster;;0"
 +void ZeldaEnemyChargeStopped(Unit* caster, ObjectGuid const& hero);
 +// Zelda of Warcraft: an enemy's heavy blow or charged bolt lands (true when spellId is one)
@@ -7920,7 +7954,7 @@ index 591908ab5..5cb585b23 100644
      if (!noSpillover)
      {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..65017e092 100644
+index bf5c5c578..2123604ee 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -7969,12 +8003,14 @@ index bf5c5c578..65017e092 100644
                  AddPrecastSpell(25771);                     // Forbearance
              break;
          }
-@@ -3280,6 +3289,13 @@ SpellCastResult Spell::cast(bool skipCheck)
+@@ -3280,6 +3289,15 @@ SpellCastResult Spell::cast(bool skipCheck)
      SendCastResult(castResult);
      SendSpellGo();                                          // we must send smsg_spell_go packet before m_castItem delete in TakeCastItem()...
  
 +    // Zelda of Warcraft: an enemy's charge-up goes off - blocked or parried, the hero gains rage
 +    ZeldaChargeLanded(this);
++    // ...and casts of our own that finish something (the Black Anvil's Reforging)
++    ZeldaSpellFinished(this);
 +
 +    // Zelda of Warcraft: the client starts the potion cooldown by itself when the cast goes off - clear it
 +    if (m_CastItem && m_trueCaster->IsPlayer() && ZeldaFreePotion(*m_spellInfo, m_CastItem->GetProto()))
@@ -7983,7 +8019,7 @@ index bf5c5c578..65017e092 100644
      InitializeDamageMultipliers();
  
      OnCast();
-@@ -4450,6 +4466,9 @@ void Spell::TakeReagents()
+@@ -4450,6 +4468,9 @@ void Spell::TakeReagents()
      {
          if (m_spellInfo->Reagent[x] <= 0)
              continue;
@@ -7993,7 +8029,7 @@ index bf5c5c578..65017e092 100644
  
          uint32 itemid = m_spellInfo->Reagent[x];
          uint32 itemcount = m_spellInfo->ReagentCount[x];
-@@ -5553,9 +5572,15 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5553,9 +5574,15 @@ SpellCastResult Spell::CheckCast(bool strict)
                          return SPELL_FAILED_TRY_AGAIN;
  
                      lockId = go->GetGOInfo()->GetLockId();
@@ -8010,7 +8046,7 @@ index bf5c5c578..65017e092 100644
                      // check if its in use only when cast is finished (called from spell::cast() with strict = false)
                      if (!strict && go->IsInUse())
                          return SPELL_FAILED_CHEST_IN_USE;
-@@ -5998,6 +6023,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5998,6 +6025,10 @@ SpellCastResult Spell::CheckCast(bool strict)
          }
      }
  
@@ -8021,7 +8057,7 @@ index bf5c5c578..65017e092 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6499,6 +6528,12 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6530,12 @@ SpellCastResult Spell::CheckItems()
                      }
  
                      Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
@@ -8034,7 +8070,7 @@ index bf5c5c578..65017e092 100644
                      if (target->GetPower(power) == target->GetMaxPower(power))
                      {
                          failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
-@@ -6565,6 +6600,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6565,6 +6602,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;
