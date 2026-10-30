@@ -47,6 +47,11 @@ SCARLET_HORSE_NPC = 191160          # the ridden creature, from Riding Horse (Wa
 SCARLET_HORSE_SPELL = 40019
 SCARLET_HORSE_ITEM = 191161         # the reins, from the Black War Steed Bridle 18241
 WARHORSE_LOOK, WARHORSE_NPC, WARHORSE_SPELL, WAR_STEED_BRIDLE = 8469, 9158, 13819, 18241
+# the Vanquisher's Sword's smite: Holy Smite (13519) for 50, with only its impact on the enemy - a
+# SpellVisual of its own without Holy Smite's precast and cast kits, so the hero plays no cast
+VANQUISHER_SMITE = 40020
+HOLY_SMITE, HOLY_SMITE_VISUAL = 13519, 128
+SMITE_IMPACT_VISUAL = 7892          # SpellVisual, after the stock 7891
 EXTRA_ATTACKS = 15494       # Ironfoe's Fury of Forgewright: 2 extra attacks on the next swing
 
 # custom spells: (id, cloned from, name, tooltip text, changes)
@@ -92,6 +97,8 @@ SPELLS = [
      dict(EffectApplyAuraName1=4, EffectBasePoints1=4, EffectMiscValue1=0)),
     (SCARLET_HORSE_SPELL, 13819, 'Scarlet Warhorse', 'Summons a Scarlet Warhorse, a fast mount. Increases speed by 150%.',
      dict(EffectMiscValue1=SCARLET_HORSE_NPC, EffectBasePoints2=149)),
+    (VANQUISHER_SMITE, HOLY_SMITE, 'Holy Smite', 'Smites an enemy for $s1 Holy damage.',
+     dict(EffectBasePoints1=49, SpellVisual=SMITE_IMPACT_VISUAL)),
 ] + [
     # Mace Specialization's armor crush (ZeldaAfterMeleeHit): each mace hit lowers the enemy's armor by
     # the talent's points in percent, stacking up to five times - one spell per rank (40013 = rank 1
@@ -106,10 +113,10 @@ SPELLS = [
 # stock items changed in place: {item entry: {item_template column: value}}
 ITEM_EDITS = {
     # Vanquisher's Sword: 65-120 at 2.70 speed, its attack power kept, Vanquisher's Mercy added, and the
-    # Shortsword of Vengeance's chance on hit (13519: smites the enemy for 30 Holy damage)
+    # Shortsword of Vengeance's chance on hit, as a 50 Holy damage smite (VANQUISHER_SMITE)
     10823: dict(dmg_min1=65, dmg_max1=120, delay=2700, spellid_2=40018, spelltrigger_2=1, spellcharges_2=0,
                 spellcooldown_2=-1, spellcategory_2=0, spellcategorycooldown_2=-1,
-                spellid_3=13519, spelltrigger_3=2, spellppmRate_3=0, spellcharges_3=0, spellcooldown_3=-1,
+                spellid_3=VANQUISHER_SMITE, spelltrigger_3=2, spellppmRate_3=0, spellcharges_3=0, spellcooldown_3=-1,
                 spellcategory_3=0, spellcategorycooldown_3=-1),
 }
 
@@ -402,6 +409,19 @@ def patch_creature_display(path):
     return write_dbc(f, rows, strings)
 
 
+def patch_spell_visual(path):
+    """SpellVisual with the smite's impact-only visual: Holy Smite's, its precast and cast kits removed."""
+    f, rows, strings = read_dbc(path)
+    assert f == 16, f
+    rows = [r for r in rows if r[0] != SMITE_IMPACT_VISUAL]
+    row = list(next(r for r in rows if r[0] == HOLY_SMITE_VISUAL))
+    row[0] = SMITE_IMPACT_VISUAL
+    row[1] = row[2] = 0                                     # PrecastKit, CastKit: the hero's casting
+    rows.append(row)
+    rows.sort(key=lambda r: r[0])
+    return write_dbc(f, rows, strings)
+
+
 def patch_spells(path):
     f, rows, strings = read_dbc(path)
     assert f == 173, f
@@ -443,7 +463,8 @@ def patch_spells(path):
     return write_dbc(f, rows, strings)
 
 
-def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None, creature_display_dbc=None, warhorse_blp=None):
+def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None, creature_display_dbc=None, warhorse_blp=None,
+                spell_visual_dbc=None):
     """patch-Z.MPQ; with the stock CreatureDisplayInfo.dbc and WarHorse.blp also the Scarlet Warhorse,
     whose CreatureDisplayInfo.dbc the server needs too (written beside out_mpq)."""
     import mpq
@@ -461,11 +482,13 @@ def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None, creature_displ
         with open(server, 'wb') as fh:
             fh.write(dbc)
         print('wrote', server)
+    if spell_visual_dbc:
+        files['DBFilesClient\\SpellVisual.dbc'] = patch_spell_visual(spell_visual_dbc)
     mpq.write_archive(out_mpq, files)
     print('wrote', out_mpq, os.path.getsize(out_mpq), 'bytes')
 
 
 if __name__ == '__main__':
     write_sql()
-    if len(sys.argv) in (4, 5, 7):
+    if len(sys.argv) in (4, 5, 7, 8):
         build_patch(*sys.argv[1:])

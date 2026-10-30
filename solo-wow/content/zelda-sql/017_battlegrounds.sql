@@ -8,8 +8,8 @@ INSERT INTO `creature_template` (`Entry`,`Name`,`SubName`,`MinLevel`,`MaxLevel`,
 (190982,'Silverwing Warden','Guardian of the Flag',30,30,14793,100,1216,1.35,7,1,1,0,0,1.0,1.14286,1,1,14.0,1.0,2.2,1.0,1.0,2200,2000,14762,0,'EventAI',''),
 (190983,'Warsong Warlord','Guardian of the Flag',30,30,14797,100,1214,1.35,7,1,1,0,0,1.0,1.14286,1,1,14.0,1.0,2.2,1.0,1.0,2200,2000,14777,0,'EventAI',''),
 (190984,'Ironhide Brute','Guardian of the Banner',30,30,11567,100,14,1.3,7,1,1,0,0,1.0,1.14286,1,1,9.0,1.0,2.0,1.0,1.0,2600,2000,1142,0,'EventAI',''),
-(190985,'Stormpike Champion','Alliance Base Guardian',30,30,11896,100,1216,1.6,7,1,1,0,0,1.0,1.14286,1,1,60.0,1.0,3.0,1.0,2.0,2400,2000,11948,0,'EventAI',''),
-(190986,'Frostwolf Champion','Horde Base Guardian',30,30,11894,100,1214,1.6,7,1,1,0,0,1.0,1.14286,1,1,60.0,1.0,3.0,1.0,2.0,2400,2000,11946,0,'EventAI','');
+(190985,'Stormpike Champion','Alliance Base Guardian',30,30,11896,100,1216,1.6,7,1,1,0,0,1.0,1.14286,1,1,120.0,1.0,3.0,1.0,2.0,2400,2000,11948,0,'EventAI',''),
+(190986,'Frostwolf Champion','Horde Base Guardian',30,30,11894,100,1214,1.6,7,1,1,0,0,1.0,1.14286,1,1,120.0,1.0,3.0,1.0,2.0,2400,2000,11946,0,'EventAI','');
 INSERT INTO `creature_ai_scripts` (`id`,`creature_id`,`event_type`,`event_inverse_phase_mask`,`event_chance`,`event_flags`,`event_param1`,`event_param2`,`event_param3`,`event_param4`,`event_param5`,`event_param6`,`action1_type`,`action1_param1`,`action1_param2`,`action1_param3`,`action2_type`,`action2_param1`,`action2_param2`,`action2_param3`,`action3_type`,`action3_param1`,`action3_param2`,`action3_param3`,`comment`) VALUES
 (19098001,190980,0,0,100,1,4000,8000,9000,14000,0,0,11,13737,1,0,0,0,0,0,0,0,0,0,'Zelda battleground: 190980 cast 13737'),
 (19098002,190980,0,0,100,1,6000,9000,10000,15000,0,0,11,15284,1,0,0,0,0,0,0,0,0,0,'Zelda battleground: 190980 cast 15284'),

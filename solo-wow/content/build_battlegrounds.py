@@ -18,9 +18,9 @@ UNITS = [
     (190983, 'Warsong Warlord', 'Guardian of the Flag', 14797, 14777, 1214, 1.35, 14.0, 2.2, 2200, 1.0),
     (190984, 'Ironhide Brute', 'Guardian of the Banner', 11567, 1142, 14, 1.3, 9.0, 2.0, 2600, 1.0),
     # the base champions at each base's entrance (Warsong Gulch, Arathi Basin): the side whose
-    # champion falls first loses the battle (core: ZeldaSoloBattleground)
-    (190985, 'Stormpike Champion', 'Alliance Base Guardian', 11896, 11948, 1216, 1.6, 60.0, 3.0, 2400, 2.0),
-    (190986, 'Frostwolf Champion', 'Horde Base Guardian', 11894, 11946, 1214, 1.6, 60.0, 3.0, 2400, 2.0),
+    # champion falls first loses the battle (core: ZeldaSoloBattleground); twice the health they had
+    (190985, 'Stormpike Champion', 'Alliance Base Guardian', 11896, 11948, 1216, 1.6, 120.0, 3.0, 2400, 2.0),
+    (190986, 'Frostwolf Champion', 'Horde Base Guardian', 11894, 11946, 1214, 1.6, 120.0, 3.0, 2400, 2.0),
 ]
 
 TIMER, HP = 0, 2
