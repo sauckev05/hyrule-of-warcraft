@@ -82,6 +82,9 @@ jobs:
           $bin = Get-ChildItem -Recurse -Directory "cmangos/bin" | Where-Object { $_.Name -eq "x64_$env:BUILD_TYPE" } | Select-Object -First 1
           Write-Host "Binaries in $($bin.FullName)"
           Copy-Item -Recurse "$($bin.FullName)/*" $out
+          # mangosd's symbols, kept apart for reading crash reports
+          New-Item -ItemType Directory -Force server-pdb | Out-Null
+          Get-ChildItem -Recurse $out -Filter mangosd.pdb | Copy-Item -Destination server-pdb
           Get-ChildItem -Recurse $out -Include *.pdb | Remove-Item -Force
           # make sure every *.conf.dist is next to the executables
           Get-ChildItem -Recurse cmangos/bin/builddir, cmangos/src -Filter *.conf.dist -ErrorAction SilentlyContinue | ForEach-Object {
@@ -97,6 +100,12 @@ jobs:
           name: server-bin
           path: server-bin
           retention-days: 3
+      - name: Upload symbols
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-pdb
+          path: server-pdb
+          retention-days: 30
 
   database:
     runs-on: ubuntu-22.04

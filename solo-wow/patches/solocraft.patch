@@ -1757,10 +1757,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..0c16b1124
+index 000000000..70a4719d6
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4592 @@
+@@ -0,0 +1,4599 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4129,7 +4129,10 @@ index 000000000..0c16b1124
 +    }
 +    if (bg->GetStatus() != STATUS_IN_PROGRESS)
 +    {
-+        if (bg->GetStatus() == STATUS_WAIT_LEAVE && !state.bgSoldiers.empty())
++        bool const armies = !state.bgSoldiers.empty() || state.bgBoss[0] || state.bgBoss[1] ||
++                            std::any_of(std::begin(state.bgGuards), std::end(state.bgGuards),
++                                        [](ObjectGuid const& g) { return bool(g); });
++        if (bg->GetStatus() == STATUS_WAIT_LEAVE && armies)
 +            ClearBgArmies(player, state), state.bgInstance = player->GetInstanceId();
 +        return;
 +    }
@@ -4206,8 +4209,12 @@ index 000000000..0c16b1124
 +            std::string const fallen = champ ? champ->GetName() : (side == 0 ? "The Alliance champion" : "The Horde champion");
 +            player->GetSession()->SendAreaTriggerMessage("|cffffcc33%s has fallen! The %s wins the battle!|r", fallen.c_str(),
 +                                                         winner == ALLIANCE ? "Alliance" : "Horde");
-+            state.bgBoss[0] = state.bgBoss[1] = ObjectGuid();
 +            bg->EndBattleGround(winner);
++            // everything the armies left behind goes at once: a soldier or champion left standing
++            // away from its "home" (the far base, the middle) would be moved there when the map
++            // unloads its grids, loading new ones after the battleground is gone
++            ClearBgArmies(player, state);
++            state.bgInstance = player->GetInstanceId();
 +            return;
 +        }
 +    }
@@ -6659,7 +6666,7 @@ index 06567441e..40ccbe604 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb08..cd6b64501 100644
+index a10fdbb08..d8b659c09 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -6701,7 +6708,21 @@ index a10fdbb08..cd6b64501 100644
          if (IsUnit())
              GetMap()->GetObjectsStore().erase<Creature>(GetObjectGuid(), (Creature*)nullptr);
          if (GetDbGuid())
-@@ -1086,6 +1097,14 @@ void Creature::PrepareBodyLootState(Unit* killer)
+@@ -909,8 +920,12 @@ bool Creature::Create(uint32 dbGuid, uint32 guidlow, CreatureCreatePos& cPos, Cr
+         return false;
+ 
+     // Notify the pvp script
++    // (Zelda of Warcraft: the battleground can already be gone while its map unloads grids)
+     if (GetMap()->IsBattleGround())
+-        static_cast<BattleGroundMap*>(GetMap())->GetBG()->HandleCreatureCreate(this);
++    {
++        if (BattleGround* bg = static_cast<BattleGroundMap*>(GetMap())->GetBG())
++            bg->HandleCreatureCreate(this);
++    }
+     else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
+         outdoorPvP->HandleCreatureCreate(this);
+ 
+@@ -1086,6 +1101,14 @@ void Creature::PrepareBodyLootState(Unit* killer)
  
          if (looter || GetSettings().HasFlag(CreatureStaticFlags::CAN_WIELD_LOOT))
              m_loot = new Loot(looter, this, LOOT_CORPSE);
@@ -6716,7 +6737,7 @@ index a10fdbb08..cd6b64501 100644
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1281,42 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1285,42 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -6759,7 +6780,7 @@ index a10fdbb08..cd6b64501 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1360,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1364,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -6768,7 +6789,7 @@ index a10fdbb08..cd6b64501 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1469,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1473,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -6777,7 +6798,7 @@ index a10fdbb08..cd6b64501 100644
      if (health < 1)
          health = 1;
  
-@@ -1875,6 +1930,9 @@ void Creature::SetDeathState(DeathState s)
+@@ -1875,6 +1934,9 @@ void Creature::SetDeathState(DeathState s)
          else if (m_respawnOverrideOnce)
              m_respawnOverriden = false;
  
@@ -6787,7 +6808,7 @@ index a10fdbb08..cd6b64501 100644
          if (m_settings.HasFlag(CreatureStaticFlags3::FOREVER_CORPSE_DURATION))
              m_corpseExpirationTime = GetMap()->GetCurrentClockTime() + std::chrono::hours(24*7);
          else
-@@ -2125,6 +2183,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -2125,6 +2187,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
@@ -6811,7 +6832,7 @@ index a378c4e1e..f53dd6559 100644
 +
  #endif
 diff --git a/src/game/Entities/GameObject.cpp b/src/game/Entities/GameObject.cpp
-index 043cad6ef..ffd445e9b 100644
+index 043cad6ef..bec91915a 100644
 --- a/src/game/Entities/GameObject.cpp
 +++ b/src/game/Entities/GameObject.cpp
 @@ -17,6 +17,7 @@
@@ -6822,7 +6843,21 @@ index 043cad6ef..ffd445e9b 100644
  #include "Quests/QuestDef.h"
  #include "Globals/ObjectMgr.h"
  #include "Globals/ObjectAccessor.h"
-@@ -1498,6 +1499,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -284,8 +285,12 @@ bool GameObject::Create(uint32 dbGuid, uint32 guidlow, uint32 name_id, Map* map,
+         SetStringId(goinfo->StringId, true);
+ 
+     // Notify the battleground or outdoor pvp script
++    // (Zelda of Warcraft: the battleground can already be gone while its map unloads grids)
+     if (map->IsBattleGround())
+-        ((BattleGroundMap*)map)->GetBG()->HandleGameObjectCreate(this);
++    {
++        if (BattleGround* bg = ((BattleGroundMap*)map)->GetBG())
++            bg->HandleGameObjectCreate(this);
++    }
+     else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
+         outdoorPvP->HandleGameObjectCreate(this);
+ 
+@@ -1498,6 +1503,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
      {
          case GAMEOBJECT_TYPE_DOOR:                          // 0
          {
@@ -6833,7 +6868,7 @@ index 043cad6ef..ffd445e9b 100644
              // doors never really despawn, only reset to default state/flags
              UseDoorOrButton();
  
-@@ -1787,7 +1792,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1787,7 +1796,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                          // TODO: find reasonable value for fishing hole search
                          fishingHole = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
  
@@ -6844,7 +6879,7 @@ index 043cad6ef..ffd445e9b 100644
  
                      // fish catch or fail and junk allowed (after 3.1.0)
                      if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
-@@ -1961,6 +1968,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1961,6 +1972,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
  
              if (player->CanUseBattleGroundObject())
              {
@@ -7474,6 +7509,30 @@ index a67044614..5084c7488 100644
  
          if (flush)
          {
+diff --git a/src/game/Grids/GridNotifiers.cpp b/src/game/Grids/GridNotifiers.cpp
+index 91f40fcf2..317f013b3 100644
+--- a/src/game/Grids/GridNotifiers.cpp
++++ b/src/game/Grids/GridNotifiers.cpp
+@@ -210,7 +210,8 @@ void MaNGOS::RespawnDo::operator()(Creature* u) const
+     if (map->IsBattleGround())
+     {
+         BattleGroundEventIdx eventId = map->GetMapDataContainer().GetCreatureEventIndex(u->GetDbGuid());
+-        if (!((BattleGroundMap*)map)->GetBG()->IsActiveEvent(eventId.event1, eventId.event2))
++        BattleGround* bg = ((BattleGroundMap*)map)->GetBG();
++        if (!bg || !bg->IsActiveEvent(eventId.event1, eventId.event2))
+             return;
+     }
+ 
+@@ -235,7 +236,8 @@ void MaNGOS::RespawnDo::operator()(GameObject* u) const
+     if (map->IsBattleGround())
+     {
+         BattleGroundEventIdx eventId = map->GetMapDataContainer().GetGameObjectEventIndex(u->GetDbGuid());
+-        if (!static_cast<BattleGroundMap*>(map)->GetBG()->IsActiveEvent(eventId.event1, eventId.event2))
++        BattleGround* bg = static_cast<BattleGroundMap*>(map)->GetBG();
++        if (!bg || !bg->IsActiveEvent(eventId.event1, eventId.event2))
+             return;
+     }
+ 
 diff --git a/src/game/Guilds/GuildHandler.cpp b/src/game/Guilds/GuildHandler.cpp
 index 0bde155d8..3e7dbf632 100644
 --- a/src/game/Guilds/GuildHandler.cpp
