@@ -1757,10 +1757,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..70a4719d6
+index 000000000..6134658d5
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4599 @@
+@@ -0,0 +1,4664 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4292,6 +4292,71 @@ index 000000000..70a4719d6
 +    return false;
 +}
 +
++// ---------------------------------------------------------------------------------- the Sword of Mastery
++// Linken's last quests (story.py): The Light of Every Dungeon asks for the hilt and a Crystal Shard of
++// each of the 24 dungeons - more items than the quest log's four, so the shards are checked and taken
++// here - and Reforged in the Black Anvil is finished at the Black Anvil in Blackrock Depths: using the
++// anvil (a goober of our own over the stock one) with the Shard-Bound Hilt forges the sword at once.
++namespace
++{
++    uint32 const QUEST_EVERY_DUNGEON = 90520;
++    uint32 const QUEST_BLACK_ANVIL = 90521;
++    uint32 const GO_BLACK_ANVIL = 191170;
++    uint32 const ITEM_SHARD_BOUND_HILT = 190534;
++    uint32 const FIRST_DUNGEON_SHARD = 191100, LAST_DUNGEON_SHARD = 191123;     // shards.py, raids excluded
++}
++
++bool ZeldaQuestExtraItem(uint32 questId, uint32 itemEntry)
++{
++    return questId == QUEST_EVERY_DUNGEON && itemEntry >= FIRST_DUNGEON_SHARD && itemEntry <= LAST_DUNGEON_SHARD;
++}
++
++bool ZeldaQuestExtraHeld(Player const* player, uint32 questId)
++{
++    if (questId != QUEST_EVERY_DUNGEON || !player)
++        return true;
++    for (uint32 shard = FIRST_DUNGEON_SHARD; shard <= LAST_DUNGEON_SHARD; ++shard)
++        if (!player->HasItemCount(shard, 1))
++            return false;
++    return true;
++}
++
++void ZeldaQuestExtraTake(Player* player, uint32 questId)
++{
++    if (questId != QUEST_EVERY_DUNGEON || !player)
++        return;
++    for (uint32 shard = FIRST_DUNGEON_SHARD; shard <= LAST_DUNGEON_SHARD; ++shard)
++        player->DestroyItemCount(shard, 1, true);
++}
++
++bool ZeldaGameObjectUse(Player* player, GameObject* go)
++{
++    if (!player || !go || go->GetEntry() != GO_BLACK_ANVIL)
++        return false;
++    Quest const* quest = sObjectMgr.GetQuestTemplate(QUEST_BLACK_ANVIL);
++    if (!quest || player->GetQuestStatus(QUEST_BLACK_ANVIL) != QUEST_STATUS_INCOMPLETE)
++        return true;                                // nothing to forge
++    if (!player->HasItemCount(ITEM_SHARD_BOUND_HILT, 1))
++    {
++        player->GetSession()->SendNotification("You need the Shard-Bound Hilt.");
++        return true;
++    }
++    for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
++    {
++        ItemPosCountVec dest;
++        if (quest->RewItemId[i] &&
++            player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewItemId[i], quest->RewItemCount[i]) != EQUIP_ERR_OK)
++        {
++            player->GetSession()->SendNotification("Your bags are full.");
++            return true;
++        }
++    }
++    player->CompleteQuest(QUEST_BLACK_ANVIL);
++    player->RewardQuest(quest, 0, go, true);
++    player->GetSession()->SendAreaTriggerMessage("|cffffcc33The Black Anvil roars to life - Linken's blade is reforged!|r");
++    return true;
++}
++
 +// ---------------------------------------------------------------------------------- pawnbroker
 +void ZeldaRecordSold(Player* player, Item* item, uint32 money)
 +{
@@ -6362,10 +6427,10 @@ index 000000000..70a4719d6
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..a2f5cf07c
+index 000000000..b3cdc70a0
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,282 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6539,6 +6604,13 @@ index 000000000..a2f5cf07c
 +bool ZeldaBuyBackSold(Player* player, uint32 id, std::string& why);
 +// Zelda of Warcraft: battlegrounds for one hero, with armies of elite soldiers (Zelda.SoloBattlegrounds)
 +bool ZeldaSoloBattlegrounds();
++// Quests that ask for more items than the quest log's four (Linken's dungeon shards): is this item
++// one of a quest's extra items, are they all in the bags, and take them on the reward
++bool ZeldaQuestExtraItem(uint32 questId, uint32 itemEntry);
++bool ZeldaQuestExtraHeld(Player const* player, uint32 questId);
++void ZeldaQuestExtraTake(Player* player, uint32 questId);
++// A goober whose use the core handles (the Black Anvil forging the Sword of Mastery): true if handled
++bool ZeldaGameObjectUse(Player* player, GameObject* go);
 +// Warsong Gulch: using a flag stand starts a ten-second Opening cast (true: don't take it yet); the
 +// cast's end uses the stand again with the spell, which takes the flag
 +bool ZeldaFlagTaking(Player* player, GameObject* flag, SpellEntry const* spellInfo);
@@ -6832,7 +6904,7 @@ index a378c4e1e..f53dd6559 100644
 +
  #endif
 diff --git a/src/game/Entities/GameObject.cpp b/src/game/Entities/GameObject.cpp
-index 043cad6ef..bec91915a 100644
+index 043cad6ef..a6be9990a 100644
 --- a/src/game/Entities/GameObject.cpp
 +++ b/src/game/Entities/GameObject.cpp
 @@ -17,6 +17,7 @@
@@ -6868,7 +6940,18 @@ index 043cad6ef..bec91915a 100644
              // doors never really despawn, only reset to default state/flags
              UseDoorOrButton();
  
-@@ -1787,7 +1796,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1643,6 +1652,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+             if (!info)
+                 return;
+ 
++            // Zelda of Warcraft: objects whose use the core handles (the Black Anvil's forging)
++            if (user->IsPlayer() && ZeldaGameObjectUse(static_cast<Player*>(user), this))
++                return;
++
+             // exception - 180619 - ossirian crystal - supposed to be kept from despawning by a pending spellcast - to be implemented, done in db for now
+ 
+             TriggerLinkedGameObject(user);
+@@ -1787,7 +1800,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                          // TODO: find reasonable value for fishing hole search
                          fishingHole = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
  
@@ -6879,7 +6962,7 @@ index 043cad6ef..bec91915a 100644
  
                      // fish catch or fail and junk allowed (after 3.1.0)
                      if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
-@@ -1961,6 +1972,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1961,6 +1976,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
  
              if (player->CanUseBattleGroundObject())
              {
@@ -6991,7 +7074,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..b6bcde1cd 100644
+index 4d8e9160a..0f4f9932c 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -7115,7 +7198,37 @@ index 4d8e9160a..b6bcde1cd 100644
      uint32 slot = m_currentBuybackSlot;
      // if current back slot non-empty search oldest or free
      if (m_items[slot])
-@@ -12659,6 +12695,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12352,6 +12388,10 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
+             return false;
+     }
+ 
++    // Zelda of Warcraft: quests that ask for more items than the log's four (the dungeon shards)
++    if (!ZeldaQuestExtraHeld(this, quest_id))
++        return false;
++
+     uint32 repFacId = qInfo->GetRepObjectiveFaction();
+     return !(repFacId && GetReputationMgr().GetReputation(repFacId) < qInfo->GetRepObjectiveValue());
+ }
+@@ -12408,6 +12448,10 @@ bool Player::CanRewardQuest(Quest const* pQuest, bool msg) const
+     if (pQuest->GetRewOrReqMoney() < 0 && GetMoney() < uint32(-pQuest->GetRewOrReqMoney()))
+         return false;
+ 
++    // Zelda of Warcraft: the items beyond the log's four must still be in the bags
++    if (!ZeldaQuestExtraHeld(this, pQuest->GetQuestId()))
++        return false;
++
+     return true;
+ }
+ 
+@@ -12617,6 +12661,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+         if (pQuest->ReqItemId[i])
+             DestroyItemCount(pQuest->ReqItemId[i], pQuest->ReqItemCount[i], true);
+     }
++    ZeldaQuestExtraTake(this, quest_id);           // Zelda of Warcraft: and the items beyond the log's four
+ 
+     RemoveTimedQuest(quest_id);
+ 
+@@ -12659,6 +12704,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
  
      // Used for client inform but rewarded only in case not max level
      uint32 xp = uint32(pQuest->XPValue(this) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
@@ -7128,7 +7241,36 @@ index 4d8e9160a..b6bcde1cd 100644
  
      if (GetLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          GiveXP(xp, nullptr);
-@@ -18082,9 +18124,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -13458,6 +13509,14 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
+         if (!qInfo || !qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER))
+             continue;
+ 
++        // Zelda of Warcraft: one of the items beyond the log's four (the dungeon shards)
++        if (ZeldaQuestExtraItem(questid, entry))
++        {
++            if (CanCompleteQuest(questid))
++                CompleteQuest(questid);
++            continue;
++        }
++
+         for (int j = 0; j < QUEST_ITEM_OBJECTIVES_COUNT; ++j)
+         {
+             uint32 reqitem = qInfo->ReqItemId[j];
+@@ -13492,6 +13551,13 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
+         uint32 questid = GetQuestSlotQuestId(i);
+         if (!questid)
+             continue;
++        // Zelda of Warcraft: losing one of the items beyond the log's four undoes the completion
++        if (ZeldaQuestExtraItem(questid, entry))
++        {
++            if (GetQuestStatus(questid) == QUEST_STATUS_COMPLETE && !ZeldaQuestExtraHeld(this, questid))
++                IncompleteQuest(questid);
++            continue;
++        }
+         Quest const* qInfo = sObjectMgr.GetQuestTemplate(questid);
+         if (!qInfo)
+             continue;
+@@ -18082,9 +18148,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -7143,7 +7285,7 @@ index 4d8e9160a..b6bcde1cd 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19710,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19734,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -7171,7 +7313,7 @@ index 4d8e9160a..b6bcde1cd 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20098,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20122,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -7180,7 +7322,7 @@ index 4d8e9160a..b6bcde1cd 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20287,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20311,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  

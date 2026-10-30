@@ -105,6 +105,12 @@ QUEST_ITEMS = [
     (190523, "Thaurissan's Brand", 9116, 'A brand of living fire, still burning with the Firelord\'s favor.', 9019),
     (190531, "Arugal's Grimoire", 7264, 'Arugal\'s notes on calling beings from beyond death.', 4275),
     (190532, 'Phylactery Fragment', 7277, 'Part of a lich\'s phylactery. It is very cold.', 7358),
+    # Linken's sword (the end of this file): what It's Dangerous to Go Alone gives, and what the dungeon
+    # shards make of it
+    (190533, 'Hilt of the Sword of Mastery', 34171, 'All that is left of Linken\'s sword. It is warm, as if it '
+             'were waiting.', 0),
+    (190534, 'Shard-Bound Hilt', 34170, 'The hilt, bound with the light of every dungeon. It hums like a held '
+             'breath.', 0),
 ]
 
 # ------------------------------------------------------------------------------------ quests
@@ -952,6 +958,47 @@ for (_id, _lvl, _zone, _mob, _n, _title, _details, _obj, _req, _rew) in NAVI_ERR
           details=_details, objectives=_obj, request=_req, reward=_rew, kills=[(_mob, _n, None)], items=[],
           rep=(0, 0), prev=90501, next=0)
 
-# Linken's Sword of Mastery becomes a legendary blade and It's Dangerous to Go Alone gives only it.
+# Linken's Sword of Mastery becomes a legendary blade. It's Dangerous to Go Alone gives only its hilt;
+# the light of every dungeon (their 24 Crystal Shards, shards.py - not the raids') binds it, and the
+# Black Anvil in Blackrock Depths forges it. The core checks and takes the shards (more items than the
+# quest log's four) and finishes the last quest at the anvil (ZeldaCommands.cpp, ZeldaGameObjectUse).
 LINKEN_SWORD_ENTRY = 11902   # the Unfinished Sword of Mastery (build_mastery.py)
 LINKEN_FINAL_QUEST = 3962
+LINKEN_HILT = 190533
+LINKEN_SHARD_BOUND_HILT = 190534
+LINKEN = 8737
+BLACK_ANVIL_GO = 191170       # a goober over the stock Black Anvil (172911), live while the quest is
+BLACK_ANVIL_SPOT = (230, 895.10614, -273.56369, -71.88760, 2.3736467, 0.9271837, 0.3746071)
+# the dungeons whose shards the sword takes (shards.py, every one but the raids)
+DUNGEONS = ("Ragefire Chasm, Wailing Caverns, the Deadmines, Shadowfang Keep, Blackfathom Deeps, the Stockade, "
+            "Gnomeregan, Razorfen Kraul, the four wings of the Scarlet Monastery (Graveyard, Armory, Cathedral and "
+            "Library), Razorfen Downs, Uldaman, Zul'Farrak, Maraudon, the Sunken Temple, Blackrock Depths, "
+            "Blackrock Spire, the three wings of Dire Maul (East, North and West), Stratholme and Scholomance")
+
+quest(id=90520, level=58, min=55, kind='', zone=490, giver=LINKEN, ender=LINKEN, prev=LINKEN_FINAL_QUEST, next=90521,
+      title='The Light of Every Dungeon',
+      details="That hilt... I know it the way I know my own hands. It's all that's left of my sword.$B$BThe blade "
+              "wasn't steel, $N. It was light - the light that gathers in the deep places of the world, where heroes "
+              "go and come back changed. When I lost my way, the light went out of it.$B$BYou've walked those deep "
+              "places. Every one you clear leaves a Crystal Shard behind. Bring me a shard from every dungeon in "
+              "the land, and the hilt with them. Not the great raids - their light is too wild for a sword. Just "
+              "the dungeons. All of them.",
+      objectives="Bring the Hilt of the Sword of Mastery and a Crystal Shard from every dungeon to Linken in "
+                 "Un'Goro Crater: " + DUNGEONS + ".",
+      request="Every dungeon, $N. The light has to be whole, or the blade will be too.",
+      reward="*Linken sets the shards around the hilt. One by one they dim, and the hilt begins to glow.*$B$BIt "
+             "remembers. Can you feel it? The light knows where it belongs.$B$BBut no fire here could hold it. "
+             "There's only one forge in the world that burns hot enough...",
+      kills=[], items=[(LINKEN_HILT, 1)], reward_item=LINKEN_SHARD_BOUND_HILT, rep=(0, 0))
+
+quest(id=90521, level=60, min=55, kind='dungeon', zone=1584, giver=LINKEN, ender=LINKEN, prev=90520, next=0,
+      title='Reforged in the Black Anvil',
+      details="The Black Anvil, deep in Blackrock Depths. The Dark Irons forge their master's weapons on it, in "
+              "fire stolen from the Firelord himself. It's the only anvil in the world that can take that much "
+              "light.$B$BCarry the hilt down there and strike it on the anvil. The blade will remember the rest. "
+              "Go, $N - it's dangerous to go alone, but you've never really been alone, have you?",
+      objectives="Take the Shard-Bound Hilt to the Black Anvil in Blackrock Depths and use the anvil to "
+                 "reforge Linken's sword.",
+      request="The Black Anvil, $N. In Blackrock Depths.",
+      reward="The blade is whole again. It sings, just like I remember.",
+      kills=[], items=[(LINKEN_SHARD_BOUND_HILT, 1)], reward_item=LINKEN_SWORD_ENTRY, rep=(0, 0))

@@ -5,7 +5,7 @@ quests, quest items, drops and dialogue. The server applies zelda-sql/*.sql by i
 import json
 import os
 from story import (STORY_NPCS, COMPANIONS, RETIRED_ENTRIES, RETIRED_QUESTS, QUEST_ITEMS, Q, KATRANA_TEXTS, CAPTIVE_TEXT, NAVI, NAVI_ITEMS,
-                   LINKEN_SWORD_ENTRY, LINKEN_FINAL_QUEST)
+                   LINKEN_SWORD_ENTRY, LINKEN_FINAL_QUEST, LINKEN_HILT, BLACK_ANVIL_GO, BLACK_ANVIL_SPOT)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REWARDS = {int(k): v for k, v in json.load(open(os.path.join(HERE, 'rewards.json'))).items()}
@@ -287,10 +287,28 @@ def main():
     out.append(insert('creature_involvedrelation', ends))
 
     # Linken's Sword of Mastery (11902) itself: see build_mastery.py (006_mastery.sql)
-    # It's Dangerous to Go Alone: the sword only (no boomerang, no Spirit of Aquementas)
-    others = ', '.join('`RewChoiceItemId%d` = 0, `RewChoiceItemCount%d` = 0' % (n, n) for n in range(2, 7))
-    out.append('UPDATE `quest_template` SET `RewChoiceItemId1` = %d, `RewChoiceItemCount1` = 1, %s, '
-               '`RewItemId1` = 0, `RewItemCount1` = 0 WHERE `entry` = %d;\n' % (LINKEN_SWORD_ENTRY, others, LINKEN_FINAL_QUEST))
+    # It's Dangerous to Go Alone: only the sword's hilt (no boomerang, no Spirit of Aquementas); the
+    # sword comes from The Light of Every Dungeon and Reforged in the Black Anvil (story.py)
+    choices = ', '.join('`RewChoiceItemId%d` = 0, `RewChoiceItemCount%d` = 0' % (n, n) for n in range(1, 7))
+    out.append('UPDATE `quest_template` SET %s, `RewItemId1` = %d, `RewItemCount1` = 1, `NextQuestInChain` = 90520, '
+               '`OfferRewardText` = %s WHERE `entry` = %d;\n'
+               % (choices, LINKEN_HILT, esc("Thank you, $N.$B$BThe Golden Flame will now be returned back to my "
+                                           "homeland, where it may be protected, never again to be used for "
+                                           "evil.$B$BSince you did so much for me, I'd like you to have this. It's "
+                                           "the hilt of my old sword - the blade is long gone. But hold it a "
+                                           "moment... do you feel that? It still remembers what it was."),
+                  LINKEN_FINAL_QUEST))
+    # the Black Anvil the sword is reforged on: a goober of our own over the stock anvil, live only
+    # while Reforged in the Black Anvil is (the core forges it when used: ZeldaGameObjectUse)
+    anvil_map, ax, ay, az, ao, ar2, ar3 = BLACK_ANVIL_SPOT
+    out.append('DELETE FROM `gameobject_template` WHERE `entry` = %d;\n' % BLACK_ANVIL_GO)
+    out.append('INSERT INTO `gameobject_template` (`entry`, `type`, `displayId`, `name`, `faction`, `flags`, `size`, '
+               '`data0`, `data1`) VALUES (%d, 10, 3311, %s, 0, 0, 1.05, 0, 90521);\n' % (BLACK_ANVIL_GO, esc('The Black Anvil')))
+    out.append('DELETE FROM `gameobject` WHERE `id` = %d;\n' % BLACK_ANVIL_GO)
+    out.append('INSERT INTO `gameobject` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, '
+               '`orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, '
+               '`spawntimesecsmax`) VALUES (%d, %d, %d, 1, %.5f, %.5f, %.5f, %.7f, 0, 0, %.7f, %.7f, 25, 25);\n'
+               % (5400170, BLACK_ANVIL_GO, anvil_map, ax, ay, az, ao, ar2, ar3))
     # Linken's story now begins with Navi: The Hero of Time leads into It's a Secret to Everybody
     out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;\n')
     out.append('UPDATE `quest_template` SET `NextQuestInChain` = 3908 WHERE `entry` = 90503;\n')

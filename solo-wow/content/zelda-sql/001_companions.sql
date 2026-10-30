@@ -17,15 +17,15 @@ DELETE FROM `creature_template` WHERE `Entry` IN (190001,190002,190003,190004,19
 
 DELETE FROM `creature_template_addon` WHERE `entry` IN (190001,190002,190003,190004,190005,190101,190102,190103,190104,190105,190201,190202,190203,190301,190302,190303,190401,190402,190403,190404,190601,190701);
 
-DELETE FROM `creature_questrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90112,90113,90114,90106,90115,90107,90108,90109,90110,90111,90201,90202,90208,90203,90209,90210,90211,90205,90206,90207,90301,90302,90309,90308,90303,90310,90304,90305,90311,90306,90401,90402,90412,90413,90414,90415,90403,90416,90404,90405,90417,90406,90501,90502,90503,90504,90505,90506,90507,90508,90509,90510,90511,90512,90513,90514,90515,90204);
+DELETE FROM `creature_questrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90112,90113,90114,90106,90115,90107,90108,90109,90110,90111,90201,90202,90208,90203,90209,90210,90211,90205,90206,90207,90301,90302,90309,90308,90303,90310,90304,90305,90311,90306,90401,90402,90412,90413,90414,90415,90403,90416,90404,90405,90417,90406,90501,90502,90503,90504,90505,90506,90507,90508,90509,90510,90511,90512,90513,90514,90515,90520,90521,90204);
 
-DELETE FROM `creature_involvedrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90112,90113,90114,90106,90115,90107,90108,90109,90110,90111,90201,90202,90208,90203,90209,90210,90211,90205,90206,90207,90301,90302,90309,90308,90303,90310,90304,90305,90311,90306,90401,90402,90412,90413,90414,90415,90403,90416,90404,90405,90417,90406,90501,90502,90503,90504,90505,90506,90507,90508,90509,90510,90511,90512,90513,90514,90515,90204);
+DELETE FROM `creature_involvedrelation` WHERE `quest` IN (90101,90102,90103,90104,90105,90112,90113,90114,90106,90115,90107,90108,90109,90110,90111,90201,90202,90208,90203,90209,90210,90211,90205,90206,90207,90301,90302,90309,90308,90303,90310,90304,90305,90311,90306,90401,90402,90412,90413,90414,90415,90403,90416,90404,90405,90417,90406,90501,90502,90503,90504,90505,90506,90507,90508,90509,90510,90511,90512,90513,90514,90515,90520,90521,90204);
 
-DELETE FROM `quest_template` WHERE `entry` IN (90101,90102,90103,90104,90105,90112,90113,90114,90106,90115,90107,90108,90109,90110,90111,90201,90202,90208,90203,90209,90210,90211,90205,90206,90207,90301,90302,90309,90308,90303,90310,90304,90305,90311,90306,90401,90402,90412,90413,90414,90415,90403,90416,90404,90405,90417,90406,90501,90502,90503,90504,90505,90506,90507,90508,90509,90510,90511,90512,90513,90514,90515,90204);
+DELETE FROM `quest_template` WHERE `entry` IN (90101,90102,90103,90104,90105,90112,90113,90114,90106,90115,90107,90108,90109,90110,90111,90201,90202,90208,90203,90209,90210,90211,90205,90206,90207,90301,90302,90309,90308,90303,90310,90304,90305,90311,90306,90401,90402,90412,90413,90414,90415,90403,90416,90404,90405,90417,90406,90501,90502,90503,90504,90505,90506,90507,90508,90509,90510,90511,90512,90513,90514,90515,90520,90521,90204);
 
-DELETE FROM `item_template` WHERE `entry` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532,190601,190602,190801,190802,190803,190804,190805,190806,190807,190808,190809,190810,190811,190812,190813,190814,190815,190816,190817,190818,190819,190820,190821,190822,190823,190824,190825,190826,190827,190828,190829,190830,190831,190832,190833,190834,190835,190836,190837,190838,190839,190840,190841,190842,190843,190844,190845,190846);
+DELETE FROM `item_template` WHERE `entry` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532,190533,190534,190601,190602,190801,190802,190803,190804,190805,190806,190807,190808,190809,190810,190811,190812,190813,190814,190815,190816,190817,190818,190819,190820,190821,190822,190823,190824,190825,190826,190827,190828,190829,190830,190831,190832,190833,190834,190835,190836,190837,190838,190839,190840,190841,190842,190843,190844,190845,190846);
 
-DELETE FROM `creature_loot_template` WHERE `item` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532,190601,190602,190801,190802,190803,190804,190805,190806,190807,190808,190809,190810,190811,190812,190813,190814,190815,190816,190817,190818,190819,190820,190821,190822,190823,190824,190825,190826,190827,190828,190829,190830,190831,190832,190833,190834,190835,190836,190837,190838,190839,190840,190841,190842,190843,190844,190845,190846);
+DELETE FROM `creature_loot_template` WHERE `item` IN (190501,190502,190503,190504,190505,190506,190511,190512,190521,190522,190523,190531,190532,190533,190534,190601,190602,190801,190802,190803,190804,190805,190806,190807,190808,190809,190810,190811,190812,190813,190814,190815,190816,190817,190818,190819,190820,190821,190822,190823,190824,190825,190826,190827,190828,190829,190830,190831,190832,190833,190834,190835,190836,190837,190838,190839,190840,190841,190842,190843,190844,190845,190846);
 
 DELETE FROM `npc_text` WHERE `ID` BETWEEN 900000 AND 900999;
 
@@ -148,6 +148,8 @@ INSERT INTO `item_template` (`entry`,`class`,`subclass`,`name`,`displayid`,`Qual
 (190523,12,0,'Thaurissan''s Brand',9116,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'A brand of living fire, still burning with the Firelord''s favor.',4,0),
 (190531,12,0,'Arugal''s Grimoire',7264,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'Arugal''s notes on calling beings from beyond death.',4,0),
 (190532,12,0,'Phylactery Fragment',7277,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'Part of a lich''s phylactery. It is very cold.',4,0),
+(190533,12,0,'Hilt of the Sword of Mastery',34171,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'All that is left of Linken''s sword. It is warm, as if it were waiting.',4,0),
+(190534,12,0,'Shard-Bound Hilt',34170,1,0,1,0,0,0,-1,-1,1,0,1,1,4,'The hilt, bound with the light of every dungeon. It hums like a held breath.',4,0),
 (190601,4,0,'Navi''s Light',24730,5,0,1,0,2500,12,-1,-1,60,1,1,1,1,'Equip: Navi follows you. In combat she heals you for 10% of your health every 10 sec. If you die, her light can bring you back with 10% of your health (once every 5 min). Hey! Listen!',0,0),
 (190602,12,0,'Piece of Heart',6614,1,0,1,0,0,0,-1,-1,1,0,4,4,4,'A quarter of something that wants to be whole.',4,0);
 
@@ -276,7 +278,9 @@ INSERT INTO `quest_template` (`entry`,`Method`,`ZoneOrSort`,`MinLevel`,`MaxLevel
 (90512,2,33,35,255,35,0,0,0,0,0,0,90501,0,0,0,0,'Lizalfos of the Jungle','Hey! Listen! In Stranglethorn there are Lashtail Raptors. Fast, clever, they jump at you from the side - just like Lizalfos! Watch their tails, block with your shield, then strike!$B$BDefeat 10 of them.','Slay 10 Lashtail Raptors in Stranglethorn Vale.','Look at you! Block, dodge, strike! You fight like a real Hylian now.','Shield up! Shield UP!','',9800,3150,1,2,1,0,'',0,0,686,10,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,190833,1,190834,1,190835,1,190836,1,0,0,0,0,0,0,0,0,0),
 (90513,2,15,38,255,38,0,0,0,0,0,0,90501,0,0,0,0,'Skulltulas in the Marsh','Hey! LISTEN! Skulltulas! In Dustwallow Marsh! The Darkfang Creepers drop down from the trees when you''re not looking - that is exactly what Skulltulas do!$B$BClear out 10 of them. And look UP.','Slay 10 Darkfang Creepers in Dustwallow Marsh.','That''s ten! Somewhere a family is cured of a curse because of this. Probably!','Did you look up? Always look up.','',11552,3420,1,2,1,0,'',0,0,4412,10,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,190837,1,190838,1,190839,1,190840,1,0,0,0,0,0,0,0,0,0),
 (90514,2,3,40,255,40,0,0,0,0,0,0,90501,0,0,0,0,'The Armos Awaken','Hey! Listen! In the Badlands the stones walk around by themselves. Back home we had statues like that - the Armos. You''d walk past and THUNK, they''d wake up.$B$BPut 10 Rock Elementals back to sleep.','Destroy 10 Rock Elementals in the Badlands.','Statues are statues again! My wings feel lighter already.','Are they still walking? Stones shouldn''t walk.','',12800,3600,1,2,1,0,'',0,0,92,10,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,190841,1,190842,1,190843,1,0,0,0,0,0,0,0,0,0,0,0),
-(90515,2,440,42,255,42,0,0,0,0,0,0,90501,0,0,0,0,'Thieves of the Desert','Hey! Listen! The Wastewander bandits in Tanaris remind me of the Gerudo - sand, blades, and a fortress full of stolen treasure. Except the Gerudo had honor, and these just have knives.$B$BTheir Shadow Mages lead them. Defeat 8 Wastewander Shadow Mages.','Slay 8 Wastewander Shadow Mages in Tanaris.','The desert is a little safer now. And you... you''re almost ready. I can feel it. Linken''s heartbeat is getting closer.','Watch for the ones casting - they''re the leaders!','',14112,3780,1,2,1,0,'',0,0,5617,8,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,190844,1,190845,1,190846,1,0,0,0,0,0,0,0,0,0,0,0);
+(90515,2,440,42,255,42,0,0,0,0,0,0,90501,0,0,0,0,'Thieves of the Desert','Hey! Listen! The Wastewander bandits in Tanaris remind me of the Gerudo - sand, blades, and a fortress full of stolen treasure. Except the Gerudo had honor, and these just have knives.$B$BTheir Shadow Mages lead them. Defeat 8 Wastewander Shadow Mages.','Slay 8 Wastewander Shadow Mages in Tanaris.','The desert is a little safer now. And you... you''re almost ready. I can feel it. Linken''s heartbeat is getting closer.','Watch for the ones casting - they''re the leaders!','',14112,3780,1,2,1,0,'',0,0,5617,8,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,190844,1,190845,1,190846,1,0,0,0,0,0,0,0,0,0,0,0),
+(90520,2,490,55,255,58,0,0,0,0,0,0,3962,0,90521,0,0,'The Light of Every Dungeon','That hilt... I know it the way I know my own hands. It''s all that''s left of my sword.$B$BThe blade wasn''t steel, $N. It was light - the light that gathers in the deep places of the world, where heroes go and come back changed. When I lost my way, the light went out of it.$B$BYou''ve walked those deep places. Every one you clear leaves a Crystal Shard behind. Bring me a shard from every dungeon in the land, and the hilt with them. Not the great raids - their light is too wild for a sword. Just the dungeons. All of them.','Bring the Hilt of the Sword of Mastery and a Crystal Shard from every dungeon to Linken in Un''Goro Crater: Ragefire Chasm, Wailing Caverns, the Deadmines, Shadowfang Keep, Blackfathom Deeps, the Stockade, Gnomeregan, Razorfen Kraul, the four wings of the Scarlet Monastery (Graveyard, Armory, Cathedral and Library), Razorfen Downs, Uldaman, Zul''Farrak, Maraudon, the Sunken Temple, Blackrock Depths, Blackrock Spire, the three wings of Dire Maul (East, North and West), Stratholme and Scholomance.','*Linken sets the shards around the hilt. One by one they dim, and the hilt begins to glow.*$B$BIt remembers. Can you feel it? The light knows where it belongs.$B$BBut no fire here could hold it. There''s only one forge in the world that burns hot enough...','Every dungeon, $N. The light has to be whole, or the blade will be too.','',26912,5220,1,2,1,0,'',190533,1,0,0,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,190534,1,0,0),
+(90521,2,1584,55,255,60,81,0,0,0,0,0,90520,0,0,0,0,'Reforged in the Black Anvil','The Black Anvil, deep in Blackrock Depths. The Dark Irons forge their master''s weapons on it, in fire stolen from the Firelord himself. It''s the only anvil in the world that can take that much light.$B$BCarry the hilt down there and strike it on the anvil. The blade will remember the rest. Go, $N - it''s dangerous to go alone, but you''ve never really been alone, have you?','Take the Shard-Bound Hilt to the Black Anvil in Blackrock Depths and use the anvil to reforge Linken''s sword.','The blade is whole again. It sings, just like I remember.','The Black Anvil, $N. In Blackrock Depths.','',28800,5400,1,2,1,0,'',190534,1,0,0,'',0,0,0,0,'',0,0,0,0,'',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,11902,1,0,0);
 
 INSERT INTO `creature_questrelation` (`id`,`quest`) VALUES
 (190001,90101),
@@ -340,7 +344,9 @@ INSERT INTO `creature_questrelation` (`id`,`quest`) VALUES
 (190601,90512),
 (190601,90513),
 (190601,90514),
-(190601,90515);
+(190601,90515),
+(8737,90520),
+(8737,90521);
 
 INSERT INTO `creature_involvedrelation` (`id`,`quest`) VALUES
 (190002,90101),
@@ -404,9 +410,19 @@ INSERT INTO `creature_involvedrelation` (`id`,`quest`) VALUES
 (190601,90512),
 (190601,90513),
 (190601,90514),
-(190601,90515);
+(190601,90515),
+(8737,90520),
+(8737,90521);
 
-UPDATE `quest_template` SET `RewChoiceItemId1` = 11902, `RewChoiceItemCount1` = 1, `RewChoiceItemId2` = 0, `RewChoiceItemCount2` = 0, `RewChoiceItemId3` = 0, `RewChoiceItemCount3` = 0, `RewChoiceItemId4` = 0, `RewChoiceItemCount4` = 0, `RewChoiceItemId5` = 0, `RewChoiceItemCount5` = 0, `RewChoiceItemId6` = 0, `RewChoiceItemCount6` = 0, `RewItemId1` = 0, `RewItemCount1` = 0 WHERE `entry` = 3962;
+UPDATE `quest_template` SET `RewChoiceItemId1` = 0, `RewChoiceItemCount1` = 0, `RewChoiceItemId2` = 0, `RewChoiceItemCount2` = 0, `RewChoiceItemId3` = 0, `RewChoiceItemCount3` = 0, `RewChoiceItemId4` = 0, `RewChoiceItemCount4` = 0, `RewChoiceItemId5` = 0, `RewChoiceItemCount5` = 0, `RewChoiceItemId6` = 0, `RewChoiceItemCount6` = 0, `RewItemId1` = 190533, `RewItemCount1` = 1, `NextQuestInChain` = 90520, `OfferRewardText` = 'Thank you, $N.$B$BThe Golden Flame will now be returned back to my homeland, where it may be protected, never again to be used for evil.$B$BSince you did so much for me, I''d like you to have this. It''s the hilt of my old sword - the blade is long gone. But hold it a moment... do you feel that? It still remembers what it was.' WHERE `entry` = 3962;
+
+DELETE FROM `gameobject_template` WHERE `entry` = 191170;
+
+INSERT INTO `gameobject_template` (`entry`, `type`, `displayId`, `name`, `faction`, `flags`, `size`, `data0`, `data1`) VALUES (191170, 10, 3311, 'The Black Anvil', 0, 0, 1.05, 0, 90521);
+
+DELETE FROM `gameobject` WHERE `id` = 191170;
+
+INSERT INTO `gameobject` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, `orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, `spawntimesecsmax`) VALUES (5400170, 191170, 230, 1, 895.10614, -273.56369, -71.88760, 2.3736467, 0, 0, 0.9271837, 0.3746071, 25, 25);
 
 UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;
 
