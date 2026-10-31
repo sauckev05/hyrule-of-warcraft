@@ -1770,10 +1770,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..001c519f8
+index 000000000..b424be3be
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5027 @@
+@@ -0,0 +1,5114 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1906,6 +1906,8 @@ index 000000000..001c519f8
 +        float setBonus[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 +        float appliedCrit = 0.0f;
 +        float appliedWeaponDamage = 0.0f;               // flat weapon damage given to this login
++        float appliedShieldArmor = 0.0f;                // Toughness: the shield's extra armor given to this login
++        std::unordered_map<uint64, uint32> defianceOwed;    // Defiance: damage to turn back, by attacker
 +        Player const* setsAppliedFor = nullptr;
 +        // a warrior's stance the weapons were last fitted to, and when a refused equip was last told
 +        uint8 lastForm = 0xFF;
@@ -2390,6 +2392,33 @@ index 000000000..001c519f8
 +        return StateFor(const_cast<Player*>(static_cast<Player const*>(unit))).setBonus[type];
 +    }
 +
++    // the warrior's Toughness and Defiance (Zelda: the shield's armor, and damage turned back)
++    uint32 const TOUGHNESS[5] = { 12299, 12761, 12762, 12763, 12764 };
++    uint32 const DEFIANCE[5] = { 12303, 12788, 12789, 12791, 12792 };
++
++    uint32 RankOf(Unit const* unit, uint32 const (&ranks)[5])
++    {
++        uint32 rank = 0;
++        for (uint32 n = 0; n < 5; ++n)
++            if (unit->HasAura(ranks[n]))
++                rank = n + 1;
++        return rank;
++    }
++
++    // the shield in the off hand's own armor, and with Toughness's 10% per point
++    float ZeldaShieldArmorBase(Player const* player)
++    {
++        Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
++        if (!item || item->GetProto()->InventoryType != INVTYPE_SHIELD || item->IsBroken())
++            return 0.0f;
++        return float(item->GetProto()->Armor);
++    }
++
++    float ZeldaShieldArmor(Player const* player)
++    {
++        return ZeldaShieldArmorBase(player) * (1.0f + 0.1f * float(RankOf(player, TOUGHNESS)));
++    }
++
 +    void UpdateSetBonuses(Player* player, ZeldaState& state)
 +    {
 +        if (state.setsAppliedFor != player)
@@ -2397,6 +2426,7 @@ index 000000000..001c519f8
 +            state.setsAppliedFor = player;      // a new login starts without the old crit bonus
 +            state.appliedCrit = 0.0f;
 +            state.appliedWeaponDamage = 0.0f;
++            state.appliedShieldArmor = 0.0f;
 +        }
 +        std::unordered_map<uint32, uint32> worn;
 +        if (!s_setOfItem.empty())
@@ -2445,6 +2475,17 @@ index 000000000..001c519f8
 +                    player->HandleStatModifier(mod, TOTAL_VALUE, flat, true);
 +            }
 +            state.appliedWeaponDamage = flat;
++        }
++
++        // Toughness: the shield's armor 10% higher per point (and the shield slam with it)
++        float const shieldArmor = ZeldaShieldArmor(player) - ZeldaShieldArmorBase(player);
++        if (shieldArmor != state.appliedShieldArmor)
++        {
++            if (state.appliedShieldArmor != 0.0f)
++                player->HandleStatModifier(UNIT_MOD_ARMOR, TOTAL_VALUE, state.appliedShieldArmor, false);
++            if (shieldArmor != 0.0f)
++                player->HandleStatModifier(UNIT_MOD_ARMOR, TOTAL_VALUE, shieldArmor, true);
++            state.appliedShieldArmor = shieldArmor;
 +        }
 +    }
 +
@@ -3074,6 +3115,7 @@ index 000000000..001c519f8
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaForgeTrial(Player* player, ZeldaState& state);
 +static void ZeldaDoomLordWatch(Player* player);
++static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
 +static void ZeldaFrostBreath(Unit* azuregos);
 +
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
@@ -3101,6 +3143,7 @@ index 000000000..001c519f8
 +    ZeldaSoloBattleground(player, state, diff);
 +    ZeldaForgeTrial(player, state);
 +    ZeldaDoomLordWatch(player);
++    ZeldaDefianceStrikesBack(player, state);
 +
 +    // the dungeon clear bar under the minimap: sent when it changes, looked at twice a second
 +    if (player->IsInWorld() && !player->IsBeingTeleported())
@@ -4622,6 +4665,46 @@ index 000000000..001c519f8
 +    return true;
 +}
 +
++void ZeldaDamageTaken(Unit* victim, Unit* dealer, uint32 damage)
++{
++    // Defiance: an enemy that hurts the hero takes 3% of it back per point, like Thorns (dealt on the
++    // hero's next update, not inside the blow that is still landing)
++    if (!victim || !dealer || damage == 0 || victim == dealer || !victim->IsPlayer() || dealer->IsPlayer())
++        return;
++    uint32 const rank = RankOf(victim, DEFIANCE);
++    if (!rank)
++        return;
++    uint32 const back = damage * 3 * rank / 100;
++    if (back)
++        StateFor(static_cast<Player*>(victim)).defianceOwed[dealer->GetObjectGuid().GetRawValue()] += back;
++}
++
++static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state)
++{
++    if (state.defianceOwed.empty())
++        return;
++    auto owed = std::move(state.defianceOwed);
++    state.defianceOwed.clear();
++    if (!player->IsInWorld() || !player->IsAlive())
++        return;
++    SpellEntry const* defiance = sSpellTemplate.LookupEntry<SpellEntry>(DEFIANCE[std::max<uint32>(1, RankOf(player, DEFIANCE)) - 1]);
++    for (auto const& [raw, damage] : owed)
++    {
++        Unit* enemy = player->GetMap()->GetUnit(ObjectGuid(raw));
++        if (!enemy || !enemy->IsAlive() || !enemy->IsInWorld() || enemy->IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL))
++            continue;
++        uint32 amount = damage;
++        Unit::DealDamageMods(player, enemy, amount, nullptr, SPELL_DIRECT_DAMAGE, defiance);
++        WorldPacket data(SMSG_SPELLDAMAGESHIELD, (8 + 8 + 4 + 4));
++        data << player->GetObjectGuid();
++        data << enemy->GetObjectGuid();
++        data << uint32(amount);
++        data << uint32(SPELL_SCHOOL_NORMAL);
++        player->SendMessageToSet(data, true);
++        Unit::DealDamage(player, enemy, amount, nullptr, SPELL_DAMAGE_SHIELD, SPELL_SCHOOL_MASK_NORMAL, defiance, false);
++    }
++}
++
 +void ZeldaBeforeCorpseLoot(Player* looter, Creature* creature)
 +{
 +    // Kazzak falls: short of twenty blocks, the quest fails (before his loot, so no horn)
@@ -5273,7 +5356,9 @@ index 000000000..001c519f8
 +    CollectEnemies(player, reach.slashRange + 8.0f, enemies);
 +    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
 +    // Shield Slam adds the block value itself, so the strike as a whole is the shield's armor
-+    int32 const damage = std::max<int32>(1, int32(shield->GetProto()->Armor) - int32(player->GetShieldBlockValue()));
++    // (Toughness raises the shield's armor, and so the slam)
++    (void)shield;
++    int32 const damage = std::max<int32>(1, int32(ZeldaShieldArmor(player)) - int32(player->GetShieldBlockValue()));
 +    uint32 hit = 0;
 +    for (Unit* unit : enemies)
 +    {
@@ -5286,6 +5371,8 @@ index 000000000..001c519f8
 +        ++hit;
 +        if (!unit->IsAlive())
 +            continue;
++        // the blow breaks any spell being cast - bosses too, who shrug off the stun
++        unit->InterruptNonMeleeSpells(false);
 +        player->CastSpell(unit, SLAM_STUN_SPELL, TRIGGERED_OLD_TRIGGERED);
 +        if (SpellAuraHolder* holder = unit->GetSpellAuraHolder(SLAM_STUN_SPELL, player->GetObjectGuid()))
 +        {
@@ -6803,10 +6890,10 @@ index 000000000..001c519f8
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..513f5a822
+index 000000000..7cf3b28fd
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,301 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6996,6 +7083,8 @@ index 000000000..513f5a822
 +// Navi's Mirror Shield quests: Kazzak's volleys blocked, his fall decided before his loot, Azuregos's
 +// body kept to be clicked and clicked, and the shield turning spells back while the guard is raised
 +void ZeldaSpellDamageTaken(Unit* victim, Unit* dealer, SpellEntry const* spellInfo);
++// Defiance: an enemy's damage to the hero, 3% per point of it to be turned back
++void ZeldaDamageTaken(Unit* victim, Unit* dealer, uint32 damage);
 +void ZeldaBeforeCorpseLoot(Player* looter, Creature* creature);
 +bool ZeldaKeepCorpseLoot(Player* looter, Creature* creature);
 +bool ZeldaCorpseClicked(Player* player, ObjectGuid guid);
@@ -7825,7 +7914,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..8acf6dd07 100644
+index 00986af9e..2180aa6f0 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -7836,7 +7925,7 @@ index 00986af9e..8acf6dd07 100644
  #include "Log/Log.h"
  #include "Server/Opcodes.h"
  #include "Server/WorldPacket.h"
-@@ -901,6 +902,13 @@ void Unit::FallSuicide()
+@@ -901,6 +902,15 @@ void Unit::FallSuicide()
  
  uint32 Unit::DealDamage(Unit* dealer, Unit* victim, uint32 damage, CleanDamage const* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellInfo, bool durabilityLoss, Spell* spell)
  {
@@ -7845,12 +7934,14 @@ index 00986af9e..8acf6dd07 100644
 +    {
 +        ZeldaSpellDamageTaken(victim, dealer, spellInfo);      // the volleys blocked for Navi's quest
 +        damage = ZeldaModifyIncomingDamage(static_cast<Player*>(victim), dealer, damage);
++        if (damagetype != SPELL_DAMAGE_SHIELD)
++            ZeldaDamageTaken(victim, dealer, damage);           // Defiance turns some of it back
 +    }
 +
      // remove affects from attacker at any non-DoT damage (including 0 damage)
      if (damagetype != DOT && damagetype != INSTAKILL)
      {
-@@ -1376,6 +1384,10 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
+@@ -1376,6 +1386,10 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
      if (InstanceData* mapInstance = victim->GetInstanceData())
          mapInstance->OnCreatureDeath(victim);
  
@@ -7861,7 +7952,7 @@ index 00986af9e..8acf6dd07 100644
      if (responsiblePlayer)                                  // killedby Player, inform BG
          if (BattleGround* bg = responsiblePlayer->GetBattleGround())
              bg->HandleKillUnit(victim, responsiblePlayer);
-@@ -1863,6 +1875,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
+@@ -1863,6 +1877,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
  
      // Call default DealDamage (send critical in hit info for threat calculation)
      CleanDamage cleanDamage(spellDamageInfo->damage, BASE_ATTACK, spellDamageInfo->HitInfo & SPELL_HIT_TYPE_CRIT ? MELEE_HIT_CRIT : MELEE_HIT_NORMAL, (spellDamageInfo->damage > 0 || spellDamageInfo->absorb > 0));
@@ -7872,7 +7963,7 @@ index 00986af9e..8acf6dd07 100644
      DealDamage(affectiveCaster, victim, spellDamageInfo->damage, &cleanDamage, resetLeash ? SPELL_DIRECT_DAMAGE : SPELL_DAMAGE_SHIELD, GetSchoolMask(spellDamageInfo->school), spellProto, durabilityLoss, spellDamageInfo->spell);
  }
  
-@@ -1933,6 +1949,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -1933,6 +1951,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
          // Add melee damage bonus
          subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
@@ -7885,7 +7976,7 @@ index 00986af9e..8acf6dd07 100644
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2045,6 +2067,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -2045,6 +2069,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
              calcDamageInfo->TargetState = VICTIMSTATE_NORMAL;
              calcDamageInfo->procEx |= PROC_EX_BLOCK;
              calcDamageInfo->blocked_amount = calcDamageInfo->target->GetShieldBlockValue();
@@ -7895,7 +7986,7 @@ index 00986af9e..8acf6dd07 100644
  
              if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
              {
-@@ -2656,10 +2681,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2683,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -7920,7 +8011,7 @@ index 00986af9e..8acf6dd07 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -2711,6 +2750,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+@@ -2711,6 +2752,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
      if (pVictim->GetCombatManager().IsInEvadeMode())
          return MELEE_HIT_EVADE;
  
@@ -7934,7 +8025,7 @@ index 00986af9e..8acf6dd07 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
      if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
-@@ -2829,6 +2875,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+@@ -2829,6 +2877,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
  
  SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
  {
@@ -7948,7 +8039,7 @@ index 00986af9e..8acf6dd07 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
      die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
-@@ -2942,7 +2995,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2942,7 +2997,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
      // Reflect (when available)
      if (reflectable)
      {
@@ -7958,7 +8049,7 @@ index 00986af9e..8acf6dd07 100644
          if (roll_chance_combat(chance))
              return SPELL_MISS_REFLECT;
      }
-@@ -3628,7 +3682,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3684,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -7968,7 +8059,7 @@ index 00986af9e..8acf6dd07 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3698,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3700,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -7977,7 +8068,7 @@ index 00986af9e..8acf6dd07 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5031,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5033,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -7989,7 +8080,7 @@ index 00986af9e..8acf6dd07 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6157,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6159,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -7998,7 +8089,7 @@ index 00986af9e..8acf6dd07 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7110,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7112,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -8007,7 +8098,7 @@ index 00986af9e..8acf6dd07 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7227,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7229,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -8017,7 +8108,7 @@ index 00986af9e..8acf6dd07 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7372,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7374,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -8027,7 +8118,7 @@ index 00986af9e..8acf6dd07 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8161,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8163,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -8041,7 +8132,7 @@ index 00986af9e..8acf6dd07 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8477,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8479,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
