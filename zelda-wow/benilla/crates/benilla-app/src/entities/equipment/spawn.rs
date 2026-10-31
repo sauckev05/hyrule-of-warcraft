@@ -282,11 +282,27 @@ fn spawn_slot(
     // author them too for the swing trail (`0x6c67f0`).
     if slot_idx == 2 && hs.attach == attach_id::HAND_LEFT {
         if let Some([top, bottom]) = dm.string_anchors {
+            // The markers are model-space points; a posed bone moves them from its pivot, so the
+            // flexing path needs them pivot-relative, as the attachments are baked.
+            let pivot = |bone: u16| {
+                let mut p = Vec3::ZERO;
+                let mut b = bone as i32;
+                let mut hops = dm.skeleton.joints.len();
+                while b >= 0 && hops > 0 {
+                    hops -= 1;
+                    let Some(j) = dm.skeleton.joints.get(b as usize) else {
+                        break;
+                    };
+                    p += j.local_translation;
+                    b = i32::from(j.parent);
+                }
+                p
+            };
             commands.entity(root).insert(crate::bowstring::Bowstring {
                 owner: entity,
                 // Bone and offset: the prop flexes, so the tips move.
-                top,
-                bottom,
+                top: (top.0, top.1, top.1 - pivot(top.0)),
+                bottom: (bottom.0, bottom.1, bottom.1 - pivot(bottom.0)),
             });
         }
     }

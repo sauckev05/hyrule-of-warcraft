@@ -20,9 +20,10 @@ const HAND_ARROW: u16 = 0x23;
 pub(crate) struct Bowstring {
     /// The unit wearing the bow, which carries the HandArrow attach and the nock latch.
     pub(crate) owner: Entity,
-    /// The `$WTT` top and `$WTB` bottom anchors as `(bone, model-local offset)`.
-    pub(crate) top: (u16, Vec3),
-    pub(crate) bottom: (u16, Vec3),
+    /// The `$WTT` top and `$WTB` bottom anchors as `(bone, model-space point, the point relative
+    /// to the bone's pivot)`: the rigid prop places the first, a posed bone the second.
+    pub(crate) top: (u16, Vec3, Vec3),
+    pub(crate) bottom: (u16, Vec3, Vec3),
 }
 
 /// Draws every visible bow's string, tip to middle to tip, from this frame's joint frames.
@@ -49,9 +50,12 @@ fn draw_bowstrings(
         }
         // The prop's own pose when it flexes (`joints_root` is this entity); its rigid frame
         // otherwise.
-        let tip = |(bone, offset): (u16, Vec3)| {
-            flex.and_then(|p| p.posed_point(prop, bone, offset))
-                .unwrap_or_else(|| prop.transform_point(offset))
+        // `RigPose::model` is each bone's frame at its pivot (the palette multiplies by the inverse
+        // bind pose), so a posed tip is the pivot-relative point; a model-space one would land a
+        // pivot's length out past the limb.
+        let tip = |(bone, model_point, from_pivot): (u16, Vec3, Vec3)| {
+            flex.and_then(|p| p.posed_point(prop, bone, from_pivot))
+                .unwrap_or_else(|| prop.transform_point(model_point))
         };
         let top = tip(bs.top);
         let bottom = tip(bs.bottom);

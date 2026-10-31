@@ -1303,7 +1303,13 @@ fn convert_entry(
                 None => UvRect::FULL,
             };
             // A slice past the texture tiles (`BonusActionBarFrame.lua:173`), on that axis alone.
-            let wrap = tiling_axes(&uv);
+            // A rotated quad (the 8-argument form) clamps: `DrawRouteLine` (`TaxiFrame.lua`)
+            // turns the taxi line inside its box with corners past [0, 1], counting on the
+            // texture's clear border; repeating it drew stray copies of each route beside it.
+            let wrap = match tex_coords {
+                Some(TexCoords::Corners(_)) => (false, false),
+                _ => tiling_axes(&uv),
+            };
             let handle = match (path.as_deref(), assets.as_mut()) {
                 (Some(p), Some(a)) => {
                     let resolved = if p == benilla_ui::script::nameplate::BORDER_TEXTURE {
