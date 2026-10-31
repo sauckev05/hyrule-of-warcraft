@@ -111,7 +111,19 @@ QUEST_ITEMS = [
              'were waiting.', 0),
     (190534, 'Shard-Bound Hilt', 34170, 'The hilt, bound with the light of every dungeon. It hums like a held '
              'breath.', 0),
+    # Navi's Mirror Shield (the end of this file)
+    (190535, 'Horn of the Doom Lord', 7145, 'Black and cold, and it still smells of fel fire.', 12397),
+    (190536, 'Tarnished Mirror Plate', 31746, 'Under the soot, a face polished like still water.', 0),
+    (190537, 'Frost-Kissed Mirror Plate', 31746, 'So cold it burns. The frost will not last long.', 0),
+    (190538, 'Dragon-Tempered Mirror Plate', 31746, 'As tough as dragon hide, and as bright as a mirror.', 0),
+    (190539, 'Unfinished Mirror Shield', 31746, 'The plate and the horn, waiting for a smith worthy of them.', 0),
 ]
+# quest item columns beyond the usual (build_content.py): the plate's Use, the frost that melts away
+QUEST_ITEM_EXTRAS = {
+    190536: dict(spellid_1=40025, spelltrigger_1=0, spellcharges_1=0, spellcooldown_1=-1, spellcategory_1=0,
+                 spellcategorycooldown_1=-1),          # Place Mirror Plate (build_mastery.py)
+    190537: dict(duration=300),                         # five minutes, like Quel'Serrar's heated blade
+}
 
 # ------------------------------------------------------------------------------------ quests
 # Each quest: id, level, min level, type ('' normal, 'dungeon', 'raid'), zone, giver, turn-in,
@@ -1006,3 +1018,80 @@ quest(id=90521, level=60, min=55, kind='dungeon', zone=1584, giver=LINKEN, ender
       request="Ironfoe in your hand, the hilt on the Black Anvil. And stay standing, $N.",
       reward="The blade is whole again. It sings, just like I remember.",
       kills=[], items=[(LINKEN_SHARD_BOUND_HILT, 1)], reward_item=LINKEN_SWORD_ENTRY, rep=(0, 0))
+
+# =========================================================== NAVI - the Mirror Shield
+# After Linken's sword: Navi's shield. The core runs the fights (ZeldaCommands.cpp, "the Mirror
+# Shield"): Kazzak's volleys blocked, the plate frost-kissed by Azuregos's breath, his body clicked.
+MIRROR_HORN, MIRROR_PLATE, MIRROR_FROSTED, MIRROR_TEMPERED, MIRROR_UNFINISHED = 190535, 190536, 190537, 190538, 190539
+MIRROR_SHIELD = 191180        # build_mastery.py
+VOLLEY_BLOCKED_NPC = 191190   # the volley counter: a creature never spawned
+MIRROR_PLATE_GO = 191181      # behind General Drakkisath
+MIRROR_PLATE_SPOT = (229, 47.0, -286.2, 110.96, 3.1415927)
+MIRROR_PLACED_GO, MIRROR_FROSTED_GO = 191182, 191183
+KING_MAGNI = 2784
+NAVI_ID = 190601
+
+quest(id=90530, level=60, min=58, kind='raid', zone=4, giver=NAVI_ID, ender=NAVI_ID, prev=90521, next=90531,
+      title="The Doom Lord's Volley",
+      details="Hey! Listen! That sword is wonderful, but a hero needs a shield too. A real one. One that can "
+              "turn magic around!$B$BBack home there was a shield like that - the Mirror Shield. I think we can "
+              "make one here. First we need something that has stood up to the worst magic there is.$B$BLord "
+              "Kazzak, in the Blasted Lands. His Shadow Bolt Volleys melt armies. Raise your shield and stand "
+              "against them - block twenty volleys, then bring him down and take his horn.$B$BDon't fall. And "
+              "don't finish him too soon - if he dies before you've blocked twenty, it doesn't count!",
+      objectives="Block 20 of Lord Kazzak's Shadow Bolt Volleys with your shield raised, then slay him and take the "
+                 "Horn of the Doom Lord. If you fall, or he falls before the 20th block, the quest fails.",
+      request="Twenty volleys, shield up! You can do it!",
+      reward="You did it! Twenty! And look at that horn - it's still cold from all that shadow.$B$BKeep it safe. "
+             "We'll need it.",
+      kills=[(VOLLEY_BLOCKED_NPC, 20, 'Shadow Bolt Volley blocked')], items=[(MIRROR_HORN, 1)],
+      reward_item=MIRROR_HORN, rep=(0, 0))
+
+quest(id=90531, level=60, min=58, kind='dungeon', zone=1583, giver=NAVI_ID, ender=NAVI_ID, prev=90530, next=90532,
+      title='The Mirror of Blackrock',
+      details="Hey! Listen! A shield needs a face. Not just any metal - something that shines like a mirror.$B$B"
+              "The black dragons hoard everything shiny, and the best of it sits with General Drakkisath, at the "
+              "very top of Blackrock Spire. Behind him there's an old plate, black with soot - but under the soot "
+              "it's a mirror. I can feel it!$B$BGet past the General and take it.",
+      objectives="Take the Tarnished Mirror Plate from behind General Drakkisath in Upper Blackrock Spire.",
+      request="Behind the General, at the top of the Spire!",
+      reward="Ooh, look at it! Rub off a little soot... see? You can see yourself in it! Well, sort of.$B$B"
+             "It's still too soft for a shield, though. It needs to be tempered. By something very, very cold.",
+      kills=[], items=[(MIRROR_PLATE, 1)], reward_item=MIRROR_PLATE, rep=(0, 0))
+
+quest(id=90532, level=60, min=58, kind='raid', zone=16, giver=NAVI_ID, ender=NAVI_ID, prev=90531, next=90533,
+      title="Breath of the Blue Dragon",
+      details="Hey! Listen! Azuregos, the blue dragon, guards the ruins of Azshara. His breath is the coldest thing "
+              "in the world - cold enough to temper the plate!$B$BFight him, and set the plate down in front of "
+              "him before he breathes his frost. When the frost hits it, pick it up - fast! The cold won't last, "
+              "five minutes at most. Bring Azuregos down before it melts, then press the plate to his body. "
+              "Dragon's cold, dragon's strength. That's how it works. I think.",
+      objectives="Set the Tarnished Mirror Plate down before Azuregos so his Frost Breath strikes it. Take the "
+                 "Frost-Kissed Mirror Plate, slay Azuregos before it thaws, and click his body to temper it. "
+                 "Bring the Dragon-Tempered Mirror Plate to Navi.",
+      request="Down in front of him, before the breath! Then quick, quick!",
+      reward="It's so bright! And so tough - like dragon scale! Now it really is a Mirror Plate.",
+      kills=[], items=[(MIRROR_TEMPERED, 1), (MIRROR_PLATE, 1)], reward_item=MIRROR_TEMPERED, rep=(0, 0))
+
+quest(id=90533, level=60, min=58, kind='', zone=0, giver=NAVI_ID, ender=NAVI_ID, prev=90532, next=90534,
+      title='The Mirror Shield',
+      details="Hey! Listen! We have everything now - the Doom Lord's horn and the dragon-tempered plate. Give them "
+              "to me and I'll fit them together. Then we just need a smith who can make them one.",
+      objectives="Bring the Horn of the Doom Lord and the Dragon-Tempered Mirror Plate to Navi.",
+      request="The horn and the plate!",
+      reward="*Navi circles the plate and the horn, and they settle together with a soft chime.*$B$BThere! It's "
+             "almost a shield. Almost.",
+      kills=[], items=[(MIRROR_HORN, 1), (MIRROR_TEMPERED, 1)], reward_item=MIRROR_UNFINISHED, rep=(0, 0))
+
+quest(id=90534, level=60, min=58, kind='', zone=1537, giver=NAVI_ID, ender=KING_MAGNI, prev=90533, next=0,
+      title='Forged by a King',
+      details="Hey! Listen! Only a master smith can finish it - and the best smith in the world is a king! King "
+              "Magni Bronzebeard, in Ironforge. The dwarves have forged on the Great Anvil since before anyone "
+              "can remember.$B$BTake the shield to him. He'll know what to do.",
+      objectives="Take the Unfinished Mirror Shield to King Magni Bronzebeard in Ironforge.",
+      request="Well now, what's that ye've got there?",
+      reward="*Magni turns the shield over in his great hands, and his eyes go wide.*$B$BDragon-tempered, and a "
+             "Doom Lord's horn for the boss... By the Light, lad. Give me a moment at the anvil.$B$B*The hammer "
+             "rings, again and again.*$B$BThere. Hold it up - see how it shines? Any spell that strikes it will "
+             "go right back where it came from. Carry it well, hero.",
+      kills=[], items=[(MIRROR_UNFINISHED, 1)], reward_item=MIRROR_SHIELD, rep=(47, 500))

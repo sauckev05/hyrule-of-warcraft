@@ -3,9 +3,12 @@
 quests, quest items, drops and dialogue. The server applies zelda-sql/*.sql by itself at startup
 (ZeldaApplyContentSql), and CI loads the file into a real database to check it."""
 import json
+import math
 import os
 from story import (STORY_NPCS, COMPANIONS, RETIRED_ENTRIES, RETIRED_QUESTS, QUEST_ITEMS, Q, KATRANA_TEXTS, CAPTIVE_TEXT, NAVI, NAVI_ITEMS,
-                   LINKEN_SWORD_ENTRY, LINKEN_FINAL_QUEST, LINKEN_HILT, BLACK_ANVIL_GO, BLACK_ANVIL_SPOT)
+                   LINKEN_SWORD_ENTRY, LINKEN_FINAL_QUEST, LINKEN_HILT, BLACK_ANVIL_GO, BLACK_ANVIL_SPOT,
+                   QUEST_ITEM_EXTRAS, VOLLEY_BLOCKED_NPC, MIRROR_PLATE_GO, MIRROR_PLATE_SPOT, MIRROR_PLACED_GO,
+                   MIRROR_FROSTED_GO, MIRROR_PLATE, MIRROR_FROSTED, KING_MAGNI)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REWARDS = {int(k): v for k, v in json.load(open(os.path.join(HERE, 'rewards.json'))).items()}
@@ -231,6 +234,9 @@ def main():
                           maxcount=1 if n['cls'] != 12 else 4, stackable=1 if n['cls'] != 12 else 4,
                           bonding=1 if n['cls'] != 12 else 4, description=n['description'], Material=4 if n['cls'] == 12 else 0, sheath=0))
     out.append(insert('item_template', items))
+    for entry, cols in QUEST_ITEM_EXTRAS.items():
+        out.append('UPDATE `item_template` SET %s WHERE `entry` = %d;\n'
+                   % (', '.join('`%s` = %d' % kv for kv in cols.items()), entry))
     out.append(insert('item_template', reward_items))
     out.append(insert('creature_loot_template', loot))
 
@@ -309,6 +315,33 @@ def main():
                '`orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, '
                '`spawntimesecsmax`) VALUES (%d, %d, %d, 1, %.5f, %.5f, %.5f, %.7f, 0, 0, %.7f, %.7f, 25, 25);\n'
                % (5400170, BLACK_ANVIL_GO, anvil_map, ax, ay, az, ao, ar2, ar3))
+    # Navi's Mirror Shield (story.py): the volley counter, the plate behind General Drakkisath, the plate set
+    # down before Azuregos and the frost-kissed one his breath leaves (core: ZeldaFrostBreath), and the
+    # two world bosses back in ten minutes instead of days
+    out.append('DELETE FROM `creature_template` WHERE `Entry` = %d;\n' % VOLLEY_BLOCKED_NPC)
+    out.append(insert('creature_template', [creature_template(VOLLEY_BLOCKED_NPC, 'Shadow Bolt Volley blocked', '', 11686,
+                                                              35, 0, 60, 1, '')]))
+    gos = [(MIRROR_PLATE_GO, 3, 'Tarnished Mirror Plate', 0, MIRROR_PLATE_GO, 0),
+           (MIRROR_PLACED_GO, 5, 'Mirror Plate', 0, 0, 0),
+           (MIRROR_FROSTED_GO, 3, 'Frost-Kissed Mirror Plate', 0, MIRROR_FROSTED_GO, 1)]
+    out.append('DELETE FROM `gameobject_template` WHERE `entry` IN (%s);\n' % ','.join(str(g[0]) for g in gos))
+    for entry, kind, name, lock, loot_id, consumable in gos:
+        out.append('INSERT INTO `gameobject_template` (`entry`, `type`, `displayId`, `name`, `faction`, `flags`, `size`, '
+                   '`data0`, `data1`, `data3`) VALUES (%d, %d, 4172, %s, 0, 0, 1.0, %d, %d, %d);\n'
+                   % (entry, kind, esc(name), lock, loot_id, consumable))
+    out.append('DELETE FROM `gameobject_loot_template` WHERE `entry` IN (%d, %d);\n' % (MIRROR_PLATE_GO, MIRROR_FROSTED_GO))
+    out.append('INSERT INTO `gameobject_loot_template` (`entry`, `item`, `ChanceOrQuestChance`, `groupid`, `mincountOrRef`, '
+               '`maxcount`, `condition_id`, `comments`) VALUES (%d, %d, -100, 0, 1, 1, 0, %s), (%d, %d, 100, 0, 1, 1, 0, %s);\n'
+               % (MIRROR_PLATE_GO, MIRROR_PLATE, esc('Zelda: The Mirror of Blackrock'),
+                  MIRROR_FROSTED_GO, MIRROR_FROSTED, esc("Zelda: Breath of the Blue Dragon")))
+    pmap, px, py, pz, po = MIRROR_PLATE_SPOT
+    out.append('DELETE FROM `gameobject` WHERE `id` = %d;\n' % MIRROR_PLATE_GO)
+    out.append('INSERT INTO `gameobject` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, '
+               '`orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, '
+               '`spawntimesecsmax`) VALUES (%d, %d, %d, 1, %.4f, %.4f, %.4f, %.7f, 0, 0, %.7f, %.7f, 60, 60);\n'
+               % (5400181, MIRROR_PLATE_GO, pmap, px, py, pz, po, math.sin(po / 2), math.cos(po / 2)))
+    out.append('UPDATE `creature` SET `spawntimesecsmin` = 600, `spawntimesecsmax` = 600 WHERE `id` IN (12397, 6109);\n')
+    out.append('UPDATE `creature_template` SET `NpcFlags` = `NpcFlags` | 2 WHERE `Entry` = %d;\n' % KING_MAGNI)
     # Ironfoe (the anvil answers only to it in hand): 30% from Emperor Dagran Thaurissan instead of 1%
     out.append('UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;\n')
     # Linken's story now begins with Navi: The Hero of Time leads into It's a Secret to Everybody

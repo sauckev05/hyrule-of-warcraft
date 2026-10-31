@@ -58,6 +58,17 @@ SMITE_IMPACT_VISUAL = 7892          # SpellVisual, after the stock 7891
 REFORGING = 40021
 COPPER_BRACERS = 2663
 CAST_30_SECONDS = 9                 # SpellCastTimes
+# the Mirror Shield (Navi's quests, story.py): the High Warlord's Shield Wall blue and gold (mirror_shield.py,
+# its own ItemDisplayInfo), epic, with the spells below; the core does the last stand and the reflection
+MIRROR_SHIELD = 191180
+HIGH_WARLORDS_SHIELD_WALL = 18826
+SHIELD_WALL_LOOK = 31746            # ItemDisplayInfo of the Shield Wall
+MIRROR_SHIELD_LOOK = 60300
+MIRROR_SHIELD_TEXTURE = 'Shield_ZeldaMirror'
+MIRROR_WARD, MIRROR_LAST_STAND, MIRROR_REFLECTION, PLACE_MIRROR_PLATE = 40022, 40023, 40024, 40025
+ARENA_WARD = 23506                  # the Arena Grand Master's Aura of Protection
+PLACE_UNFIRED_BLADE = 22905         # Quel'Serrar's
+BLOCK_VALUE_30, BLOCK_CHANCE_5, DEFENSE_10 = 23562, 21482, 13390
 EXTRA_ATTACKS = 15494       # Ironfoe's Fury of Forgewright: 2 extra attacks on the next swing
 
 # custom spells: (id, cloned from, name, tooltip text, changes)
@@ -105,6 +116,16 @@ SPELLS = [
      dict(EffectMiscValue1=SCARLET_HORSE_NPC, EffectBasePoints2=149)),
     (VANQUISHER_SMITE, HOLY_SMITE, 'Holy Smite', 'Smites an enemy for $s1 Holy damage.',
      dict(EffectBasePoints1=49, SpellVisual=SMITE_IMPACT_VISUAL)),
+    (MIRROR_WARD, ARENA_WARD, 'Mirror Ward', 'Absorbs $s1 damage.  Lasts $d.',
+     dict(EffectBasePoints1=1999, EffectDieSides1=501, tooltip='Absorbs $s1 damage.')),
+    (MIRROR_LAST_STAND, 9335, 'Mirror Ward',
+     'When a blow would leave you near death, the shield\'s light absorbs 2000 to 2500 damage for 20 sec. '
+     '(5 min cooldown)', dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0)),
+    (MIRROR_REFLECTION, 9335, 'Mirror Reflection',
+     'While your guard is raised, harmful spells cast at you are turned back upon their caster.',
+     dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0)),
+    (PLACE_MIRROR_PLATE, PLACE_UNFIRED_BLADE, 'Place Mirror Plate', 'Sets the Tarnished Mirror Plate on the ground.',
+     dict(EffectMiscValue1=191182)),
     (REFORGING, COPPER_BRACERS, 'Reforging', "Reforges Linken's sword on the Black Anvil.",
      dict(Effect1=3, EffectItemType1=0, EffectImplicitTargetA1=1, Totem1=0, RequiresSpellFocus=0, Reagent1=0,
           ReagentCount1=0, CastingTimeIndex=CAST_30_SECONDS)),
@@ -348,6 +369,18 @@ def item_sql():
                '`bonding` = 1, `maxcount` = 1, %s, `description` = %s WHERE `entry` = %d;\n'
                % (sql_str('Reins of the Scarlet Warhorse'), spells_sql([(SCARLET_HORSE_SPELL, 0, 0, 0)]),
                   sql_str("Vesper's thanks: a crusader's charger, freed of its crusade."), SCARLET_HORSE_ITEM))
+    # the Mirror Shield, made from the High Warlord's Shield Wall's row
+    out.append(clone('item_template', 'entry', MIRROR_SHIELD, HIGH_WARLORDS_SHIELD_WALL, ITEM_COLUMNS))
+    out.append('UPDATE `item_template` SET `name` = %s, `Quality` = 4, `displayid` = %d, `ItemLevel` = 78, '
+               '`RequiredLevel` = 60, `requiredhonorrank` = 0, `RequiredCityRank` = 0, `RequiredReputationFaction` = 0, '
+               '`RequiredReputationRank` = 0, `AllowableClass` = -1, `AllowableRace` = -1, `BuyPrice` = 0, '
+               '`SellPrice` = 150000, `bonding` = 1, `maxcount` = 1, `armor` = 2500, `block` = 45, `DisenchantID` = 0, '
+               '%s, %s, `description` = %s WHERE `entry` = %d;\n'
+               % (sql_str('Mirror Shield'), MIRROR_SHIELD_LOOK,
+                  stats_sql([(STR, 15), (AGI, 15), (STA, 15), (INT, 15), (SPI, 15)]),
+                  spells_sql([(BLOCK_VALUE_30, 1, 0, 0), (BLOCK_CHANCE_5, 1, 0, 0), (DEFENSE_10, 1, 0, 0),
+                              (MIRROR_LAST_STAND, 1, 0, 0), (MIRROR_REFLECTION, 1, 0, 0)]),
+                  sql_str("Forged by a king from a dragon's cold and a Doom Lord's horn."), MIRROR_SHIELD))
     return ''.join(out)
 
 
@@ -398,6 +431,12 @@ def patch_display(path):
     # (HelmetGeosetVisData, male / female, ItemDisplayInfo fields 12-13)
     for display, vis in HELM_HIDES_HAIR.items():
         byid[display][12], byid[display][13] = vis
+    # the Mirror Shield: the Shield Wall's look on its own skin (mirror_shield.py)
+    rows = [r for r in rows if r[0] != MIRROR_SHIELD_LOOK]
+    row = list(byid[SHIELD_WALL_LOOK])
+    row[0] = MIRROR_SHIELD_LOOK
+    row[3] = add_string(strings, MIRROR_SHIELD_TEXTURE)
+    rows.append(row)
     # the dungeon clears' Crystal Shards (shards.py)
     import shards
     shards.add_displays(rows, lambda text: add_string(strings, text))
@@ -473,7 +512,7 @@ def patch_spells(path):
 
 
 def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None, creature_display_dbc=None, warhorse_blp=None,
-                spell_visual_dbc=None):
+                spell_visual_dbc=None, shield_wall_blp=None):
     """patch-Z.MPQ; with the stock CreatureDisplayInfo.dbc and WarHorse.blp also the Scarlet Warhorse,
     whose CreatureDisplayInfo.dbc the server needs too (written beside out_mpq)."""
     import mpq
@@ -497,11 +536,15 @@ def build_patch(display_dbc, spell_dbc, out_mpq, shard_icon=None, creature_displ
         print('wrote', server)
     if spell_visual_dbc:
         files['DBFilesClient\\SpellVisual.dbc'] = patch_spell_visual(spell_visual_dbc)
+    if shield_wall_blp:
+        import mirror_shield
+        files['Item\\ObjectComponents\\Shield\\%s.blp' % MIRROR_SHIELD_TEXTURE] = \
+            mirror_shield.build(open(shield_wall_blp, 'rb').read())
     mpq.write_archive(out_mpq, files)
     print('wrote', out_mpq, os.path.getsize(out_mpq), 'bytes')
 
 
 if __name__ == '__main__':
     write_sql()
-    if len(sys.argv) in (4, 5, 7, 8):
+    if len(sys.argv) in (4, 5, 7, 8, 9):
         build_patch(*sys.argv[1:])

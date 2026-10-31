@@ -1757,10 +1757,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..8fbd89bb5
+index 000000000..964627495
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4827 @@
+@@ -0,0 +1,4996 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1912,6 +1912,7 @@ index 000000000..8fbd89bb5
 +        uint32 portalMap = 0, portalAt = 0;     // the battleground entrance just walked into
 +        // the Arena Grand Master's shield rises by itself near death, then rests until this time
 +        time_t grandMasterReadyAt = 0;
++        time_t mirrorShieldReadyAt = 0;                // the Mirror Shield's last stand, ready again at
 +        // the Gurubashi Arena challenge this hero is running
 +        uint8 arenaPhase = 0;                           // ArenaPhase
 +        uint8 arenaStage = 0;                           // 1..12
@@ -3059,6 +3060,8 @@ index 000000000..8fbd89bb5
 +static void ZeldaUnderWorldRescue(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaForgeTrial(Player* player, ZeldaState& state);
++static void ZeldaDoomLordWatch(Player* player);
++static void ZeldaFrostBreath(Unit* azuregos);
 +
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
@@ -3084,6 +3087,7 @@ index 000000000..8fbd89bb5
 +    ZeldaEnemyMechanics(player, state);
 +    ZeldaSoloBattleground(player, state, diff);
 +    ZeldaForgeTrial(player, state);
++    ZeldaDoomLordWatch(player);
 +
 +    // the dungeon clear bar under the minimap: sent when it changes, looked at twice a second
 +    if (player->IsInWorld() && !player->IsBeingTeleported())
@@ -3690,6 +3694,21 @@ index 000000000..8fbd89bb5
 +                victim->CastSpell(victim, AURA_OF_PROTECTION, TRIGGERED_OLD_TRIGGERED);
 +                damage -= std::min<uint32>(damage, 750);      // this blow is the first it stops
 +                victim->GetSession()->SendAreaTriggerMessage("Arena Grand Master: the champion's shield saves you!");
++            }
++        }
++        // the Mirror Shield (Navi's quests): the same last stand, absorbing 2000 to 2500 damage
++        static uint32 const MIRROR_SHIELD = 191180;
++        static uint32 const MIRROR_WARD = 40022;
++        if (victim->IsAlive() && victim->HasItemWithIdEquipped(MIRROR_SHIELD, 1))
++        {
++            ZeldaState& live = StateFor(victim);
++            time_t const now = time(nullptr);
++            if (now >= live.mirrorShieldReadyAt)
++            {
++                live.mirrorShieldReadyAt = now + cooldown;
++                victim->CastSpell(victim, MIRROR_WARD, TRIGGERED_OLD_TRIGGERED);
++                damage -= std::min<uint32>(damage, 2000);
++                victim->GetSession()->SendAreaTriggerMessage("Mirror Shield: the shield's light holds back death!");
 +            }
 +        }
 +    }
@@ -4431,6 +4450,12 @@ index 000000000..8fbd89bb5
 +
 +void ZeldaSpellFinished(Spell* spell)
 +{
++    if (spell && spell->m_spellInfo->Id == 21099 && spell->GetCaster() &&      // Azuregos's Frost Breath
++        spell->GetCaster()->GetEntry() == 6109)
++    {
++        ZeldaFrostBreath(spell->GetCaster());
++        return;
++    }
 +    if (!spell || spell->m_spellInfo->Id != SPELL_REFORGING || !spell->GetCaster() || !spell->GetCaster()->IsPlayer())
 +        return;
 +    Player* player = static_cast<Player*>(spell->GetCaster());
@@ -4518,6 +4543,150 @@ index 000000000..8fbd89bb5
 +        state.forgeBagsTold = true;
 +        player->GetSession()->SendNotification("Your bags are full - make room for the blade.");
 +    }
++}
++
++// ---------------------------------------------------------------------------------- the Mirror Shield
++// Navi's quests after Linken's sword (story.py):
++//  - The Doom Lord's Volley: block 20 of Lord Kazzak's Shadow Bolt Volleys behind a raised shield
++//    (the kills of an unseen creature count them), then kill him for his horn; falling in the fight,
++//    or killing him short of 20 blocks, fails the quest
++//  - The Mirror of Blackrock: the Tarnished Mirror Plate, behind General Drakkisath (only data)
++//  - The Frost Dragon's Breath: the plate, set down before Azuregos, is frost-kissed by his Frost
++//    Breath; it must be carried off and pressed to his body within five minutes of his death... the
++//    item lasts five minutes, and clicking his body with it makes the Dragon-Tempered Mirror Plate
++//  - the shield itself: its last stand (ZeldaModifyIncomingDamage) and turning spells back
++//    (ZeldaReflectChance) while the guard is raised
++namespace
++{
++    uint32 const QUEST_DOOM_LORD = 90530;
++    uint32 const QUEST_FROST_BREATH = 90532;
++    uint32 const NPC_KAZZAK = 12397;
++    uint32 const NPC_AZUREGOS = 6109;
++    uint32 const NPC_VOLLEY_BLOCKED = 191190;       // the quest's counter: never spawned
++    uint32 const SPELL_SHADOW_VOLLEY = 21341;
++    uint32 const SPELL_FROST_BREATH = 21099;
++    uint32 const SPELL_MIRROR_REFLECT = 40024;      // the Mirror Shield's equip aura
++    uint32 const VOLLEYS_NEEDED = 20;
++    uint32 const GO_PLACED_PLATE = 191182;          // set down by the Tarnished Mirror Plate (40025)
++    uint32 const GO_FROSTED_PLATE = 191183;         // after the breath: a chest with the frost-kissed plate
++    uint32 const ITEM_FROSTED_PLATE = 190537;       // lasts five minutes
++    uint32 const ITEM_TEMPERED_PLATE = 190538;
++
++    uint32 VolleysBlocked(Player* player)
++    {
++        auto& quests = player->getQuestStatusMap();
++        auto itr = quests.find(QUEST_DOOM_LORD);
++        return itr == quests.end() ? 0 : itr->second.m_creatureOrGOcount[0];
++    }
++
++    void FailDoomLord(Player* player, char const* why)
++    {
++        if (player->GetQuestStatus(QUEST_DOOM_LORD) != QUEST_STATUS_INCOMPLETE)
++            return;
++        player->FailQuest(QUEST_DOOM_LORD);
++        player->GetSession()->SendAreaTriggerMessage("|cffff4040%s The Doom Lord's Volley has failed - abandon it and ask Navi again.|r", why);
++    }
++}
++
++void ZeldaSpellDamageTaken(Unit* victim, Unit* dealer, SpellEntry const* spellInfo)
++{
++    if (!victim || !dealer || !spellInfo || !victim->IsPlayer() || spellInfo->Id != SPELL_SHADOW_VOLLEY ||
++        dealer->GetEntry() != NPC_KAZZAK)
++        return;
++    Player* player = static_cast<Player*>(victim);
++    if (player->GetQuestStatus(QUEST_DOOM_LORD) != QUEST_STATUS_INCOMPLETE || !ZeldaShieldHolds(player, dealer))
++        return;
++    if (VolleysBlocked(player) < VOLLEYS_NEEDED)
++        player->KilledMonsterCredit(NPC_VOLLEY_BLOCKED);
++}
++
++bool ZeldaKeepCorpseLoot(Player* looter, Creature* creature)
++{
++    // Azuregos's body stays to be clicked while the hero carries the frost-kissed plate
++    if (!looter || !creature || creature->GetEntry() != NPC_AZUREGOS || !looter->HasItemCount(ITEM_FROSTED_PLATE, 1))
++        return false;
++    looter->GetSession()->SendAreaTriggerMessage("|cff66ccffAzuregos falls! Click his body to temper the Mirror Plate.|r");
++    return true;
++}
++
++void ZeldaBeforeCorpseLoot(Player* looter, Creature* creature)
++{
++    // Kazzak falls: short of twenty blocks, the quest fails (before his loot, so no horn)
++    if (looter && creature && creature->GetEntry() == NPC_KAZZAK && VolleysBlocked(looter) < VOLLEYS_NEEDED)
++        FailDoomLord(looter, "Kazzak fell before you blocked twenty of his volleys.");
++}
++
++float ZeldaReflectChance(Unit const* victim, WorldObject const* caster, uint32 schoolMask)
++{
++    if (!victim || !caster || !victim->IsPlayer() || !caster->IsUnit() || schoolMask == SPELL_SCHOOL_MASK_NORMAL ||
++        !victim->HasAura(SPELL_MIRROR_REFLECT))
++        return 0.0f;
++    return ZeldaShieldHolds(victim, static_cast<Unit const*>(caster)) ? 100.0f : 0.0f;
++}
++
++bool ZeldaCorpseClicked(Player* player, ObjectGuid guid)
++{
++    // pressing the frost-kissed plate to Azuregos's body tempers it like dragon hide
++    if (!player || !guid.IsCreature() || !player->HasItemCount(ITEM_FROSTED_PLATE, 1))
++        return false;
++    Creature* body = player->GetMap()->GetCreature(guid);
++    if (!body || body->GetEntry() != NPC_AZUREGOS || body->IsAlive() || !player->IsWithinDistInMap(body, 10.0f))
++        return false;
++    ItemPosCountVec dest;
++    if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, ITEM_TEMPERED_PLATE, 1) != EQUIP_ERR_OK)
++    {
++        player->GetSession()->SendNotification("Your bags are full.");
++        return true;
++    }
++    player->DestroyItemCount(ITEM_FROSTED_PLATE, 1, true);
++    if (Item* item = player->StoreNewItem(dest, ITEM_TEMPERED_PLATE, true))
++        player->SendNewItem(item, 1, true, false);
++    player->GetSession()->SendAreaTriggerMessage("|cff66ccffThe plate drinks the dragon's cold - it is as strong as dragonscale now.|r");
++    return true;
++}
++
++static void ZeldaFrostBreath(Unit* azuregos)
++{
++    // Azuregos breathes: a placed Mirror Plate in front of him turns frost-kissed for five minutes
++    std::list<GameObject*> plates;
++    MaNGOS::GameObjectEntryInPosRangeCheck check(*azuregos, GO_PLACED_PLATE, azuregos->GetPositionX(),
++                                                 azuregos->GetPositionY(), azuregos->GetPositionZ(), 40.0f);
++    MaNGOS::GameObjectListSearcher<MaNGOS::GameObjectEntryInPosRangeCheck> searcher(plates, check);
++    Cell::VisitGridObjects(azuregos, searcher, 40.0f);
++    for (GameObject* plate : plates)
++    {
++        if (!plate->IsSpawned() || !azuregos->HasInArc(plate, M_PI_F * 2.0f / 3.0f))
++            continue;
++        Map* map = plate->GetMap();
++        GameObject* frosted = new GameObject;
++        uint32 const lowGuid = map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT);
++        if (!frosted->Create(lowGuid, lowGuid, GO_FROSTED_PLATE, map, plate->GetPositionX(), plate->GetPositionY(),
++                             plate->GetPositionZ(), plate->GetOrientation()))
++        {
++            delete frosted;
++            continue;
++        }
++        frosted->SetRespawnTime(300);
++        frosted->SetSpawnerGuid(plate->GetSpawnerGuid());
++        map->Add(frosted);
++        frosted->AIM_Initialize();
++        if (Player* owner = map->GetPlayer(plate->GetSpawnerGuid()))
++            owner->GetSession()->SendAreaTriggerMessage("|cff66ccffThe Mirror Plate is frost-kissed! Take it - you have five minutes to fell Azuregos and press it to his body.|r");
++        plate->SetLootState(GO_JUST_DEACTIVATED);
++    }
++}
++
++static void ZeldaDoomLordWatch(Player* player)
++{
++    // falling while Kazzak still stands fails The Doom Lord's Volley
++    if (player->IsAlive() || player->GetQuestStatus(QUEST_DOOM_LORD) != QUEST_STATUS_INCOMPLETE || !player->IsInWorld())
++        return;
++    Creature* kazzak = nullptr;
++    MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck check(*player, NPC_KAZZAK, true, false, 150.0f);
++    MaNGOS::CreatureLastSearcher<MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(kazzak, check);
++    Cell::VisitGridObjects(player, searcher, 150.0f);
++    if (kazzak)
++        FailDoomLord(player, "You fell before the Doom Lord.");
 +}
 +
 +// ---------------------------------------------------------------------------------- pawnbroker
@@ -6590,10 +6759,10 @@ index 000000000..8fbd89bb5
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..3d05ae606
+index 000000000..e976ba4fc
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,288 @@
+@@ -0,0 +1,296 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6605,6 +6774,7 @@ index 000000000..3d05ae606
 +
 +class Player;
 +class Unit;
++class WorldObject;
 +struct SpellEntry;
 +struct ItemPrototype;
 +class Loot;
@@ -6776,6 +6946,13 @@ index 000000000..3d05ae606
 +void ZeldaQuestExtraTake(Player* player, uint32 questId);
 +// A goober whose use the core handles (the Black Anvil forging the Sword of Mastery): true if handled
 +bool ZeldaGameObjectUse(Player* player, GameObject* go);
++// Navi's Mirror Shield quests: Kazzak's volleys blocked, his fall decided before his loot, Azuregos's
++// body kept to be clicked and clicked, and the shield turning spells back while the guard is raised
++void ZeldaSpellDamageTaken(Unit* victim, Unit* dealer, SpellEntry const* spellInfo);
++void ZeldaBeforeCorpseLoot(Player* looter, Creature* creature);
++bool ZeldaKeepCorpseLoot(Player* looter, Creature* creature);
++bool ZeldaCorpseClicked(Player* player, ObjectGuid guid);
++float ZeldaReflectChance(Unit const* victim, WorldObject const* caster, uint32 schoolMask);
 +// Whether a quest object shows itself to the hero (the Black Anvil only to Ironfoe in hand)
 +bool ZeldaGameObjectAwake(Player* player, GameObject const* go);
 +// Warsong Gulch: using a flag stand starts a ten-second Opening cast (true: don't take it yet); the
@@ -6907,7 +7084,7 @@ index 06567441e..40ccbe604 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb08..a9f62bbd9 100644
+index a10fdbb08..5596bb2f9 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -6963,8 +7140,14 @@ index a10fdbb08..a9f62bbd9 100644
      else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
          outdoorPvP->HandleCreatureCreate(this);
  
-@@ -1086,6 +1101,14 @@ void Creature::PrepareBodyLootState(Unit* killer)
+@@ -1084,8 +1099,21 @@ void Creature::PrepareBodyLootState(Unit* killer)
+         else
+             looter = GetLootRecipient();
  
++        // Zelda of Warcraft: quest outcomes decided by the kill itself, before its loot is rolled
++        if (looter)
++            ZeldaBeforeCorpseLoot(looter, this);
++
          if (looter || GetSettings().HasFlag(CreatureStaticFlags::CAN_WIELD_LOOT))
              m_loot = new Loot(looter, this, LOOT_CORPSE);
 +
@@ -6973,12 +7156,13 @@ index a10fdbb08..a9f62bbd9 100644
 +        {
 +            ZeldaHeartPieceDrop(looter, this, m_loot);
 +            ZeldaOnKill(looter, this);
-+            ZeldaAutoLoot(looter, m_loot);
++            if (!ZeldaKeepCorpseLoot(looter, this))
++                ZeldaAutoLoot(looter, m_loot);
 +        }
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1285,42 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1290,42 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -7021,7 +7205,7 @@ index a10fdbb08..a9f62bbd9 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1364,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1369,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -7030,7 +7214,7 @@ index a10fdbb08..a9f62bbd9 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1473,8 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1478,8 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -7040,7 +7224,7 @@ index a10fdbb08..a9f62bbd9 100644
      if (health < 1)
          health = 1;
  
-@@ -1875,6 +1935,9 @@ void Creature::SetDeathState(DeathState s)
+@@ -1875,6 +1940,9 @@ void Creature::SetDeathState(DeathState s)
          else if (m_respawnOverrideOnce)
              m_respawnOverriden = false;
  
@@ -7050,7 +7234,7 @@ index a10fdbb08..a9f62bbd9 100644
          if (m_settings.HasFlag(CreatureStaticFlags3::FOREVER_CORPSE_DURATION))
              m_corpseExpirationTime = GetMap()->GetCurrentClockTime() + std::chrono::hours(24*7);
          else
-@@ -2125,6 +2188,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -2125,6 +2193,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
@@ -7594,7 +7778,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..a167d2696 100644
+index 00986af9e..8acf6dd07 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -7605,18 +7789,21 @@ index 00986af9e..a167d2696 100644
  #include "Log/Log.h"
  #include "Server/Opcodes.h"
  #include "Server/WorldPacket.h"
-@@ -901,6 +902,10 @@ void Unit::FallSuicide()
+@@ -901,6 +902,13 @@ void Unit::FallSuicide()
  
  uint32 Unit::DealDamage(Unit* dealer, Unit* victim, uint32 damage, CleanDamage const* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellInfo, bool durabilityLoss, Spell* spell)
  {
 +    // Zelda of Warcraft: dodge-roll invulnerability and shield blocking
 +    if (victim && victim->GetTypeId() == TYPEID_PLAYER && damagetype != INSTAKILL)
++    {
++        ZeldaSpellDamageTaken(victim, dealer, spellInfo);      // the volleys blocked for Navi's quest
 +        damage = ZeldaModifyIncomingDamage(static_cast<Player*>(victim), dealer, damage);
++    }
 +
      // remove affects from attacker at any non-DoT damage (including 0 damage)
      if (damagetype != DOT && damagetype != INSTAKILL)
      {
-@@ -1376,6 +1381,10 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
+@@ -1376,6 +1384,10 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
      if (InstanceData* mapInstance = victim->GetInstanceData())
          mapInstance->OnCreatureDeath(victim);
  
@@ -7627,7 +7814,7 @@ index 00986af9e..a167d2696 100644
      if (responsiblePlayer)                                  // killedby Player, inform BG
          if (BattleGround* bg = responsiblePlayer->GetBattleGround())
              bg->HandleKillUnit(victim, responsiblePlayer);
-@@ -1863,6 +1872,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
+@@ -1863,6 +1875,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
  
      // Call default DealDamage (send critical in hit info for threat calculation)
      CleanDamage cleanDamage(spellDamageInfo->damage, BASE_ATTACK, spellDamageInfo->HitInfo & SPELL_HIT_TYPE_CRIT ? MELEE_HIT_CRIT : MELEE_HIT_NORMAL, (spellDamageInfo->damage > 0 || spellDamageInfo->absorb > 0));
@@ -7638,7 +7825,7 @@ index 00986af9e..a167d2696 100644
      DealDamage(affectiveCaster, victim, spellDamageInfo->damage, &cleanDamage, resetLeash ? SPELL_DIRECT_DAMAGE : SPELL_DAMAGE_SHIELD, GetSchoolMask(spellDamageInfo->school), spellProto, durabilityLoss, spellDamageInfo->spell);
  }
  
-@@ -1933,6 +1946,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -1933,6 +1949,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
          // Add melee damage bonus
          subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
@@ -7651,7 +7838,7 @@ index 00986af9e..a167d2696 100644
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2045,6 +2064,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -2045,6 +2067,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
              calcDamageInfo->TargetState = VICTIMSTATE_NORMAL;
              calcDamageInfo->procEx |= PROC_EX_BLOCK;
              calcDamageInfo->blocked_amount = calcDamageInfo->target->GetShieldBlockValue();
@@ -7661,7 +7848,7 @@ index 00986af9e..a167d2696 100644
  
              if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
              {
-@@ -2656,10 +2678,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2681,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -7686,7 +7873,7 @@ index 00986af9e..a167d2696 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -2711,6 +2747,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+@@ -2711,6 +2750,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
      if (pVictim->GetCombatManager().IsInEvadeMode())
          return MELEE_HIT_EVADE;
  
@@ -7700,7 +7887,7 @@ index 00986af9e..a167d2696 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
      if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
-@@ -2829,6 +2872,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+@@ -2829,6 +2875,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
  
  SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
  {
@@ -7714,7 +7901,17 @@ index 00986af9e..a167d2696 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
      die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
-@@ -3628,7 +3678,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -2942,7 +2995,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+     // Reflect (when available)
+     if (reflectable)
+     {
+-        const float chance = pVictim->GetReflectChance(schoolMask);
++        // Zelda of Warcraft: the Mirror Shield turns spells back while the guard is raised
++        const float chance = pVictim->GetReflectChance(schoolMask) + ZeldaReflectChance(pVictim, caster, schoolMask);
+         if (roll_chance_combat(chance))
+             return SPELL_MISS_REFLECT;
+     }
+@@ -3628,7 +3682,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -7724,7 +7921,7 @@ index 00986af9e..a167d2696 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3694,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3698,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -7733,7 +7930,7 @@ index 00986af9e..a167d2696 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5027,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5031,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -7745,7 +7942,7 @@ index 00986af9e..a167d2696 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6153,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6157,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -7754,7 +7951,7 @@ index 00986af9e..a167d2696 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7106,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7110,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -7763,7 +7960,7 @@ index 00986af9e..a167d2696 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7223,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7227,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -7773,7 +7970,7 @@ index 00986af9e..a167d2696 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7368,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7372,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -7783,7 +7980,7 @@ index 00986af9e..a167d2696 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8157,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8161,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -7797,7 +7994,7 @@ index 00986af9e..a167d2696 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8473,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8477,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
@@ -7886,6 +8083,28 @@ index 0bde155d8..3e7dbf632 100644
          return;
      }
  
+diff --git a/src/game/Loot/LootHandler.cpp b/src/game/Loot/LootHandler.cpp
+index 4cf05c5e6..0f22d950a 100644
+--- a/src/game/Loot/LootHandler.cpp
++++ b/src/game/Loot/LootHandler.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Common.h"
++#include "Chat/ZeldaCommands.h"
+ #include "Server/WorldPacket.h"
+ #include "Log/Log.h"
+ #include "Entities/Player.h"
+@@ -153,6 +154,9 @@ void WorldSession::HandleLootOpcode(WorldPacket& recv_data)
+         }
+     }
+ 
++    // Zelda of Warcraft: clicking a body can do more than loot it (Azuregos tempers the Mirror Plate)
++    ZeldaCorpseClicked(_player, lguid);
++
+     if (Loot* loot = sLootMgr.GetLoot(_player, lguid))
+     {
+         // remove stealth aura
 diff --git a/src/game/Loot/LootMgr.cpp b/src/game/Loot/LootMgr.cpp
 index 79b26641b..29de7bb00 100644
 --- a/src/game/Loot/LootMgr.cpp
