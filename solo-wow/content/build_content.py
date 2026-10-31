@@ -309,6 +309,8 @@ def main():
                '`orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, '
                '`spawntimesecsmax`) VALUES (%d, %d, %d, 1, %.5f, %.5f, %.5f, %.7f, 0, 0, %.7f, %.7f, 25, 25);\n'
                % (5400170, BLACK_ANVIL_GO, anvil_map, ax, ay, az, ao, ar2, ar3))
+    # Ironfoe (the anvil answers only to it in hand): 30% from Emperor Dagran Thaurissan instead of 1%
+    out.append('UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;\n')
     # Linken's story now begins with Navi: The Hero of Time leads into It's a Secret to Everybody
     out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;\n')
     out.append('UPDATE `quest_template` SET `NextQuestInChain` = 3908 WHERE `entry` = 90503;\n')

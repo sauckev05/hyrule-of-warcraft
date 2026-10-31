@@ -988,17 +988,21 @@ quest(id=90520, level=58, min=55, kind='', zone=490, giver=LINKEN, ender=LINKEN,
       request="Every dungeon, $N. The light has to be whole, or the blade will be too.",
       reward="*Linken sets the shards around the hilt. One by one they dim, and the hilt begins to glow.*$B$BIt "
              "remembers. Can you feel it? The light knows where it belongs.$B$BBut no fire here could hold it. "
-             "There's only one forge in the world that burns hot enough...",
+             "There's only one forge in the world that burns hot enough - and only one hammer it will answer to...",
       kills=[], items=[(LINKEN_HILT, 1)], reward_item=LINKEN_SHARD_BOUND_HILT, rep=(0, 0))
 
 quest(id=90521, level=60, min=55, kind='dungeon', zone=1584, giver=LINKEN, ender=LINKEN, prev=90520, next=0,
       title='Reforged in the Black Anvil',
       details="The Black Anvil, deep in Blackrock Depths. The Dark Irons forge their master's weapons on it, in "
               "fire stolen from the Firelord himself. It's the only anvil in the world that can take that much "
-              "light.$B$BCarry the hilt down there and strike it on the anvil. The blade will remember the rest. "
-              "Go, $N - it's dangerous to go alone, but you've never really been alone, have you?",
-      objectives="Take the Shard-Bound Hilt to the Black Anvil in Blackrock Depths and use the anvil to "
-                 "reforge Linken's sword.",
-      request="The Black Anvil, $N. In Blackrock Depths.",
+              "light.$B$BBut it won't wake for just anyone. It answers only to Ironfoe - the hammer of the Dark "
+              "Iron emperor, Dagran Thaurissan. Take it from him, hold it in your hand, and strike the hilt on the "
+              "anvil. It will take time - half a minute of steady blows.$B$BAnd $N... the forge has guardians. When "
+              "the blade wakes, so will they. Fall, and the forge keeps it. Go - it's dangerous to go alone, but "
+              "you've never really been alone, have you?",
+      objectives="Take Ironfoe from Emperor Dagran Thaurissan in Blackrock Depths. With Ironfoe in hand, use the "
+                 "Black Anvil to reforge Linken's sword from the Shard-Bound Hilt, then defeat the forge's "
+                 "guardians without falling.",
+      request="Ironfoe in your hand, the hilt on the Black Anvil. And stay standing, $N.",
       reward="The blade is whole again. It sings, just like I remember.",
       kills=[], items=[(LINKEN_SHARD_BOUND_HILT, 1)], reward_item=LINKEN_SWORD_ENTRY, rep=(0, 0))

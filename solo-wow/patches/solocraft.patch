@@ -1757,10 +1757,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..09301816f
+index 000000000..8fbd89bb5
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4696 @@
+@@ -0,0 +1,4827 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1861,6 +1861,12 @@ index 000000000..09301816f
 +        std::vector<ObjectGuid> bgSoldiers;
 +        ObjectGuid bgGuards[8];
 +        ObjectGuid bgBoss[2];                           // the base champions: [0] Alliance, [1] Horde
++        // Reforged in the Black Anvil: the forge's guardians, called when the hammering ends
++        std::vector<ObjectGuid> forgeGuardians;
++        bool forgeTrial = false;                        // fighting them; dying fails the quest
++        uint32 forgeInstance = 0;
++        int8 ironfoeHeld = -1;                          // Ironfoe in hand when the anvil was last shown
++        bool forgeBagsTold = false;
 +        std::unordered_map<uint64, uint32> bgMight;     // Warsong Gulch: the flags each soldier is stronger by
 +        uint32 bgMightTold[2] = { 0, 0 };               // the captures already announced, per side
 +        uint32 bgGuardDeadAt[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -2205,6 +2211,27 @@ index 000000000..09301816f
 +    if (scaled - whole > 0.0f && roll_chance_f((scaled - whole) * 100.0f))
 +        ++whole;
 +    return whole;
++}
++
++float ZeldaInstanceHealthRate(Creature const* creature)
++{
++    // Inside dungeons and raids the enemies have twice their health (Zelda.InstanceHealthRate) and the
++    // bosses three times (Zelda.InstanceBossHealthRate); companions, pets and our own creatures keep theirs
++    static float const enemyRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.InstanceHealthRate", 2.0f));
++    static float const bossRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.InstanceBossHealthRate", 3.0f));
++    Map const* map = creature ? creature->GetMap() : nullptr;
++    if (!map || !map->IsDungeon() || creature->IsPet() || creature->GetEntry() >= 190000 ||
++        creature->GetOwnerGuid().IsPlayer())
++        return 1.0f;
++    CreatureInfo const* info = creature->GetCreatureInfo();
++    // (the template's faction: SelectLevel runs before the creature's own faction is set)
++    FactionTemplateEntry const* faction = sFactionTemplateStore.LookupEntry(info->Faction);
++    if (!faction || !faction->IsHostileToPlayers())
++        return 1.0f;
++    // a boss: a world boss, one with a boss script, or a five-player dungeon's elite with a boss's health
++    bool const boss = info->Rank == CREATURE_ELITE_WORLDBOSS || creature->GetScriptName().rfind("boss_", 0) == 0 ||
++                      (!map->IsRaid() && info->Rank != CREATURE_ELITE_NORMAL && info->HealthMultiplier >= 4.0f);
++    return boss ? bossRate : enemyRate;
 +}
 +
 +uint32 ZeldaDungeonXP(uint32 xp)
@@ -3031,6 +3058,7 @@ index 000000000..09301816f
 +static void ZeldaDoneQuests(Player* player);
 +static void ZeldaUnderWorldRescue(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
++static void ZeldaForgeTrial(Player* player, ZeldaState& state);
 +
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
@@ -3055,6 +3083,7 @@ index 000000000..09301816f
 +    ArenaUpdate(player, state, diff);
 +    ZeldaEnemyMechanics(player, state);
 +    ZeldaSoloBattleground(player, state, diff);
++    ZeldaForgeTrial(player, state);
 +
 +    // the dungeon clear bar under the minimap: sent when it changes, looked at twice a second
 +    if (player->IsInWorld() && !player->IsBeingTeleported())
@@ -4304,6 +4333,18 @@ index 000000000..09301816f
 +    uint32 const GO_BLACK_ANVIL = 191170;
 +    uint32 const ITEM_SHARD_BOUND_HILT = 190534;
 +    uint32 const SPELL_REFORGING = 40021;           // 30 seconds of hammering (build_mastery.py)
++    uint32 const ITEM_IRONFOE = 11684;              // the anvil answers only to Ironfoe in hand
++    uint32 const FORGE_GUARDIANS[2] = { 8911, 8903 };   // Fireguard Destroyer, Anvilrage Captain: five each
++    uint32 const FORGE_GUARDIAN_COUNT = 5;
++
++    bool IronfoeInHand(Player const* player)
++    {
++        for (uint8 slot : { EQUIPMENT_SLOT_MAINHAND, EQUIPMENT_SLOT_OFFHAND })
++            if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
++                if (item->GetEntry() == ITEM_IRONFOE)
++                    return true;
++        return false;
++    }
 +    uint32 const FIRST_DUNGEON_SHARD = 191100, LAST_DUNGEON_SHARD = 191123;     // shards.py, raids excluded
 +}
 +
@@ -4334,14 +4375,15 @@ index 000000000..09301816f
 +{
 +    // Reforged in the Black Anvil can be finished now: on the quest, the hilt in the bags, room for the
 +    // sword (told to the hero when not)
-+    Quest const* ReforgeReady(Player* player)
++    Quest const* ReforgeReady(Player* player, bool tell = true)
 +    {
 +        Quest const* quest = sObjectMgr.GetQuestTemplate(QUEST_BLACK_ANVIL);
 +        if (!quest || player->GetQuestStatus(QUEST_BLACK_ANVIL) != QUEST_STATUS_INCOMPLETE)
 +            return nullptr;
 +        if (!player->HasItemCount(ITEM_SHARD_BOUND_HILT, 1))
 +        {
-+            player->GetSession()->SendNotification("You need the Shard-Bound Hilt.");
++            if (tell)
++                player->GetSession()->SendNotification("You need the Shard-Bound Hilt.");
 +            return nullptr;
 +        }
 +        for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
@@ -4350,7 +4392,8 @@ index 000000000..09301816f
 +            if (quest->RewItemId[i] &&
 +                player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewItemId[i], quest->RewItemCount[i]) != EQUIP_ERR_OK)
 +            {
-+                player->GetSession()->SendNotification("Your bags are full.");
++                if (tell)
++                    player->GetSession()->SendNotification("Your bags are full.");
 +                return nullptr;
 +            }
 +        }
@@ -4358,13 +4401,23 @@ index 000000000..09301816f
 +    }
 +}
 +
++bool ZeldaGameObjectAwake(Player* player, GameObject const* go)
++{
++    return !player || !go || go->GetEntry() != GO_BLACK_ANVIL || IronfoeInHand(player);
++}
++
 +bool ZeldaGameObjectUse(Player* player, GameObject* go)
 +{
 +    if (!player || !go || go->GetEntry() != GO_BLACK_ANVIL)
 +        return false;
-+    // thirty seconds of hammering on the anvil (the cast's end forges the sword: ZeldaSpellFinished);
-+    // moving or being struck stops it
-+    if (player->IsNonMeleeSpellCasted(false) || !ReforgeReady(player))
++    if (!IronfoeInHand(player))
++    {
++        player->GetSession()->SendNotification("The Black Anvil answers only to Ironfoe. Wield it.");
++        return true;
++    }
++    // thirty seconds of hammering on the anvil (the cast's end calls the forge's guardians:
++    // ZeldaSpellFinished); moving or being struck stops it
++    if (StateFor(player).forgeTrial || player->IsNonMeleeSpellCasted(false) || !ReforgeReady(player))
 +        return true;
 +    if (SpellEntry const* reforging = sSpellTemplate.LookupEntry<SpellEntry>(SPELL_REFORGING))
 +    {
@@ -4381,11 +4434,89 @@ index 000000000..09301816f
 +    if (!spell || spell->m_spellInfo->Id != SPELL_REFORGING || !spell->GetCaster() || !spell->GetCaster()->IsPlayer())
 +        return;
 +    Player* player = static_cast<Player*>(spell->GetCaster());
-+    if (Quest const* quest = ReforgeReady(player))
++    ZeldaState& state = StateFor(player);
++    if (state.forgeTrial || !ReforgeReady(player))
++        return;
++    // the forge's guardians answer the hammer: five fire elementals and five Dark Iron captains in a
++    // ring around the anvil; the blade is the hero's once they all fall (ZeldaForgeTrial)
++    state.forgeGuardians.clear();
++    for (uint32 n = 0; n < 2 * FORGE_GUARDIAN_COUNT; ++n)
 +    {
++        float const angle = float(n) * float(M_PI) * 2.0f / float(2 * FORGE_GUARDIAN_COUNT);
++        float const dist = frand(9.0f, 13.0f);
++        float x = player->GetPositionX() + dist * std::cos(angle);
++        float y = player->GetPositionY() + dist * std::sin(angle);
++        float z = player->GetPositionZ();
++        player->UpdateAllowedPositionZ(x, y, z);
++        if (Creature* c = player->SummonCreature(FORGE_GUARDIANS[n % 2], x, y, z, angle + float(M_PI),
++                                                 TEMPSPAWN_CORPSE_TIMED_DESPAWN, 60000))
++        {
++            if (c->AI())
++                c->AI()->AttackStart(player);
++            c->AddThreat(player, 100.0f);
++            state.forgeGuardians.push_back(c->GetObjectGuid());
++        }
++    }
++    state.forgeTrial = true;
++    state.forgeBagsTold = false;
++    state.forgeInstance = player->GetInstanceId();
++    player->GetSession()->SendAreaTriggerMessage("|cffff4040The forge's guardians answer the hammer! Defeat them all to claim the blade - if you fall, it is lost.|r");
++}
++
++static void ZeldaForgeTrial(Player* player, ZeldaState& state)
++{
++    // the anvil shows itself only to Ironfoe in hand: tell the client again when that changes
++    if (player->IsInWorld() && player->GetQuestStatus(QUEST_BLACK_ANVIL) == QUEST_STATUS_INCOMPLETE)
++    {
++        int8 const held = IronfoeInHand(player) ? 1 : 0;
++        if (held != state.ironfoeHeld)
++        {
++            state.ironfoeHeld = held;
++            player->UpdateForQuestWorldObjects();
++        }
++    }
++    if (!state.forgeTrial)
++        return;
++    auto despawn = [&]()
++    {
++        if (player->IsInWorld())
++            for (ObjectGuid const& guid : state.forgeGuardians)
++                if (Creature* c = player->GetMap()->GetAnyTypeCreature(guid))
++                    if (c->IsAlive())
++                        c->ForcedDespawn();
++        state.forgeGuardians.clear();
++        state.forgeTrial = false;
++    };
++    // falling, or leaving the depths, loses the blade: the quest fails
++    if (!player->IsAlive() || !player->IsInWorld() || player->GetInstanceId() != state.forgeInstance)
++    {
++        despawn();
++        if (player->GetQuestStatus(QUEST_BLACK_ANVIL) == QUEST_STATUS_INCOMPLETE)
++        {
++            player->FailQuest(QUEST_BLACK_ANVIL);
++            player->GetSession()->SendAreaTriggerMessage("|cffff4040The forge claims the blade. Reforged in the Black Anvil has failed - abandon it and ask Linken again.|r");
++        }
++        return;
++    }
++    for (ObjectGuid const& guid : state.forgeGuardians)
++        if (Creature* c = player->GetMap()->GetAnyTypeCreature(guid))
++            if (c->IsAlive())
++                return;
++    // all of them fell: the blade is the hero's (waiting for room in the bags if need be)
++    if (Quest const* quest = ReforgeReady(player, false))
++    {
++        despawn();
 +        player->CompleteQuest(QUEST_BLACK_ANVIL);
 +        player->RewardQuest(quest, 0, player, true);
-+        player->GetSession()->SendAreaTriggerMessage("|cffffcc33The Black Anvil roars to life - Linken's blade is reforged!|r");
++        player->GetSession()->SendAreaTriggerMessage("|cffffcc33The forge falls silent - Linken's blade is reforged!|r");
++    }
++    else if (player->GetQuestStatus(QUEST_BLACK_ANVIL) != QUEST_STATUS_INCOMPLETE ||
++             !player->HasItemCount(ITEM_SHARD_BOUND_HILT, 1))
++        despawn();
++    else if (!state.forgeBagsTold)
++    {
++        state.forgeBagsTold = true;
++        player->GetSession()->SendNotification("Your bags are full - make room for the blade.");
 +    }
 +}
 +
@@ -6459,10 +6590,10 @@ index 000000000..09301816f
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..c6d7a5fab
+index 000000000..3d05ae606
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,284 @@
+@@ -0,0 +1,288 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6599,6 +6730,8 @@ index 000000000..c6d7a5fab
 +int32 ZeldaRageGain(int32 gain);
 +// Zelda of Warcraft: experience for a kill inside a dungeon or raid, scaled by Zelda.DungeonXPRate (0.5).
 +uint32 ZeldaDungeonXP(uint32 xp);
++// Health of a creature in a dungeon or raid: x2 for its enemies, x3 for its bosses
++float ZeldaInstanceHealthRate(Creature const* creature);
 +// Zelda of Warcraft: Execute needs the target under 20% health unless the warrior's rage is full
 +// (Zelda.FullRageExecute = 1). True when this cast must be refused.
 +// Zelda of Warcraft: dungeon clears (zelda_dungeon_clear): enemies stay dead, the bar under the
@@ -6643,6 +6776,8 @@ index 000000000..c6d7a5fab
 +void ZeldaQuestExtraTake(Player* player, uint32 questId);
 +// A goober whose use the core handles (the Black Anvil forging the Sword of Mastery): true if handled
 +bool ZeldaGameObjectUse(Player* player, GameObject* go);
++// Whether a quest object shows itself to the hero (the Black Anvil only to Ironfoe in hand)
++bool ZeldaGameObjectAwake(Player* player, GameObject const* go);
 +// Warsong Gulch: using a flag stand starts a ten-second Opening cast (true: don't take it yet); the
 +// cast's end uses the stand again with the spell, which takes the flag
 +bool ZeldaFlagTaking(Player* player, GameObject* flag, SpellEntry const* spellInfo);
@@ -6772,7 +6907,7 @@ index 06567441e..40ccbe604 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb08..d8b659c09 100644
+index a10fdbb08..a9f62bbd9 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -6895,16 +7030,17 @@ index a10fdbb08..d8b659c09 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1473,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1473,8 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
 -    health *= _GetHealthMod(rank); // Apply custom config setting
 +    health *= _GetHealthMod(rank) * SoloCraftFactor(this, true); // Apply custom config setting + SoloCraft
++    health *= ZeldaInstanceHealthRate(this);         // Zelda of Warcraft: dungeon and raid enemies x2, bosses x3
      if (health < 1)
          health = 1;
  
-@@ -1875,6 +1934,9 @@ void Creature::SetDeathState(DeathState s)
+@@ -1875,6 +1935,9 @@ void Creature::SetDeathState(DeathState s)
          else if (m_respawnOverrideOnce)
              m_respawnOverriden = false;
  
@@ -6914,7 +7050,7 @@ index a10fdbb08..d8b659c09 100644
          if (m_settings.HasFlag(CreatureStaticFlags3::FOREVER_CORPSE_DURATION))
              m_corpseExpirationTime = GetMap()->GetCurrentClockTime() + std::chrono::hours(24*7);
          else
-@@ -2125,6 +2187,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -2125,6 +2188,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
@@ -6938,7 +7074,7 @@ index a378c4e1e..f53dd6559 100644
 +
  #endif
 diff --git a/src/game/Entities/GameObject.cpp b/src/game/Entities/GameObject.cpp
-index 043cad6ef..a6be9990a 100644
+index 043cad6ef..9da131fa5 100644
 --- a/src/game/Entities/GameObject.cpp
 +++ b/src/game/Entities/GameObject.cpp
 @@ -17,6 +17,7 @@
@@ -6963,7 +7099,18 @@ index 043cad6ef..a6be9990a 100644
      else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
          outdoorPvP->HandleGameObjectCreate(this);
  
-@@ -1498,6 +1503,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1168,6 +1173,10 @@ void GameObject::Respawn()
+ 
+ bool GameObject::ActivateToQuest(Player* pTarget) const
+ {
++    // Zelda of Warcraft: the Black Anvil wakes only to Ironfoe in hand
++    if (!ZeldaGameObjectAwake(pTarget, this))
++        return false;
++
+     // if GO is ReqCreatureOrGoN for quest
+     if (pTarget->HasQuestForGO(GetEntry()))
+         return true;
+@@ -1498,6 +1507,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
      {
          case GAMEOBJECT_TYPE_DOOR:                          // 0
          {
@@ -6974,7 +7121,7 @@ index 043cad6ef..a6be9990a 100644
              // doors never really despawn, only reset to default state/flags
              UseDoorOrButton();
  
-@@ -1643,6 +1652,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1643,6 +1656,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
              if (!info)
                  return;
  
@@ -6985,7 +7132,7 @@ index 043cad6ef..a6be9990a 100644
              // exception - 180619 - ossirian crystal - supposed to be kept from despawning by a pending spellcast - to be implemented, done in db for now
  
              TriggerLinkedGameObject(user);
-@@ -1787,7 +1800,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1787,7 +1804,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                          // TODO: find reasonable value for fishing hole search
                          fishingHole = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
  
@@ -6996,7 +7143,7 @@ index 043cad6ef..a6be9990a 100644
  
                      // fish catch or fail and junk allowed (after 3.1.0)
                      if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
-@@ -1961,6 +1976,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1961,6 +1980,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
  
              if (player->CanUseBattleGroundObject())
              {
