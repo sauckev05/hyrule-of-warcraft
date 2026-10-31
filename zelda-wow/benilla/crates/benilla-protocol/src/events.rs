@@ -353,6 +353,9 @@ pub enum SessionEvent {
     ReputationDelta { standings: Vec<(u32, i32)> },
     /// `SMSG_SET_FACTION_VISIBLE`: sets the slot's visible flag, which decides if it is listed.
     ReputationVisible { list_id: u32 },
+    /// `SMSG_SET_FORCED_REACTIONS`: the full set of `(Faction.dbc id, rank)` reactions forced on
+    /// the player, standing aside (the Azeroth Solo server makes the other side friendly).
+    ForcedReactions { reactions: Vec<(u32, u32)> },
     /// `SMSG_NAME_QUERY_RESPONSE`: names are never descriptor fields in 1.12, only query answers.
     /// An unknown guid answers with an empty `name`.
     PlayerName {

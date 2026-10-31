@@ -300,6 +300,10 @@ pub enum ServerPacket {
     SetFactionVisible {
         list_id: u32,
     },
+    /// `SMSG_SET_FORCED_REACTIONS`: `(Faction.dbc id, rank)` per forced faction; the whole set.
+    SetForcedReactions {
+        reactions: Vec<(u32, u32)>,
+    },
     /// `SMSG_NAME_QUERY_RESPONSE`: guid, name, realm (empty on one realm), race/gender/class as
     /// `u32`s (`NameQueryResponse::AppendBodyTo`); an unknown guid gets an empty name.
     NameQueryResponse {
@@ -1328,6 +1332,7 @@ impl ServerPacket {
             ServerPacket::InitializeFactions { .. } => "SMSG_INITIALIZE_FACTIONS".into(),
             ServerPacket::SetFactionStanding { .. } => "SMSG_SET_FACTION_STANDING".into(),
             ServerPacket::SetFactionVisible { .. } => "SMSG_SET_FACTION_VISIBLE".into(),
+            ServerPacket::SetForcedReactions { .. } => "SMSG_SET_FORCED_REACTIONS".into(),
             ServerPacket::NameQueryResponse { .. } => "SMSG_NAME_QUERY_RESPONSE".into(),
             ServerPacket::CreatureQueryResponse { .. } => "SMSG_CREATURE_QUERY_RESPONSE".into(),
             ServerPacket::PetNameQueryResponse { .. } => "SMSG_PET_NAME_QUERY_RESPONSE".into(),

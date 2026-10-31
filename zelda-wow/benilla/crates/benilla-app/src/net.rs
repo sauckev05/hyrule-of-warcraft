@@ -591,6 +591,28 @@ pub(crate) fn send_query_time(
 #[derive(Resource, Default)]
 pub(crate) struct Reputations(pub(crate) Vec<(u8, i32)>);
 
+/// `SMSG_SET_FORCED_REACTIONS`: `Faction.dbc` id -> the reputation rank forced on the player,
+/// which overrides the standing and the template comparator (the reference's `0x4d6490`). The
+/// Azeroth Solo server forces the other side's factions friendly. One session at a time, so a
+/// process-wide table; the reaction legs ([`crate::target::ring`]) read it.
+static FORCED_REACTIONS: std::sync::RwLock<Vec<(u32, u8)>> = std::sync::RwLock::new(Vec::new());
+
+/// Replace the forced reactions with the server's full set.
+pub(crate) fn set_forced_reactions(reactions: &[(u32, u32)]) {
+    if let Ok(mut forced) = FORCED_REACTIONS.write() {
+        *forced = reactions
+            .iter()
+            .map(|&(faction, rank)| (faction, rank.min(7) as u8))
+            .collect();
+    }
+}
+
+/// The rank forced on the player toward a `Faction.dbc` faction, if the server forced one.
+pub(crate) fn forced_reaction(faction: u32) -> Option<u8> {
+    let forced = FORCED_REACTIONS.read().ok()?;
+    forced.iter().find(|&&(f, _)| f == faction).map(|&(_, rank)| rank)
+}
+
 /// The hearthstone bind point (`SMSG_BINDPOINTUPDATE`): the AreaTable id the tooltip's `$z`
 /// token names.
 #[derive(Resource, Default)]

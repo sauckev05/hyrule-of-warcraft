@@ -469,6 +469,10 @@ pub(crate) fn ring_reaction(
         let catalog = &factions?.0;
         let self_store = self_store?;
         let target_tpl = catalog.template(target_store?.0.unit_faction_template()?)?;
+        // A reaction the server forced (`SMSG_SET_FORCED_REACTIONS`) outranks the standing.
+        if let Some(rank) = crate::net::forced_reaction(target_tpl.faction) {
+            return Some(rank);
+        }
         // A reputation faction: our rank with it.
         if let Some(info) = catalog.reputation_faction(target_tpl.faction) {
             let standing = reputations
@@ -574,6 +578,14 @@ pub(crate) fn reaction_from_player(
     let resolved = (|| {
         let catalog = &factions?.0;
         let target_tpl = catalog.template(target_store?.0.unit_faction_template()?)?;
+        // A forced reaction (`0x4d6490`): friendly from Friendly up, hostile below Neutral.
+        if let Some(rank) = crate::net::forced_reaction(target_tpl.faction) {
+            return Some(match rank {
+                0..=2 => Reaction::Hostile as u8,
+                3 => Reaction::Neutral as u8,
+                _ => Reaction::Friendly as u8,
+            });
+        }
         // Leg 3: a reputation faction answers by the at-war bit alone.
         if let Some(at_war) = at_war_with(catalog, reputations, target_tpl.faction) {
             return Some(if at_war {

@@ -1130,6 +1130,17 @@ fn parse_server_body(
         opcode::SMSG_SET_FACTION_VISIBLE => ServerPacket::SetFactionVisible {
             list_id: read_u32_le(&mut r)?,
         },
+        opcode::SMSG_SET_FORCED_REACTIONS => {
+            let count = read_u32_le(&mut r)?;
+            let mut reactions =
+                Vec::with_capacity(capacity_hint(count, super::reputation::FACTION_LIST_LEN));
+            for _ in 0..count {
+                let faction = read_u32_le(&mut r)?;
+                let rank = read_u32_le(&mut r)?;
+                reactions.push((faction, rank));
+            }
+            ServerPacket::SetForcedReactions { reactions }
+        }
         opcode::SMSG_NAME_QUERY_RESPONSE => {
             let guid = read_u64_le(&mut r)?;
             let name = read_cstring(&mut r)?;

@@ -47,6 +47,7 @@ pub(super) fn register(app: &mut App) {
         .net_handler(K::Reputations, on_reputations)
         .net_handler(K::ReputationDelta, on_reputation_delta)
         .net_handler(K::ReputationVisible, on_reputations)
+        .net_handler(K::ForcedReactions, on_forced_reactions)
         .net_handler(K::BindPoint, on_player_store)
         .net_handler(K::Proficiency, on_player_store)
         .net_handler(K::PacketDropped, on_packet_dropped)
@@ -266,6 +267,13 @@ fn on_clock(In(ev): In<SessionEvent>, mut b: Bridge) {
             server_unix_time(unix_time, &mut b.wall_clock)
         }
         _ => {}
+    }
+}
+
+fn on_forced_reactions(In(ev): In<SessionEvent>) {
+    if let SessionEvent::ForcedReactions { reactions } = ev {
+        info!("net: {} forced faction reactions", reactions.len());
+        crate::net::set_forced_reactions(&reactions);
     }
 }
 
