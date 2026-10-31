@@ -223,10 +223,10 @@ index 91c212e50..118ca42a3 100644
              m_uiSummonPatientTimer -= uiDiff;
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 000000000..c5ab9777b
+index 000000000..aff244167
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,1265 @@
+@@ -0,0 +1,1278 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -500,6 +500,7 @@ index 000000000..c5ab9777b
 +        ACTION_FOLLOW   = GOSSIP_ACTION_INFO_DEF + 2,
 +        ACTION_DISMISS  = GOSSIP_ACTION_INFO_DEF + 3,
 +        ACTION_RESCUE   = GOSSIP_ACTION_INFO_DEF + 4,
++        ACTION_RESET_INSTANCES = GOSSIP_ACTION_INFO_DEF + 5,     // Navi: every dungeon and raid starts over
 +    };
 +
 +    float const FOLLOW_DIST = 2.5f;
@@ -1333,12 +1334,24 @@ index 000000000..c5ab9777b
 +    if (creature->isQuestGiver())
 +        player->PrepareQuestMenu(creature->GetObjectGuid());
 +    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Who are you, little light?", GOSSIP_SENDER_MAIN, ACTION_ABOUT);
++    player->ADD_GOSSIP_ITEM_EXTENDED(GOSSIP_ICON_INTERACT_1, "Navi, reset all the dungeons and raids.", GOSSIP_SENDER_MAIN,
++                                     ACTION_RESET_INSTANCES, "Every dungeon and raid will start over, its enemies back. Are you sure?", 0, false);
 +    player->SEND_GOSSIP_MENU(NAVI_TEXT_GREETING, creature->GetObjectGuid());
 +    return true;
 +}
 +
 +bool GossipSelect_npc_zelda_navi(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
 +{
++    if (action == ACTION_RESET_INSTANCES)
++    {
++        player->CLOSE_GOSSIP_MENU();
++        std::string why;
++        if (ZeldaResetAllInstances(player, why))
++            creature->MonsterSay("Hey! Listen! Okay... *whoosh* ...done! Every dungeon and raid is just like new!", LANG_UNIVERSAL, player);
++        else
++            creature->MonsterSay(why.c_str(), LANG_UNIVERSAL, player);
++        return true;
++    }
 +    if (action != ACTION_ABOUT)
 +        return false;
 +    player->SEND_GOSSIP_MENU(NAVI_TEXT_ABOUT, creature->GetObjectGuid());
@@ -1757,10 +1770,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..964627495
+index 000000000..001c519f8
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,4996 @@
+@@ -0,0 +1,5027 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5813,7 +5826,7 @@ index 000000000..964627495
 +
 +void ZeldaWorldThreadUpdate(Player* player)
 +{
-+    static bool const resetOnLeave = sConfig.GetBoolDefault("Zelda.ResetDungeonsOnLeave", true);
++    static bool const resetOnLeave = sConfig.GetBoolDefault("Zelda.ResetDungeonsOnLeave", false);
 +    if (!player || !player->IsInWorld() || player->IsBeingTeleported())
 +        return;
 +    ZeldaState& state = StateFor(player);
@@ -5822,6 +5835,37 @@ index 000000000..964627495
 +    state.pendingDungeonReset = false;
 +    if (resetOnLeave && !state.inDungeonMap && !player->GetMap()->IsDungeon() && !player->GetGroup())
 +        player->ResetInstances(INSTANCE_RESET_ALL);
++}
++
++bool ZeldaNeverResetInstances()
++{
++    // dungeons and raids keep their state - leaving, logging out, the weekly reset - until Navi resets
++    // them (ZeldaResetAllInstances)
++    static bool const never = sConfig.GetBoolDefault("Zelda.NeverResetInstances", true);
++    return never;
++}
++
++bool ZeldaResetAllInstances(Player* player, std::string& why)
++{
++    if (!player)
++        return false;
++    if (player->GetMap()->IsDungeon())
++    {
++        why = "Hey! We have to leave the dungeon first!";
++        return false;
++    }
++    if (player->GetGroup())
++    {
++        why = "Not while you're in a group!";
++        return false;
++    }
++    // the five-player dungeons the usual way (it tells the hero each one that resets), then every bind
++    // left - the raids - dropped, so the next visit is a fresh instance
++    player->ResetInstances(INSTANCE_RESET_ALL);
++    Player::BoundInstancesMap& binds = player->GetBoundInstances();
++    for (auto itr = binds.begin(); itr != binds.end();)
++        player->UnbindInstance(itr, true);
++    return true;
 +}
 +
 +bool ZeldaDungeonRelease(Player* player)
@@ -6759,10 +6803,10 @@ index 000000000..964627495
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..e976ba4fc
+index 000000000..513f5a822
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,299 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -6939,6 +6983,9 @@ index 000000000..e976ba4fc
 +bool ZeldaBuyBackSold(Player* player, uint32 id, std::string& why);
 +// Zelda of Warcraft: battlegrounds for one hero, with armies of elite soldiers (Zelda.SoloBattlegrounds)
 +bool ZeldaSoloBattlegrounds();
++// Dungeons and raids never reset by themselves (Zelda.NeverResetInstances); Navi resets them all
++bool ZeldaNeverResetInstances();
++bool ZeldaResetAllInstances(Player* player, std::string& why);
 +// Quests that ask for more items than the quest log's four (Linken's dungeon shards): is this item
 +// one of a quest's extra items, are they all in the bags, and take them on the reward
 +bool ZeldaQuestExtraItem(uint32 questId, uint32 itemEntry);
@@ -8255,6 +8302,51 @@ index 13896f973..c574abdfb 100644
  }
  
  void Map::InitVisibilityDistance()
+diff --git a/src/game/Maps/MapPersistentStateMgr.cpp b/src/game/Maps/MapPersistentStateMgr.cpp
+index 9634ef89d..f2c406a08 100644
+--- a/src/game/Maps/MapPersistentStateMgr.cpp
++++ b/src/game/Maps/MapPersistentStateMgr.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "Maps/MapPersistentStateMgr.h"
++#include "Chat/ZeldaCommands.h"
+ 
+ #include "Server/SQLStorages.h"
+ #include "Entities/Player.h"
+@@ -457,7 +458,9 @@ void DungeonResetScheduler::LoadResetTimes()
+ 
+     // clean expired instances, references to them will be deleted in CleanupInstances
+     // must be done before calculating new reset times
+-    m_InstanceSaves._CleanupExpiredInstancesAtTime(now);
++    // (Zelda of Warcraft: none expire - Navi resets them)
++    if (!ZeldaNeverResetInstances())
++        m_InstanceSaves._CleanupExpiredInstancesAtTime(now);
+ 
+     // calculate new global reset times for expired instances and those that have never been reset yet
+     // add the global reset times to the priority queue
+@@ -546,15 +549,18 @@ void DungeonResetScheduler::Update()
+         if (event.type == RESET_EVENT_NORMAL_DUNGEON)
+         {
+             // for individual normal instances, max creature respawn + X hours
+-            m_InstanceSaves._ResetInstance(event.mapid, event.instanceId);
++            // (Zelda of Warcraft: not at all - Navi resets them)
++            if (!ZeldaNeverResetInstances())
++                m_InstanceSaves._ResetInstance(event.mapid, event.instanceId);
+         }
+         else
+         {
+-            // global reset/warning for a certain map
++            // global reset/warning for a certain map (Zelda of Warcraft: the timer runs on, nothing resets)
+             time_t resetTime = GetResetTimeFor(event.mapid);
+             uint32 timeLeft = uint32(std::max(int32(resetTime - now), 0));
+             bool warn = event.type != RESET_EVENT_INFORM_LAST && event.type != RESET_EVENT_FORCED_INFORM_LAST;
+-            m_InstanceSaves._ResetOrWarnAll(event.mapid, warn, timeLeft);
++            if (!ZeldaNeverResetInstances())
++                m_InstanceSaves._ResetOrWarnAll(event.mapid, warn, timeLeft);
+             if (event.type != RESET_EVENT_INFORM_LAST && event.type != RESET_EVENT_FORCED_INFORM_LAST)
+             {
+                 // schedule the next warning/reset
 diff --git a/src/game/MotionGenerators/MotionMaster.cpp b/src/game/MotionGenerators/MotionMaster.cpp
 index 68dc674d6..d91ad2bff 100644
 --- a/src/game/MotionGenerators/MotionMaster.cpp

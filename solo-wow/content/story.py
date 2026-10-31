@@ -520,7 +520,7 @@ quest(id=90302, level=15, min=11, kind='dungeon', zone=14, giver=190301, ender=1
              "to please a buried elemental lord. ...I need to hit something. Not you. Something.",
       kills=[(11520, 1, None), (11519, 1, None)], items=[(190521, 1)], rep=(76, 250))
 
-quest(id=90309, level=50, min=50, kind='dungeon', zone=1337, giver=190302, ender=190302, prev=90416,
+quest(id=90309, level=46, min=45, kind='dungeon', zone=1337, giver=190302, ender=190302, prev=90416,
       title='The Earth Remembers',
       details="So the dead girl sent you. Fine. She's strange, but she's right - the elements are screaming "
               "everywhere at once, and it's not just fire.$B$BStart with the earth. In the Badlands there's a "
@@ -536,7 +536,7 @@ quest(id=90309, level=50, min=50, kind='dungeon', zone=1337, giver=190302, ender
              "Let's see what they know.",
       kills=[(2748, 1, None)], items=[], rep=(76, 350), next=90308)
 
-quest(id=90308, level=51, min=50, kind='dungeon', zone=1176, giver=190302, ender=190302, prev=90309,
+quest(id=90308, level=48, min=45, kind='dungeon', zone=1176, giver=190302, ender=190302, prev=90309,
       title='Sand and Blood',
       details="Zul'Farrak. The Sandfury trolls in Tanaris have been sacrificing prisoners to bind elemental "
               "spirits into their idols - their witch doctor Zum'rah raises the dead to guard them, and Chief "
@@ -551,7 +551,7 @@ quest(id=90308, level=51, min=50, kind='dungeon', zone=1176, giver=190302, ender
              "is shaking the whole world at once.",
       kills=[(7271, 1, None), (7267, 1, None)], items=[], rep=(76, 350), next=90303)
 
-quest(id=90303, level=52, min=50, kind='dungeon', zone=2100, giver=190302, ender=190302, prev=90308,
+quest(id=90303, level=50, min=45, kind='dungeon', zone=2100, giver=190302, ender=190302, prev=90308,
       title='Earth That Weeps',
       details="I've been training. Grimtusk says I'm 'less on fire'. I think that's a compliment.$B$BThe "
               "Earthen Ring sent word: the earth is sick here in Desolace. Princess Theradras, daughter of the "
@@ -736,7 +736,7 @@ quest(id=90403, level=45, min=40, kind='dungeon', zone=722, giver=190402, ender=
              "polite. Right up until the end.",
       kills=[(7358, 1, None)], items=[(190532, 1)], reward_item=191161, rep=(68, 350), next=90416)
 
-quest(id=90416, level=50, min=50, kind='', zone=405, giver=190402, ender=190302, prev=90403,
+quest(id=90416, level=45, min=45, kind='', zone=405, giver=190402, ender=190302, prev=90403,
       title='The Shaman Who Shouts at Fire',
       details="Before I go hunting liches, there is a debt to pay. Your huntress friend asked me to look into "
               "something: the elements themselves are screaming, all over Kalimdor, and the dead hear it too.$B$B"

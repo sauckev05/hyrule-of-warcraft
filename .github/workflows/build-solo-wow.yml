@@ -322,7 +322,8 @@ jobs:
           $c += 'Zelda.AutoSellWhiteGear = 1'
           $c += 'Zelda.DungeonReleaseAtEntrance = 1'
           $c += 'Zelda.DungeonReleaseHealth = 0.05'
-          $c += 'Zelda.ResetDungeonsOnLeave = 1'
+          $c += 'Zelda.ResetDungeonsOnLeave = 0'
+          $c += 'Zelda.NeverResetInstances = 1'
           $c += 'Zelda.HeartPieceChance = 15'
           Set-Content $m.FullName $c
           # Single player: no anticheat or Warden (also required by the Benilla client)
