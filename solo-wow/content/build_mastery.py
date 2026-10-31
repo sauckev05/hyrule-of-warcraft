@@ -52,6 +52,11 @@ WARHORSE_LOOK, WARHORSE_NPC, WARHORSE_SPELL, WAR_STEED_BRIDLE = 8469, 9158, 1381
 VANQUISHER_SMITE = 40020
 HOLY_SMITE, HOLY_SMITE_VISUAL = 13519, 128
 SMITE_IMPACT_VISUAL = 7892          # SpellVisual, after the stock 7891
+# Navi's Light: the priest's Resurrection visual (41) with only its impact, so the hero is raised in
+# the light as if by a priest instead of playing a cast while lying dead
+RESURRECTION_VISUAL, REVIVED_VISUAL = 41, 7893
+# SpellVisuals of our own: {new id: the stock visual it is, without its precast and cast kits}
+IMPACT_ONLY_VISUALS = {SMITE_IMPACT_VISUAL: HOLY_SMITE_VISUAL, REVIVED_VISUAL: RESURRECTION_VISUAL}
 # Reforged in the Black Anvil (story.py): using the anvil starts a 30-second blacksmithing cast - Copper
 # Bracers' hammering at the anvil (SpellVisual 395), without its hammer, anvil, bars or bracers - and
 # its end completes the quest (ZeldaCommands.cpp, ZeldaGameObjectUse / ZeldaSpellFinished)
@@ -96,7 +101,7 @@ SPELLS = [
     # Navi's revive (ZeldaCommands.cpp, ZeldaNaviResurrection): a soulstone-style self resurrection that
     # brings you back with 10% of your health and mana, in a priest's resurrection light
     (40009, 3026, "Navi's Light", "Navi's light brings you back to life with 10% of your health and mana.",
-     dict(EffectBasePoints1=9, SpellVisual=41, SpellIconID=121)),
+     dict(EffectBasePoints1=9, SpellVisual=REVIVED_VISUAL, SpellIconID=121)),
     # a mana potion's mana as an absorb shield (ZeldaManaPotionShield); the core sets the amount
     (40010, 23506, 'Potion Shield', 'Absorbs $s1 damage.  Lasts $d.', dict(tooltip='Absorbs $s1 damage.')),
     # the enemies' telegraphed attacks (ZeldaEnemyMechanics): a two-second windup whose dummy effect
@@ -458,14 +463,17 @@ def patch_creature_display(path):
 
 
 def patch_spell_visual(path):
-    """SpellVisual with the smite's impact-only visual: Holy Smite's, its precast and cast kits removed."""
+    """SpellVisual with our impact-only visuals (IMPACT_ONLY_VISUALS): a stock visual's row without its
+    precast and cast kits, so the caster plays nothing and only the target lights up."""
     f, rows, strings = read_dbc(path)
     assert f == 16, f
-    rows = [r for r in rows if r[0] != SMITE_IMPACT_VISUAL]
-    row = list(next(r for r in rows if r[0] == HOLY_SMITE_VISUAL))
-    row[0] = SMITE_IMPACT_VISUAL
-    row[1] = row[2] = 0                                     # PrecastKit, CastKit: the hero's casting
-    rows.append(row)
+    rows = [r for r in rows if r[0] not in IMPACT_ONLY_VISUALS]
+    byid = {r[0]: r for r in rows}
+    for new_id, source in IMPACT_ONLY_VISUALS.items():
+        row = list(byid[source])
+        row[0] = new_id
+        row[1] = row[2] = 0                                 # PrecastKit, CastKit: the caster's casting
+        rows.append(row)
     rows.sort(key=lambda r: r[0])
     return write_dbc(f, rows, strings)
 
