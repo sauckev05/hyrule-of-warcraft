@@ -342,6 +342,13 @@ def main():
                % (5400181, MIRROR_PLATE_GO, pmap, px, py, pz, po, math.sin(po / 2), math.cos(po / 2)))
     out.append('UPDATE `creature` SET `spawntimesecsmin` = 600, `spawntimesecsmax` = 600 WHERE `id` IN (12397, 6109);\n')
     out.append('UPDATE `creature_template` SET `NpcFlags` = `NpcFlags` | 2 WHERE `Entry` = %d;\n' % KING_MAGNI)
+    # Gahz'rilla waits on the shore of his pool in Zul'Farrak: no gong, no mallet, no quest. He
+    # used to rise only to the gong, unattackable until he reached the shore.
+    out.append('DELETE FROM `creature` WHERE `guid` = 5400273;\n'
+               'INSERT INTO `creature` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, '
+               '`orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `MovementType`) VALUES '
+               '(5400273, 7273, 209, 1, 1696.08, 1211.55, 8.98723, 4.05, 86400, 86400, 0, 0);\n')
+    out.append('UPDATE `creature_template` SET `UnitFlags` = `UnitFlags` & ~256 WHERE `Entry` = 7273;\n')
     # Ironfoe (the anvil answers only to it in hand): 30% from Emperor Dagran Thaurissan instead of 1%
     out.append('UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;\n')
     # Linken's story now begins with Navi: The Hero of Time leads into It's a Secret to Everybody

@@ -474,6 +474,11 @@ UPDATE `creature` SET `spawntimesecsmin` = 600, `spawntimesecsmax` = 600 WHERE `
 
 UPDATE `creature_template` SET `NpcFlags` = `NpcFlags` | 2 WHERE `Entry` = 2784;
 
+DELETE FROM `creature` WHERE `guid` = 5400273;
+INSERT INTO `creature` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `MovementType`) VALUES (5400273, 7273, 209, 1, 1696.08, 1211.55, 8.98723, 4.05, 86400, 86400, 0, 0);
+
+UPDATE `creature_template` SET `UnitFlags` = `UnitFlags` & ~256 WHERE `Entry` = 7273;
+
 UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;
 
 UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;

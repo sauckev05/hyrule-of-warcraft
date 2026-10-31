@@ -5,7 +5,7 @@
 	<Binding name="ZELDA_ROLL_LEFT">ZeldaControls_ShiftMove(".zroll l")</Binding>
 	<Binding name="ZELDA_ROLL_RIGHT">ZeldaControls_ShiftMove(".zroll r")</Binding>
 	<Binding name="ZELDA_FLIP">ZeldaControls_ShiftMove(".zflip")</Binding>
-	<Binding name="ZELDA_BOW">ZeldaControls_Command(".zbow")</Binding>
+	<Binding name="ZELDA_BOW" runOnUp="true">ZeldaControls_Bow(keystate)</Binding>
 	<Binding name="ZELDA_HOOK">ZeldaControls_Command(".zboomerang")</Binding>
 	<Binding name="ZELDA_POTION">ZeldaControls_DrinkPotion()</Binding>
 	<Binding name="ZELDA_MOUNT">ZeldaControls_Ride()</Binding>

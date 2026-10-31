@@ -10,7 +10,7 @@ BINDING_NAME_ZELDA_ROLL = "Roll forward"
 BINDING_NAME_ZELDA_ROLL_LEFT = "Roll left"
 BINDING_NAME_ZELDA_ROLL_RIGHT = "Roll right"
 BINDING_NAME_ZELDA_FLIP = "Backflip"
-BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon"
+BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon (hold, then release for a Charged Shot: a sure critical strike)"
 BINDING_NAME_ZELDA_HOOK = "Boomerang (stuns or disarms)"
 BINDING_NAME_ZELDA_POTION = "Drink the potion in the potion slot"
 BINDING_NAME_ZELDA_MOUNT = "Ride the mount in the mount slot (again to get off)"
@@ -24,6 +24,7 @@ BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on) - tapping Shift already 
 
 local SPIN_HOLD = 0.8
 local attackDownAt = nil
+local bowDownAt = nil          -- the bow key is held: a Charged Shot when it is let go after SPIN_HOLD
 
 function ZeldaControls_Command(cmd)
 	SendChatMessage(cmd, "SAY")
@@ -85,25 +86,27 @@ local function SpinRageShort()
 end
 
 spinBar:SetScript("OnUpdate", function()
-	if not attackDownAt then
+	local downAt = attackDownAt or bowDownAt
+	if not downAt then
 		this:Hide()
 		return
 	end
-	local held = GetTime() - attackDownAt
+	local held = GetTime() - downAt
+	local name = attackDownAt and ChargedAttackName() or "Charged Shot"
 	this:SetValue(math.min(held, SPIN_HOLD))
 	spinSpark:SetPoint("CENTER", this, "LEFT", 195 * math.min(held, SPIN_HOLD) / SPIN_HOLD, 0)
 	if held >= SPIN_HOLD then
-		if SpinRageShort() then
+		if attackDownAt and SpinRageShort() then
 			this:SetStatusBarColor(0.6, 0.6, 0.6)
-			spinText:SetText(ChargedAttackName() .. " - not enough rage")
+			spinText:SetText(name .. " - not enough rage")
 		else
 			this:SetStatusBarColor(0.0, 1.0, 0.0)
-			spinText:SetText(ChargedAttackName() .. " - release!")
+			spinText:SetText(name .. " - release!")
 		end
 		spinSpark:Hide()
 	else
 		this:SetStatusBarColor(1.0, 0.7, 0.0)
-		spinText:SetText(ChargedAttackName())
+		spinText:SetText(name)
 		spinSpark:Show()
 	end
 end)
@@ -111,7 +114,8 @@ end)
 -- shows the bar once the key has been held a moment
 local spinWatch = CreateFrame("Frame", "ZeldaSpinWatch", UIParent)
 spinWatch:SetScript("OnUpdate", function()
-	if attackDownAt and not spinBar:IsVisible() and GetTime() - attackDownAt >= SPIN_BAR_DELAY then
+	local downAt = attackDownAt or bowDownAt
+	if downAt and not spinBar:IsVisible() and GetTime() - downAt >= SPIN_BAR_DELAY then
 		spinBar:Show()
 	end
 end)
@@ -212,6 +216,26 @@ function ZeldaControls_Attack(state)
 		attackDownAt = nil
 		spinBar:Hide()
 	end
+end
+
+-- The bow key: a tap fires at once when it is let go; held until the bar is full (as long as the
+-- sword's charge), it lets fly a Charged Shot that always strikes critically (".zbow 1").
+function ZeldaControls_Bow(state)
+	if state == "down" then
+		if not attackDownAt then
+			bowDownAt = GetTime()
+		end
+		return
+	end
+	if not bowDownAt then
+		return
+	end
+	local charged = GetTime() - bowDownAt >= SPIN_HOLD
+	bowDownAt = nil
+	if not attackDownAt then
+		spinBar:Hide()
+	end
+	ZeldaControls_Command(charged and ".zbow 1" or ".zbow")
 end
 
 -- The guard key: with a shield it raises the shield (80% less damage from the front); with only a
@@ -315,7 +339,7 @@ local DEFAULT_KEYS = {
 -- keys older versions used; freed if they still hold a Zelda move
 local OLD_KEYS = { "F", "G", "R", "V", "H", "Z", "SHIFT-W", "SHIFT-A", "SHIFT-D" }
 local KEYS_VERSION = 9
-local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow, 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), 7 mount slot (right-click a mount), 8 character and bags, 9 Subscreen (Left/Right arrows to turn), the number pad's 1-9 work the same, Q/E previous/next stance, Shift+Q/E side roll, Shift+S backflip."
+local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow (hold = charged shot, a sure critical strike), 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), 7 mount slot (right-click a mount), 8 character and bags, 9 Subscreen (Left/Right arrows to turn), the number pad's 1-9 work the same, Q/E previous/next stance, Shift+Q/E side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
