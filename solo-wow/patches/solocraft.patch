@@ -1770,7 +1770,7 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..b424be3be
+index 000000000..b439be3f7
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,5114 @@
@@ -2405,7 +2405,7 @@ index 000000000..b424be3be
 +        return rank;
 +    }
 +
-+    // the shield in the off hand's own armor, and with Toughness's 10% per point
++    // the shield in the off hand's own armor, and with Toughness's 2% per point
 +    float ZeldaShieldArmorBase(Player const* player)
 +    {
 +        Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
@@ -2416,7 +2416,7 @@ index 000000000..b424be3be
 +
 +    float ZeldaShieldArmor(Player const* player)
 +    {
-+        return ZeldaShieldArmorBase(player) * (1.0f + 0.1f * float(RankOf(player, TOUGHNESS)));
++        return ZeldaShieldArmorBase(player) * (1.0f + 0.02f * float(RankOf(player, TOUGHNESS)));
 +    }
 +
 +    void UpdateSetBonuses(Player* player, ZeldaState& state)
@@ -2477,7 +2477,7 @@ index 000000000..b424be3be
 +            state.appliedWeaponDamage = flat;
 +        }
 +
-+        // Toughness: the shield's armor 10% higher per point (and the shield slam with it)
++        // Toughness: the shield's armor 2% higher per point (and the shield slam with it)
 +        float const shieldArmor = ZeldaShieldArmor(player) - ZeldaShieldArmorBase(player);
 +        if (shieldArmor != state.appliedShieldArmor)
 +        {

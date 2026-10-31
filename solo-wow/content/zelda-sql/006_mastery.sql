@@ -85,11 +85,11 @@ UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 1 
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 2 WHERE `Id` = 13849;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 3 WHERE `Id` = 13851;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 4 WHERE `Id` = 13852;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 9, `EffectMiscValue1` = 0 WHERE `Id` = 12299;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 19, `EffectMiscValue1` = 0 WHERE `Id` = 12761;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 29, `EffectMiscValue1` = 0 WHERE `Id` = 12762;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 39, `EffectMiscValue1` = 0 WHERE `Id` = 12763;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 49, `EffectMiscValue1` = 0 WHERE `Id` = 12764;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 1, `EffectMiscValue1` = 0 WHERE `Id` = 12299;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 3, `EffectMiscValue1` = 0 WHERE `Id` = 12761;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 5, `EffectMiscValue1` = 0 WHERE `Id` = 12762;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 7, `EffectMiscValue1` = 0 WHERE `Id` = 12763;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 9, `EffectMiscValue1` = 0 WHERE `Id` = 12764;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 2, `EffectMiscValue1` = 0 WHERE `Id` = 12303;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 5, `EffectMiscValue1` = 0 WHERE `Id` = 12788;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 8, `EffectMiscValue1` = 0 WHERE `Id` = 12789;

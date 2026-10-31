@@ -176,14 +176,14 @@ SPELL_EDITS = {
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=_n % 5)   # SPELL_AURA_DUMMY, rank - 1
 
-# Toughness: the shield's armor 10% higher per point, not all armor 2% - and the shield slam (Defensive
+# Toughness: the shield's armor 2% higher per point, not all armor - and the shield slam (Defensive
 # Stance's charged attack, its damage the shield's armor) with it; Defiance: an enemy that hurts you takes
 # 3% per point of it back, like Thorns, instead of more threat (ZeldaCommands.cpp, ZeldaShieldArmor,
 # ZeldaDamageTaken); both dummy auras whose $s1 is the percent
 TOUGHNESS = (12299, 12761, 12762, 12763, 12764)
 DEFIANCE = (12303, 12788, 12789, 12791, 12792)
 for _n, _sid in enumerate(TOUGHNESS):
-    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=10 * (_n + 1) - 1, EffectMiscValue1=0)
+    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=2 * (_n + 1) - 1, EffectMiscValue1=0)
     DESCRIPTION_EDITS[_sid] = ('Increases the armor of your shield by $s1%, and the damage of your shield slam '
                                'with it.')
 for _n, _sid in enumerate(DEFIANCE):
