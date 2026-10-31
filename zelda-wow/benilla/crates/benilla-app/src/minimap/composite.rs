@@ -49,7 +49,7 @@ pub(super) struct MinimapComposite {
     pub(super) active: bool,
     pub(super) tiles: Vec<CompositeTile>,
     /// The target edge this frame's tiles were placed for: [`RT_SIZE`], or larger for the Zelda
-    /// big dungeon map; [`drive_composite`] resizes the target to match.
+    /// big dungeon map; [`drive_composite`] points the camera at the target of that size.
     pub(super) rt_size: u32,
 }
 
@@ -58,6 +58,10 @@ pub(super) struct MinimapComposite {
 pub(super) struct CompositeRig {
     /// The render target, sampled by the blit quad.
     pub(super) image: Handle<Image>,
+    /// The Zelda big dungeon map's own, larger target. A target is never resized: the UI's cached
+    /// material for a target keeps the texture it was first bound to, so a resized one froze the
+    /// minimap on its old picture. The camera switches targets instead.
+    pub(super) image_big: Handle<Image>,
     camera: Entity,
     quad: Handle<Mesh>,
     /// Materials by tile texture; a building's tile set is small, so this fills once per building.
@@ -78,20 +82,24 @@ pub(super) fn setup_composite(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    let mut image = Image::new_fill(
-        Extent3d {
-            width: RT_SIZE,
-            height: RT_SIZE,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        &[0; 8],
-        TextureFormat::Rgba16Float,
-        RenderAssetUsages::default(),
-    );
-    image.texture_descriptor.usage =
-        TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT;
-    let image = images.add(image);
+    let target = |edge: u32| {
+        let mut image = Image::new_fill(
+            Extent3d {
+                width: edge,
+                height: edge,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[0; 8],
+            TextureFormat::Rgba16Float,
+            RenderAssetUsages::default(),
+        );
+        image.texture_descriptor.usage =
+            TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT;
+        image
+    };
+    let image = images.add(target(RT_SIZE));
+    let image_big = images.add(target(super::BIG_RT_SIZE));
 
     // A 1×1 quad at the origin, every tile a Transform of it. `pipe_warm` warms this same mesh (its
     // layout is a pipeline key axis), so both take it from one builder.
@@ -129,6 +137,7 @@ pub(super) fn setup_composite(
 
     commands.insert_resource(CompositeRig {
         image,
+        image_big,
         camera,
         quad,
         materials: bevy::platform::collections::HashMap::default(),
@@ -145,20 +154,18 @@ pub(super) fn drive_composite(
     mut commands: Commands,
     mut materials: ResMut<Assets<UiQuadMaterial>>,
     mut cameras: Query<(&mut Camera, &mut Projection)>,
-    mut images: ResMut<Assets<Image>>,
 ) {
     let Some(mut rig) = rig else { return };
-    // The Zelda big dungeon map draws into a larger target; resize on the switch.
+    // The Zelda big dungeon map draws into its own larger target; switch the camera to it.
     let want_size = if composite.rt_size == 0 { RT_SIZE } else { composite.rt_size };
     if composite.active && want_size != rig.size {
         rig.size = want_size;
-        if let Some(image) = images.get_mut(&rig.image) {
-            image.resize(Extent3d {
-                width: want_size,
-                height: want_size,
-                depth_or_array_layers: 1,
-            });
-        }
+        let target = if want_size == RT_SIZE {
+            rig.image.clone()
+        } else {
+            rig.image_big.clone()
+        };
+        commands.entity(rig.camera).insert(RenderTarget::Image(target.into()));
         if let Ok((_, mut projection)) = cameras.get_mut(rig.camera) {
             #[allow(clippy::cast_precision_loss)]
             let edge = want_size as f32;

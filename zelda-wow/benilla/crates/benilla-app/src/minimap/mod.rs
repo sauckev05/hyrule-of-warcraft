@@ -404,7 +404,14 @@ fn emit_minimap(
     }
     // The composite is off unless the interior branch below turns it on this frame.
     composite.active = false;
-    let Some(rt_image) = rig.map(|r| r.image.clone()) else {
+    // The big dungeon map has its own target (composite::CompositeRig::image_big).
+    let Some(rt_image) = rig.map(|r| {
+        if big_map.on {
+            r.image_big.clone()
+        } else {
+            r.image.clone()
+        }
+    }) else {
         return; // the composite rig's Startup system has not run yet
     };
     // `WOW_MM_ZOOM=0..5` forces both zoom indices, a capture instrument.
