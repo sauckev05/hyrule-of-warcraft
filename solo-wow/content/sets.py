@@ -6,7 +6,7 @@
     3 weapon        % more weapon damage
     4 knockback     % chance a hit pushes the enemy back a step
     5 extra_swing   % chance a hit swings again at once
-    6 spin_rage     rage the Spin Attack costs less
+    6 spin_rage     rage the Charge Attack (any stance's held attack) costs less
     7 heal_on_kill  % of health back on every kill (5% = one heart)
     8 stun          % chance a hit stuns the enemy for 1 second
     9 weapon_flat   flat weapon damage on every hit (shown on the character sheet)
@@ -23,7 +23,7 @@ BONUS_TEXT = {
     'weapon': 'Your weapon attacks deal %g%% more damage.',
     'knockback': 'Your melee hits have a %g%% chance to knock the enemy back.',
     'extra_swing': 'Your melee hits have a %g%% chance to swing again at once.',
-    'spin_rage': 'Your Spin Attack costs %g less rage.',
+    'spin_rage': 'Your Charge Attack costs %g less rage.',
     'heal_on_kill': 'Defeating an enemy restores %g%% of your health.',
     'stun': 'Your melee hits have a %g%% chance to stun the enemy for 1 sec.',
     'weapon_flat': '+%g Weapon Damage.',
