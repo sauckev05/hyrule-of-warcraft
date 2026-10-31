@@ -349,6 +349,9 @@ def main():
                '`orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `MovementType`) VALUES '
                '(5400273, 7273, 209, 1, 1696.08, 1211.55, 8.98723, 4.05, 86400, 86400, 0, 0);\n')
     out.append('UPDATE `creature_template` SET `UnitFlags` = `UnitFlags` & ~256 WHERE `Entry` = 7273;\n')
+    # A ritual one hero can finish alone: the Altar of the Keepers and the Altar of Archaedas in
+    # Uldaman (and every other summoning ritual) waited for three helpers, and the channel ran forever.
+    out.append('UPDATE `gameobject_template` SET `data0` = 1 WHERE `type` = 18;\n')
     # Ironfoe (the anvil answers only to it in hand): 30% from Emperor Dagran Thaurissan instead of 1%
     out.append('UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;\n')
     # Linken's story now begins with Navi: The Hero of Time leads into It's a Secret to Everybody
