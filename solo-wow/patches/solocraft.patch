@@ -1770,10 +1770,10 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..b439be3f7
+index 000000000..100af8833
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5114 @@
+@@ -0,0 +1,5117 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2367,7 +2367,7 @@ index 000000000..b439be3f7
 +        SET_BONUS_WEAPON_DAMAGE = 3,    // % more weapon damage
 +        SET_BONUS_KNOCKBACK     = 4,    // % chance a hit pushes the enemy back
 +        SET_BONUS_EXTRA_SWING   = 5,    // % chance a hit swings again at once
-+        SET_BONUS_SPIN_RAGE     = 6,    // rage the Spin Attack costs less
++        SET_BONUS_SPIN_RAGE     = 6,    // rage the Charge Attack (any stance) costs less
 +        SET_BONUS_HEAL_ON_KILL  = 7,    // % of health back on every kill
 +        SET_BONUS_STUN          = 8,    // % chance a hit stuns the enemy for 1 second
 +        SET_BONUS_WEAPON_FLAT   = 9,    // flat weapon damage on every melee hit
@@ -4980,7 +4980,7 @@ index 000000000..b439be3f7
 +}
 +
 +// ---------------------------------------------------------------------------------- enemy heavy blows
-+// Enemies fighting a hero wind up a heavy blow now and then (Heavy Blow, 40011: a two-second Slam
++// Elite, rare and boss enemies fighting a hero wind up a heavy blow now and then (Heavy Blow, 40011: a two-second Slam
 +// windup) - casters a Charged Bolt (40012) when they are not in melee - and the hero is told in
 +// front of the screen. A raised shield blocks it and staggers the enemy, a parry (no shield, melee
 +// only) turns it aside and staggers it, a roll or stepping out of reach avoids it; otherwise it
@@ -5091,6 +5091,9 @@ index 000000000..b439be3f7
 +        if (info->CreatureType == CREATURE_TYPE_CRITTER || c->GetLevel() < 5 || c->GetVictim() != player)
 +            continue;
 +        Threat const threat = ThreatOf(c);
++        // only elites, rares and bosses wind up heavy blows and charged bolts, never common enemies
++        if (threat == Threat::Normal && info->Rank != CREATURE_ELITE_RARE)
++            continue;
 +        uint64 const key = c->GetObjectGuid().GetRawValue();
 +        auto itr = state.heavyReadyAt.find(key);
 +        if (itr == state.heavyReadyAt.end())
@@ -5441,7 +5444,7 @@ index 000000000..b439be3f7
 +    uint32 const spinCost = SPIN_RAGE_COST - discount;
 +    if (usesRage && player->GetPower(POWER_RAGE) < spinCost)
 +    {
-+        player->GetSession()->SendNotification("Not enough rage for a Spin Attack (%u needed)", spinCost / 10);
++        player->GetSession()->SendNotification("Not enough rage for a Charge Attack (%u needed)", spinCost / 10);
 +        return true;
 +    }
 +    if (usesRage)
