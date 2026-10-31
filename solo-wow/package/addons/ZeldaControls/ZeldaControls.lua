@@ -10,7 +10,7 @@ BINDING_NAME_ZELDA_ROLL = "Roll forward"
 BINDING_NAME_ZELDA_ROLL_LEFT = "Roll left"
 BINDING_NAME_ZELDA_ROLL_RIGHT = "Roll right"
 BINDING_NAME_ZELDA_FLIP = "Backflip"
-BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon (hold, then release for a Charged Shot: a sure critical strike)"
+BINDING_NAME_ZELDA_BOW = "Fire bow / ranged weapon (hold, then release for a Charged Shot: double damage and a sure critical strike)"
 BINDING_NAME_ZELDA_HOOK = "Boomerang (stuns or disarms)"
 BINDING_NAME_ZELDA_POTION = "Drink the potion in the potion slot"
 BINDING_NAME_ZELDA_MOUNT = "Ride the mount in the mount slot (again to get off)"
@@ -219,7 +219,7 @@ function ZeldaControls_Attack(state)
 end
 
 -- The bow key: a tap fires at once when it is let go; held until the bar is full (as long as the
--- sword's charge), it lets fly a Charged Shot that always strikes critically (".zbow 1").
+-- sword's charge), it lets fly a Charged Shot with double damage that always strikes critically (".zbow 1").
 function ZeldaControls_Bow(state)
 	if state == "down" then
 		if not attackDownAt then
@@ -339,7 +339,7 @@ local DEFAULT_KEYS = {
 -- keys older versions used; freed if they still hold a Zelda move
 local OLD_KEYS = { "F", "G", "R", "V", "H", "Z", "SHIFT-W", "SHIFT-A", "SHIFT-D" }
 local KEYS_VERSION = 9
-local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow (hold = charged shot, a sure critical strike), 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), 7 mount slot (right-click a mount), 8 character and bags, 9 Subscreen (Left/Right arrows to turn), the number pad's 1-9 work the same, Q/E previous/next stance, Shift+Q/E side roll, Shift+S backflip."
+local HELP = "|cff33ff99Zelda Controls|r: tap Shift to lock on / let go, 1 sword (hold = spin attack; shield slam in Defensive Stance; leaping strike in Berserker Stance; 50 rage), 2 bow (hold = charged shot: double damage, a sure critical strike), 3 shield (hold; parry without a shield), 4 boomerang, 5 roll, 6 potion slot (right-click a healing or mana potion to put it there), 7 mount slot (right-click a mount), 8 character and bags, 9 Subscreen (Left/Right arrows to turn), the number pad's 1-9 work the same, Q/E previous/next stance, Shift+Q/E side roll, Shift+S backflip."
 
 local frame = CreateFrame("Frame", "ZeldaControlsFrame", UIParent)
 frame:RegisterEvent("VARIABLES_LOADED")
