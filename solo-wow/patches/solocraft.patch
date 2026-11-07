@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..ccdb870a7
+index 000000000..d0e28cfd3
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5591 @@
+@@ -0,0 +1,5614 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5723,6 +5723,35 @@ index 000000000..ccdb870a7
 +    return true;
 +}
 +
++// Puts a spell's auras on the target directly, as the GM's .aura does: no hit roll, no resist, no
++// immunity (a boss's to silence, say), held for `durationMs`.
++static void ZeldaForceAura(Unit* target, Unit* caster, uint32 spellId, int32 durationMs)
++{
++    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
++    if (!spellInfo || !target || !target->IsAlive())
++        return;
++    target->RemoveAurasDueToSpell(spellId);
++    SpellAuraHolder* holder = CreateSpellAuraHolder(spellInfo, target, caster);
++    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
++    {
++        if (spellInfo->Effect[i] != SPELL_EFFECT_APPLY_AURA)
++            continue;
++        int32 basePoints = spellInfo->CalculateSimpleValue(SpellEffectIndex(i));
++        int32 damage = basePoints;
++        Aura* aura = CreateAura(spellInfo, SpellEffectIndex(i), &damage, &basePoints, holder, target, caster);
++        holder->AddAura(aura, SpellEffectIndex(i));
++    }
++    holder->SetAuraMaxDuration(durationMs);
++    holder->SetAuraDuration(durationMs);
++    if (!target->AddSpellAuraHolder(holder))
++    {
++        delete holder;
++        return;
++    }
++    holder->SetState(SPELLAURAHOLDER_STATE_READY);
++    holder->UpdateAuraDuration();
++}
++
 +static void ZeldaShieldSlam(Player* player, Item* shield)
 +{
 +    const uint32 SHIELD_SLAM_SPELL = 23922;     // Shield Slam (rank 1): the shield-bash strike and look
@@ -5750,15 +5779,9 @@ index 000000000..ccdb870a7
 +        ++hit;
 +        if (!unit->IsAlive())
 +            continue;
-+        // the blow silences the enemy for as long as it stuns (Shield Bash - Silenced), which also
-+        // stops any spell being cast
-+        player->CastSpell(unit, SLAM_SILENCE_SPELL, TRIGGERED_OLD_TRIGGERED);
-+        if (SpellAuraHolder* holder = unit->GetSpellAuraHolder(SLAM_SILENCE_SPELL, player->GetObjectGuid()))
-+        {
-+            holder->SetAuraMaxDuration(SLAM_STUN_MS);
-+            holder->SetAuraDuration(SLAM_STUN_MS);
-+            holder->UpdateAuraDuration();
-+        }
++        // the blow silences the enemy for as long as it stuns (Shield Bash - Silenced) - every enemy,
++        // bosses too: the aura is put on directly, past any immunity or resist
++        ZeldaForceAura(unit, player, SLAM_SILENCE_SPELL, SLAM_STUN_MS);
 +        player->CastSpell(unit, SLAM_STUN_SPELL, TRIGGERED_OLD_TRIGGERED);
 +        if (SpellAuraHolder* holder = unit->GetSpellAuraHolder(SLAM_STUN_SPELL, player->GetObjectGuid()))
 +        {
