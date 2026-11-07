@@ -1770,7 +1770,7 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..ab5f1a08c
+index 000000000..cb9b3316b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,5141 @@
@@ -2409,7 +2409,7 @@ index 000000000..ab5f1a08c
 +        return rank;
 +    }
 +
-+    // the shield in the off hand's own armor, and with Toughness's 2% per point
++    // the shield in the off hand's own armor, and with Toughness's 5% per point
 +    float ZeldaShieldArmorBase(Player const* player)
 +    {
 +        Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
@@ -2420,7 +2420,7 @@ index 000000000..ab5f1a08c
 +
 +    float ZeldaShieldArmor(Player const* player)
 +    {
-+        return ZeldaShieldArmorBase(player) * (1.0f + 0.02f * float(RankOf(player, TOUGHNESS)));
++        return ZeldaShieldArmorBase(player) * (1.0f + 0.05f * float(RankOf(player, TOUGHNESS)));
 +    }
 +
 +    void UpdateSetBonuses(Player* player, ZeldaState& state)
