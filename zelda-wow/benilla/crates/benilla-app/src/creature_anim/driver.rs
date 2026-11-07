@@ -510,6 +510,22 @@ pub(super) fn drive_animations(
         // predicted: the crouch lands with the server's aura.
         mv.stealthed = store.is_some_and(|s| s.0.unit_is_stealthed());
         mv.stunned = store.is_some_and(|s| s.0.unit_flags() & 0x0004_0000 != 0);
+        // A stun's start or end re-picks the base (Stun in, Stand out), over a one-shot left
+        // paused by a freeze aura too.
+        if std::mem::replace(&mut drv.was_stunned, mv.stunned) != mv.stunned
+            && matches!(drv.mode, Mode::Swing { .. } | Mode::Gait)
+        {
+            if let Some(main) = tr.get_main_animation() {
+                if let Some(active) = player.animation_mut(main) {
+                    if active.speed() == 0.0 {
+                        active.set_speed(1.0);
+                    }
+                }
+            }
+            drv.deferred = None;
+            drv.mode = Mode::Gait;
+            drv.gait = None;
+        }
         let moving = mv.flags & move_flags::ANY_MOVE != 0;
         // An arc's launch vertical speed splits a jump (the JumpStart/Jump bracket; jump
         // `0x60e480`, land `0x602c60`) from a step-off fall, which has no bracket and keeps the

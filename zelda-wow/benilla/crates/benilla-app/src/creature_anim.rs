@@ -583,6 +583,9 @@ pub(crate) struct AnimDriver {
     /// Stand; the global is zeroed after (`0x49334b`). The state returns at the next re-pick:
     /// the Stand window's end, a movement-flag edge, or leaving Gait.
     interact_hold: bool,
+    /// Zelda of Warcraft: `UNIT_FLAG_STUNNED` last frame; its edges re-pick the base, so a stun
+    /// (or a petrify) ending lets the Stun sway go at once rather than at the next step.
+    was_stunned: bool,
     /// The reference's `[unit+0xd58] & 0xc0000`: while Knockdown, LiftOff or Land holds it, base
     /// requests are refused, so a stun's knockdown survives the root's Stand recompute.
     base_lock: driver::play::BaseAnimLock,
@@ -698,6 +701,7 @@ impl Default for AnimDriver {
             interacting: false,
             interact_player: false,
             interact_hold: false,
+            was_stunned: false,
             base_lock: driver::play::BaseAnimLock::default(),
             sheath_cur: None,
             sheath_byte: None,
