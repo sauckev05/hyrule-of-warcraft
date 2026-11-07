@@ -27,6 +27,14 @@ const ROLL_SECS: [f32; 4] = [0.65, 0.36, 0.36, 0.726];
 /// The backflip's own clip is its turn up to the landing (port_roll.py keeps 500 ms of 600): it
 /// plays at the pace the whole 600 ms had over the arc, and the arc's last moment is the fall pose.
 const BACKFLIP_CLIP_SHARE: f32 = 500.0 / 600.0;
+/// The hero's grunt as each roll leaves the ground, by kind: the forward roll, the side rolls and
+/// the backflip (the human male's attack exertions, `SoundEntries` 2941).
+const ROLL_SOUNDS: [&str; 4] = [
+    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackC.wav",
+    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackB.wav",
+    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackB.wav",
+    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackA.wav",
+];
 /// The body turns about this share of its head height above the feet, near the middle.
 const PIVOT_SHARE: f32 = 0.5;
 
@@ -111,6 +119,7 @@ fn tumble(
     mut request: ResMut<ZeldaRollRequest>,
     mut state: ResMut<ZeldaRollState>,
     mut swings: Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
+    mut sounds: MessageWriter<crate::sound::ZeldaRollSound>,
     body: Query<Option<&benilla_assets::ModelAnimations>, (With<Embodied>, Without<FlyCam>)>,
 ) {
     let now = time.elapsed_secs();
@@ -132,6 +141,7 @@ fn tumble(
             // the push landed: the arc's time in the air is the turn's
             Some(since) => {
                 let lasts = ROLL_SECS[usize::from(kind.clamp(1, 4) - 1)];
+                sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[usize::from(kind.clamp(1, 4) - 1)]));
                 // a model with the roll's own clip plays it over the arc; the rest turn whole
                 let has_clip = own_clip(kind).is_some_and(|(clip, _)| {
                     body.single()

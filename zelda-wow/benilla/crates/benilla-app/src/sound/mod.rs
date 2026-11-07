@@ -66,7 +66,7 @@ pub(crate) use greeting::NpcGreetingRequest;
 pub(crate) use kit::SoundKits;
 pub(crate) use message::MessageSounds;
 pub(crate) use mixer::Mixer;
-pub(crate) use ui::{AutoEquipSound, LootPickupSound};
+pub(crate) use ui::{AutoEquipSound, LootPickupSound, ZeldaRollSound};
 pub(crate) use zone::ExplorationSounds;
 
 /// The sound CVars. Defaults are the reference's registrations (`0x456fe0`, `0x460a60`):

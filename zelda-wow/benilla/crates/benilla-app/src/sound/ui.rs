@@ -340,10 +340,38 @@ fn play_auto_equip_sounds(
     }
 }
 
+/// Zelda of Warcraft: the hero's grunt as a dodge roll leaves the ground (`player::zelda_roll`),
+/// a game file by path, 2D on SFX like `PlaySoundFile`.
+#[derive(Message, Clone, Copy)]
+pub(crate) struct ZeldaRollSound(pub(crate) &'static str);
+
+/// Play each [`ZeldaRollSound`]; with no kit catalog the queue is dropped.
+fn play_zelda_roll_sounds(
+    mut reqs: MessageReader<ZeldaRollSound>,
+    kits: Option<ResMut<SoundKits>>,
+    assets: Option<Res<WorldAssets>>,
+    mut out: NonSendMut<SoundOutput>,
+    config: Res<SoundConfig>,
+) {
+    if reqs.is_empty() {
+        return;
+    }
+    let (Some(mut kits), Some(assets)) = (kits, assets) else {
+        reqs.clear();
+        return;
+    };
+    for req in reqs.read() {
+        if let Err(e) = kit::play_file(&mut kits, &assets, &mut out, &config, req.0, kit::SoundCategory::Sfx) {
+            debug!("sound(zelda roll): {} — {e:#}", req.0);
+        }
+    }
+}
+
 /// Registration hook for [`super::SoundPlugin`].
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<LootPickupSound>()
         .add_message::<AutoEquipSound>()
+        .add_message::<ZeldaRollSound>()
         .add_systems(Startup, load_item_sounds.after(AssetSet::Open))
         .add_systems(
             Update,
@@ -352,6 +380,7 @@ pub(super) fn plugin(app: &mut App) {
                 play_item_gesture_sounds,
                 play_loot_pickup_sounds,
                 play_auto_equip_sounds,
+                play_zelda_roll_sounds,
             )
                 .after(crate::ui_script::UiInput),
         );
