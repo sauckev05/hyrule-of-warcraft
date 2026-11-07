@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..cb9b3316b
+index 000000000..4b7cf0c94
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5141 @@
+@@ -0,0 +1,5151 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5282,17 +5282,18 @@ index 000000000..cb9b3316b
 +            session->SendAreaTriggerMessage("|cff66ccffBlocked!|r");
 +        return true;
 +    }
-+    if (melee && snapshot.parry && inFront)
++    // a parried heavy blow is turned aside, not stopped: half of it still lands, but the hero keeps
++    // their feet (no knockdown) and the enemy is thrown off balance
++    bool const parried = melee && snapshot.parry && inFront;
++    if (parried)
 +    {
-+        Unit::SendSpellMiss(caster, hero, spellId, SPELL_MISS_PARRY);
 +        Stagger(hero, caster, 1500);
 +        GuardRage(hero);
-+        session->SendAreaTriggerMessage("|cffffcc66Parried! %s is thrown off balance!|r", caster->GetName());
-+        return true;
++        session->SendAreaTriggerMessage("|cffffcc66Parried! Half the blow gets through - %s is thrown off balance!|r", caster->GetName());
 +    }
 +
 +    Threat const threat = caster->GetTypeId() == TYPEID_UNIT ? ThreatOf(static_cast<Creature*>(caster)) : Threat::Normal;
-+    uint32 damage = std::max<uint32>(1, uint32(hero->GetMaxHealth() * HeavyShare(threat)));
++    uint32 damage = std::max<uint32>(1, uint32(hero->GetMaxHealth() * HeavyShare(threat) * (parried ? 0.5f : 1.0f)));
 +    SpellSchoolMask const mask = melee ? SPELL_SCHOOL_MASK_NORMAL : SPELL_SCHOOL_MASK_ARCANE;
 +    SpellNonMeleeDamage info(caster, hero, spellId, melee ? SPELL_SCHOOL_NORMAL : SPELL_SCHOOL_ARCANE);
 +    uint32 absorb = 0;
@@ -5302,7 +5303,7 @@ index 000000000..cb9b3316b
 +    info.damage = damage > absorb ? damage - absorb : 0;
 +    Unit::SendSpellNonMeleeDamageLog(&info);
 +    Unit::DealSpellDamage(caster, &info, true, false);
-+    if (melee && hero->IsAlive())
++    if (melee && !parried && hero->IsAlive())
 +        caster->CastSpell(hero, HEAVY_KNOCKDOWN, TRIGGERED_OLD_TRIGGERED);
 +    return true;
 +}
@@ -5513,11 +5514,20 @@ index 000000000..cb9b3316b
 +    }
 +    // the Whirlwind spin goes out first so the hits land while the hero is turning
 +    PlayWhirlwind(player, hitGuids);
-+    // two strikes per enemy, each worth three normal swings
++    // two strikes per enemy, each worth three normal swings; dual wielding, the off hand strikes
++    // with each of them too (four in all)
 +    t_meleeMultiplier = SPIN_DAMAGE_MULTIPLIER;
 +    t_spinNoRage = true;
++    bool const dualWield = player->hasOffhandWeaponForAttack();
 +    for (Unit* unit : victims)
-+        ZeldaSwing(player, unit, SPIN_STRIKES);
++    {
++        for (uint32 i = 0; i < SPIN_STRIKES && unit->IsAlive(); ++i)
++        {
++            player->AttackerStateUpdate(unit, BASE_ATTACK, true);
++            if (dualWield && unit->IsAlive())
++                player->AttackerStateUpdate(unit, OFF_ATTACK, true);
++        }
++    }
 +    t_spinNoRage = false;
 +    t_meleeMultiplier = 1.0f;
 +    return true;
