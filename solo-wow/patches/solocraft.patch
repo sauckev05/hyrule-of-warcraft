@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..2e637cdbe
+index 000000000..f9d138b55
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5205 @@
+@@ -0,0 +1,5214 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5317,9 +5317,17 @@ index 000000000..2e637cdbe
 +    return true;
 +}
 +
++// A sword swing from the saddle: the hero jumps down and swings.
++static void DismountToFight(Player* player)
++{
++    if (player->IsMounted() && player->IsAlive() && !player->IsTaxiFlying())
++        player->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
++}
++
 +bool ChatHandler::HandleZeldaSlashCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    DismountToFight(player);
 +    if (!CanAct(player))
 +        return true;
 +
@@ -5463,6 +5471,7 @@ index 000000000..2e637cdbe
 +bool ChatHandler::HandleZeldaSpinCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    DismountToFight(player);
 +    if (!CanAct(player))
 +        return true;
 +
