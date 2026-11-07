@@ -35,7 +35,11 @@ label:SetPoint("CENTER", bar, "CENTER", 0, 0)
 local timeText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 timeText:SetPoint("LEFT", bar, "RIGHT", 6, 0)
 
-local caster, startAt, endAt
+-- Every charge-up under way, so several enemies charging at once are all kept: the bar shows the
+-- most urgent. A Heavy Blow or a Charged Bolt (the ones to block) always comes first, the one
+-- landing soonest; then the target's own charge-up; then the one landing soonest.
+local HEAVY = { ["Heavy Blow"] = true, ["Charged Bolt"] = true }
+local charges = {}             -- { who, ability, startAt, endAt, heavy }
 
 -- above the target bar's title (targetbar.lua), 60% of its width
 local function Place()
@@ -48,46 +52,108 @@ local function Place()
 	end
 end
 
-local function Stop()
-	caster, startAt, endAt = nil, nil, nil
-	bar:Hide()
+local function Pick(now)
+	local best
+	for i = table.getn(charges), 1, -1 do
+		if charges[i].endAt <= now then
+			table.remove(charges, i)
+		end
+	end
+	local target = UnitName("target")
+	for _, c in ipairs(charges) do
+		if not best then
+			best = c
+		elseif c.heavy ~= best.heavy then
+			if c.heavy then best = c end
+		elseif (c.who == target) ~= (best.who == target) then
+			if c.who == target then best = c end
+		elseif c.endAt < best.endAt then
+			best = c
+		end
+	end
+	return best
 end
 
-local function Start(who, ability, ms)
+local shown
+local function Show(c)
+	if shown == c then
+		return
+	end
+	shown = c
 	Place()
-	caster = who
-	startAt = GetTime()
-	endAt = startAt + ms / 1000
-	bar:SetMinMaxValues(0, ms / 1000)
-	bar:SetValue(0)
-	if who == UnitName("target") then
-		label:SetText((ability ~= "" and ability or "Attack") .. "  - shield up!")
+	bar:SetMinMaxValues(0, c.endAt - c.startAt)
+	local ability = c.ability ~= "" and c.ability or "Attack"
+	local text = c.heavy and (ability .. "  - BLOCK!") or (ability .. "  - shield up!")
+	if c.who ~= UnitName("target") then
+		text = c.who .. ":  " .. text
+	end
+	label:SetText(text)
+	if c.heavy then
+		bar:SetStatusBarColor(1.0, 0.45, 0.1)          -- the heavy ones burn orange
+		border:SetBackdropBorderColor(1.0, 0.6, 0.2, 1)
 	else
-		label:SetText(who .. ":  " .. (ability ~= "" and ability or "Attack") .. "  - shield up!")
+		bar:SetStatusBarColor(0.55, 0.88, 1.0)
+		border:SetBackdropBorderColor(0.66, 0.94, 1.0, 1)
 	end
 	bar:Show()
 end
 
-bar:SetScript("OnUpdate", function()
-	if not endAt then
-		this:Hide()
+local function Refresh()
+	local c = Pick(GetTime())
+	if not c then
+		shown = nil
+		bar:Hide()
 		return
+	end
+	Show(c)
+end
+
+local function Start(who, ability, ms)
+	-- a caster starting again replaces its own earlier charge-up
+	for i = table.getn(charges), 1, -1 do
+		if charges[i].who == who then
+			table.remove(charges, i)
+		end
 	end
 	local now = GetTime()
-	if now >= endAt then
-		Stop()
+	table.insert(charges, { who = who, ability = ability, startAt = now, endAt = now + ms / 1000, heavy = HEAVY[ability] or false })
+	Refresh()
+end
+
+local function Stop(who)
+	for i = table.getn(charges), 1, -1 do
+		if not who or charges[i].who == who then
+			table.remove(charges, i)
+		end
+	end
+	Refresh()
+end
+
+local watcher = CreateFrame("Frame")
+watcher:SetScript("OnUpdate", function()
+	if table.getn(charges) == 0 then
 		return
 	end
-	this:SetValue(now - startAt)
-	timeText:SetText(string.format("%.1f", endAt - now))
+	Refresh()
+	if shown then
+		local now = GetTime()
+		bar:SetValue(now - shown.startAt)
+		timeText:SetText(string.format("%.1f", math.max(0, shown.endAt - now)))
+	end
 end)
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("CHAT_MSG_SYSTEM")
 events:RegisterEvent("PLAYER_DEAD")
+events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:SetScript("OnEvent", function()
 	if event == "PLAYER_DEAD" then
 		Stop()
+		return
+	end
+	if event == "PLAYER_TARGET_CHANGED" then
+		shown = nil              -- the label names the caster unless it is the target
+		Refresh()
 		return
 	end
 	if not arg1 or string.sub(arg1, 1, 6) ~= "ZCAST:" then
@@ -99,9 +165,7 @@ events:SetScript("OnEvent", function()
 	end
 	ms = tonumber(ms)
 	if ms == 0 then
-		if who == caster then
-			Stop()
-		end
+		Stop(who)
 	else
 		Start(who, ability, ms)
 	end
