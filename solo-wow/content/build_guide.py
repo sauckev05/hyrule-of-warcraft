@@ -138,9 +138,119 @@ PAGES = [
     "And I give you errands along the way. Hey! Listen! They're important!",
 ]
 
+# The professions: page PROFESSION_TEXT_BASE is their overview, + n the profession n of Navi's list
+# (zelda_companions.cpp, NAVI_PROFESSIONS)
+PROFESSION_TEXT_BASE = 900640
+PROFESSIONS = [
+    # 0: overview
+    "Professions let you gather and make your own things!$B$B"
+    "You can learn two main professions, plus all three secondary ones: Cooking, First Aid and Fishing. "
+    "Trainers are in every big city - ask a guard where to find them.$B$B"
+    "Gathering goes well with crafting: Mining with Blacksmithing or Engineering, Herbalism with Alchemy, "
+    "Skinning with Leatherworking. Tailoring and Enchanting both use cloth and the gear you find.$B$B"
+    "Here, herbs, veins, skinned beasts, fish and disenchanted items all give you 5 times as much, and a "
+    "herb or vein is gathered all in one go. A recipe only "
+    "needs materials from its own profession - any others it would ask for are skipped!$B$B"
+    "Skill goes up to 75, then 150, 225 and 300. Visit your trainer to learn the next rank: Journeyman from "
+    "level 10, Expert from level 20, Artisan from level 35.",
+
+    # 1: Alchemy
+    "Alchemy turns herbs into potions and elixirs!$B$B"
+    "You make healing potions, mana potions, elixirs that raise your stats for a while, and later flasks and "
+    "transmutes. Most recipes need herbs and an empty vial - vials are sold by trade supply vendors.$B$B"
+    "Here, a mana potion becomes a shield that absorbs damage. You carry up to 10 of each potion, and "
+    "potions have no cooldown, so drink as many as you need!$B$B"
+    "Learn Herbalism too, and you'll never run out of herbs.",
+
+    # 2: Blacksmithing
+    "Blacksmithing hammers metal into weapons and armor!$B$B"
+    "You make swords, axes, maces, mail and plate armor, shield spikes, and sharpening stones and "
+    "weightstones that make your weapon hit harder for a while.$B$B"
+    "You need a Blacksmith Hammer and an anvil, and metal bars. Miners smelt ore into bars at a forge, so "
+    "Mining is the perfect partner.$B$B"
+    "Later on, blacksmiths can choose to become armorsmiths or weaponsmiths and learn special recipes.",
+
+    # 3: Enchanting
+    "Enchanting puts magic on your gear!$B$B"
+    "First you disenchant: break a green, blue or purple item you don't need into dust, essences and shards. "
+    "Then you use them to enchant your weapons and armor with more stats, damage or protection. Here you get "
+    "5 times the dust and essences!$B$B"
+    "You need an enchanting rod, which you make yourself from a copper rod and some materials.$B$B"
+    "Enchanting needs no gathering profession - every unwanted green item is a gift!",
+
+    # 4: Engineering
+    "Engineering builds gadgets! Booms! Whirrs! Things that probably shouldn't work!$B$B"
+    "You make bombs and dynamite, guns and scopes for your ranged weapon, goggles, mechanical pets, target "
+    "dummies and all sorts of tools.$B$B"
+    "You need a Blacksmith Hammer and an Arclight Spanner, metal bars and stone, so take Mining with it.$B$B"
+    "Later on, engineers choose to become Gnomish or Goblin engineers for even stranger inventions.",
+
+    # 5: Herbalism
+    "Herbalism lets you pick herbs!$B$B"
+    "Turn on Find Herbs from your spellbook and herbs show up on your minimap as little yellow dots. Walk up "
+    "and click one to gather it.$B$B"
+    "Here, each herb gives you 5 times as much, all at once. Higher-level herbs need more skill, and you get "
+    "skill by picking.$B$B"
+    "Alchemists need herbs for everything, so Herbalism and Alchemy go together like hearts and fairies!",
+
+    # 6: Leatherworking
+    "Leatherworking makes leather and mail armor!$B$B"
+    "You make armor, armor kits that add armor to your gear, cloaks, and quivers and ammo pouches for your "
+    "arrows and bullets.$B$B"
+    "You need leather and hides, which come from Skinning. Some recipes also use salt, thread and dyes from "
+    "trade supply vendors.$B$B"
+    "Later on, leatherworkers can choose Elemental, Dragonscale or Tribal Leatherworking.",
+
+    # 7: Mining
+    "Mining lets you dig ore from veins in the ground!$B$B"
+    "Turn on Find Minerals from your spellbook and veins show up on your minimap. You need a Mining Pick in "
+    "your bags.$B$B"
+    "Here, a vein gives you 5 times the ore and is mined all in one go.$B$B"
+    "Take your ore to a forge to smelt it into bars. Blacksmiths and engineers need lots of bars, and you "
+    "might find gems too!",
+
+    # 8: Skinning
+    "Skinning takes leather and hides from beasts!$B$B"
+    "After you defeat and loot a beast, click its body to skin it. You need a Skinning Knife in your bags.$B$B"
+    "Bigger, higher-level beasts need more skill. You get 5 times the leather here.$B$B"
+    "Leatherworkers turn your leather into armor, so Skinning and Leatherworking are best friends!",
+
+    # 9: Tailoring
+    "Tailoring sews cloth into armor and bags!$B$B"
+    "You make cloth armor, shirts, and best of all, bags - more room for treasure!$B$B"
+    "You need cloth, which humanoid enemies drop: linen, then wool, silk, mageweave and runecloth. First turn "
+    "the cloth into bolts, then sew. Thread and dyes come from trade supply vendors.$B$B"
+    "Tailoring needs no gathering profession. Every bandit you defeat is a supplier!",
+
+    # 10: Cooking
+    "Cooking turns meat and fish into food!$B$B"
+    "Eating good food restores your health while you sit, and many dishes give you a Well Fed bonus that "
+    "raises your stats for a while.$B$B"
+    "You need ingredients from beasts and fish, and a fire - your Basic Campfire, a cooking fire in town, "
+    "or any campfire you find.$B$B"
+    "Cooking is a secondary profession, so you can learn it along with your two main ones.",
+
+    # 11: First Aid
+    "First Aid makes bandages!$B$B"
+    "You make bandages from cloth - linen, wool, silk, mageweave, runecloth. A bandage heals you over a few "
+    "seconds, as long as you aren't hit.$B$B"
+    "Here, you can use one bandage right after another!$B$B"
+    "First Aid is a secondary profession. Trainers teach the first ranks, Expert comes from a book sold by "
+    "some vendors, and Artisan from a field medic's quest.",
+
+    # 12: Fishing
+    "Fishing! The best way to spend a quiet afternoon.$B$B"
+    "You need a fishing pole. Equip it, use Fishing near water, and wait until the bobber splashes - then "
+    "click it, quick!$B$B"
+    "Here, every catch gives you 5 times the fish and raises your Fishing skill by 10, so you get better "
+    "really fast.$B$B"
+    "Lures make you catch things more easily. You can cook your fish, and sometimes you find treasure too!",
+]
+
 
 def main():
     texts = [npc_text(GUIDE_TEXT_BASE + n, text) for n, text in enumerate(PAGES)]
+    texts += [npc_text(PROFESSION_TEXT_BASE + n, text) for n, text in enumerate(PROFESSIONS)]
     ids = ', '.join(str(t['ID']) for t in texts)
     out = ['-- Zelda of Warcraft: Navi\'s gameplay guide (build_guide.py)\n',
            'DELETE FROM `npc_text` WHERE `ID` IN (%s);\n' % ids,

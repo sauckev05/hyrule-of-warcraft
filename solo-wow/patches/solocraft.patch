@@ -223,10 +223,10 @@ index 91c212e50..118ca42a3 100644
              m_uiSummonPatientTimer -= uiDiff;
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 000000000..2c98414bd
+index 000000000..0451d1065
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,1329 @@
+@@ -0,0 +1,1367 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -503,6 +503,7 @@ index 000000000..2c98414bd
 +        ACTION_RESET_INSTANCES = GOSSIP_ACTION_INFO_DEF + 5,     // Navi: every dungeon and raid starts over
 +        ACTION_NAVI_MAIN = GOSSIP_ACTION_INFO_DEF + 6,          // Navi: back to her first menu
 +        ACTION_GUIDE = GOSSIP_ACTION_INFO_DEF + 10,             // Navi's gameplay guide; + n is topic n
++        ACTION_PROFESSIONS = GOSSIP_ACTION_INFO_DEF + 40,       // its professions; + n is profession n
 +    };
 +
 +    float const FOLLOW_DIST = 2.5f;
@@ -1184,6 +1185,15 @@ index 000000000..2c98414bd
 +        "About Navi",
 +    };
 +    uint32 const NAVI_GUIDE_TOPICS = sizeof(NAVI_GUIDE) / sizeof(NAVI_GUIDE[0]);
++    // the professions (page PROFESSION_TEXT_BASE + n; page 0 is their overview, shown with the list)
++    uint32 const PROFESSION_TEXT_BASE = 900640;
++    char const* const NAVI_PROFESSIONS[] =
++    {
++        nullptr,
++        "Alchemy", "Blacksmithing", "Enchanting", "Engineering", "Herbalism", "Leatherworking", "Mining",
++        "Skinning", "Tailoring", "Cooking (secondary)", "First Aid (secondary)", "Fishing (secondary)",
++    };
++    uint32 const NAVI_PROFESSION_COUNT = sizeof(NAVI_PROFESSIONS) / sizeof(NAVI_PROFESSIONS[0]);
 +
 +    char const* const NAVI_CHATTER[] =
 +    {
@@ -1369,8 +1379,13 @@ index 000000000..2c98414bd
 +    player->GetPlayerMenu()->ClearMenus();
 +    if (topic == 0)
 +    {
++        // every topic, with the professions just before Navi's own page
 +        for (uint32 n = 1; n < NAVI_GUIDE_TOPICS; ++n)
++        {
++            if (n + 1 == NAVI_GUIDE_TOPICS)
++                player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, "Professions", GOSSIP_SENDER_MAIN, ACTION_PROFESSIONS);
 +            player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, NAVI_GUIDE[n], GOSSIP_SENDER_MAIN, ACTION_GUIDE + n);
++        }
 +        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Back.", GOSSIP_SENDER_MAIN, ACTION_NAVI_MAIN);
 +    }
 +    else
@@ -1381,8 +1396,31 @@ index 000000000..2c98414bd
 +    player->SEND_GOSSIP_MENU(GUIDE_TEXT_BASE + topic, creature->GetObjectGuid());
 +}
 +
++// the professions' list with their overview (`profession` 0), or one profession's page
++static void ShowNaviProfessions(Player* player, Creature* creature, uint32 profession)
++{
++    player->GetPlayerMenu()->ClearMenus();
++    if (profession == 0)
++    {
++        for (uint32 n = 1; n < NAVI_PROFESSION_COUNT; ++n)
++            player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, NAVI_PROFESSIONS[n], GOSSIP_SENDER_MAIN, ACTION_PROFESSIONS + n);
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Back to the guide.", GOSSIP_SENDER_MAIN, ACTION_GUIDE);
++    }
++    else
++    {
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, "Back to the professions.", GOSSIP_SENDER_MAIN, ACTION_PROFESSIONS);
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Back to the guide.", GOSSIP_SENDER_MAIN, ACTION_GUIDE);
++    }
++    player->SEND_GOSSIP_MENU(PROFESSION_TEXT_BASE + profession, creature->GetObjectGuid());
++}
++
 +bool GossipSelect_npc_zelda_navi(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
 +{
++    if (action >= ACTION_PROFESSIONS && action < ACTION_PROFESSIONS + NAVI_PROFESSION_COUNT)
++    {
++        ShowNaviProfessions(player, creature, action - ACTION_PROFESSIONS);
++        return true;
++    }
 +    if (action >= ACTION_GUIDE && action < ACTION_GUIDE + NAVI_GUIDE_TOPICS)
 +    {
 +        ShowNaviGuide(player, creature, action - ACTION_GUIDE);
