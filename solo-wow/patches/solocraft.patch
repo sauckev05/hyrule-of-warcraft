@@ -223,10 +223,10 @@ index 91c212e50..118ca42a3 100644
              m_uiSummonPatientTimer -= uiDiff;
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 000000000..aff244167
+index 000000000..2c98414bd
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
-@@ -0,0 +1,1278 @@
+@@ -0,0 +1,1329 @@
 +/* Zelda of Warcraft - the four companions.
 + *
 + *   Lyra Ashford    human priest      shy but curious; her road runs through the churches of the
@@ -501,6 +501,8 @@ index 000000000..aff244167
 +        ACTION_DISMISS  = GOSSIP_ACTION_INFO_DEF + 3,
 +        ACTION_RESCUE   = GOSSIP_ACTION_INFO_DEF + 4,
 +        ACTION_RESET_INSTANCES = GOSSIP_ACTION_INFO_DEF + 5,     // Navi: every dungeon and raid starts over
++        ACTION_NAVI_MAIN = GOSSIP_ACTION_INFO_DEF + 6,          // Navi: back to her first menu
++        ACTION_GUIDE = GOSSIP_ACTION_INFO_DEF + 10,             // Navi's gameplay guide; + n is topic n
 +    };
 +
 +    float const FOLLOW_DIST = 2.5f;
@@ -1163,6 +1165,26 @@ index 000000000..aff244167
 +    uint32 const NAVI_TEXT_GREETING = 900601;
 +    uint32 const NAVI_TEXT_ABOUT    = 900610;
 +
++    // Navi's gameplay guide: page GUIDE_TEXT_BASE + n (023_navi_guide.sql, build_guide.py) for topic n;
++    // page 0 greets the guide's menu
++    uint32 const GUIDE_TEXT_BASE = 900620;
++    char const* const NAVI_GUIDE[] =
++    {
++        nullptr,
++        "Controls: the 1-9 keys",
++        "Combat",
++        "Stances and weapons",
++        "Levels and experience",
++        "Stats",
++        "Talents",
++        "Inventory and equipping",
++        "Items and weapon types",
++        "Dungeons and raids",
++        "Getting around",
++        "About Navi",
++    };
++    uint32 const NAVI_GUIDE_TOPICS = sizeof(NAVI_GUIDE) / sizeof(NAVI_GUIDE[0]);
++
 +    char const* const NAVI_CHATTER[] =
 +    {
 +        "Hey! Listen!",
@@ -1336,12 +1358,41 @@ index 000000000..aff244167
 +    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Who are you, little light?", GOSSIP_SENDER_MAIN, ACTION_ABOUT);
 +    player->ADD_GOSSIP_ITEM_EXTENDED(GOSSIP_ICON_INTERACT_1, "Navi, reset all the dungeons and raids.", GOSSIP_SENDER_MAIN,
 +                                     ACTION_RESET_INSTANCES, "Every dungeon and raid will start over, its enemies back. Are you sure?", 0, false);
++    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, "Navi, teach me how to play. (Gameplay guide)", GOSSIP_SENDER_MAIN, ACTION_GUIDE);
 +    player->SEND_GOSSIP_MENU(NAVI_TEXT_GREETING, creature->GetObjectGuid());
 +    return true;
 +}
 +
++// the guide's menu (`topic` 0) or one of its pages, each with a way back
++static void ShowNaviGuide(Player* player, Creature* creature, uint32 topic)
++{
++    player->GetPlayerMenu()->ClearMenus();
++    if (topic == 0)
++    {
++        for (uint32 n = 1; n < NAVI_GUIDE_TOPICS; ++n)
++            player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, NAVI_GUIDE[n], GOSSIP_SENDER_MAIN, ACTION_GUIDE + n);
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Back.", GOSSIP_SENDER_MAIN, ACTION_NAVI_MAIN);
++    }
++    else
++    {
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, "Back to the guide.", GOSSIP_SENDER_MAIN, ACTION_GUIDE);
++        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Thanks, Navi.", GOSSIP_SENDER_MAIN, ACTION_NAVI_MAIN);
++    }
++    player->SEND_GOSSIP_MENU(GUIDE_TEXT_BASE + topic, creature->GetObjectGuid());
++}
++
 +bool GossipSelect_npc_zelda_navi(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
 +{
++    if (action >= ACTION_GUIDE && action < ACTION_GUIDE + NAVI_GUIDE_TOPICS)
++    {
++        ShowNaviGuide(player, creature, action - ACTION_GUIDE);
++        return true;
++    }
++    if (action == ACTION_NAVI_MAIN)
++    {
++        player->GetPlayerMenu()->ClearMenus();
++        return GossipHello_npc_zelda_navi(player, creature);
++    }
 +    if (action == ACTION_RESET_INSTANCES)
 +    {
 +        player->CLOSE_GOSSIP_MENU();
