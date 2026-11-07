@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..5edd01a5a
+index 000000000..724fe574e
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5493 @@
+@@ -0,0 +1,5492 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2021,7 +2021,6 @@ index 000000000..5edd01a5a
 +        return uint32(std::min(1000.0f, std::max(300.0f, speed * 0.25f)));
 +    }
 +    const uint32 DODGE_COOLDOWN_MS = 900;
-+    const uint32 DODGE_LANDING_MS = 150;     // the roll's dodge outlasts its arc by this much
 +    const uint32 BOOMERANG_COOLDOWN_MS = 5000;
 +    const float BOOMERANG_RANGE = 30.0f;
 +    const uint32 BOOMERANG_SPELL = 15712;          // Linken's Boomerang: throw, flight and return visuals
@@ -5835,9 +5834,9 @@ index 000000000..5edd01a5a
 +    if (now < state.dodgeReadyAt)
 +        return;
 +    state.dodgeReadyAt = now + DODGE_COOLDOWN_MS;
-+    // every blow is dodged for as long as the roll lasts: its time in the air (an arc launched up at
-+    // v lasts 2v/g), which the client tumbles the hero through, and a little more for the landing
-+    state.invulnerableUntil = now + uint32(2.0f * vertical / 19.291105f * 1000.0f) + DODGE_LANDING_MS;
++    // every blow is dodged for as long as the roll lasts and no longer: its time in the air (an arc
++    // launched up at v lasts 2v/g), which is also the client's tumble
++    state.invulnerableUntil = now + uint32(2.0f * vertical / 19.291105f * 1000.0f);
 +
 +    // KnockBackWithAngle launches the hero along the angle given (0 = straight ahead, pi/2 = left).
 +    float angle = MapManager::NormalizeOrientation(player->GetOrientation() + angleOffset);
