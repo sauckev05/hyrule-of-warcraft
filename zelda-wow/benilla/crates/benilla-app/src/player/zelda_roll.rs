@@ -1,0 +1,155 @@
+//! Zelda of Warcraft: the dodge roll's tumble. The 1.12 character models have no roll clip, so the
+//! hero's whole body turns once through the air instead: head over heels for the forward roll,
+//! heels over head for the backflip, a cartwheel to the side for the side rolls.
+//!
+//! The ZeldaControls addon calls `ZeldaRollAnim(kind)` as it asks the server for the dodge
+//! (`.zroll f|l|r`, `.zflip`). The server answers with a knockback, or not at all (on cooldown, in
+//! the air, stunned), so the request only arms the tumble: it starts when the body actually leaves
+//! the ground within [`ARM_SECS`], and turns once over the arc's time in the air, which is the
+//! same window the server makes every blow a dodge for (`ZeldaDodge`, ZeldaCommands.cpp).
+
+use std::f32::consts::TAU;
+
+use bevy::prelude::*;
+
+use super::camera::{model_pivot_height, CameraPivot, FlyCam};
+use super::state::Player;
+use crate::net::Embodied;
+
+/// How long an asked-for roll waits for the server's push before it is dropped (s).
+const ARM_SECS: f32 = 0.5;
+/// The server's gravity (yd/s²): an arc launched up at `v` is `2v / g` long.
+const GRAVITY: f32 = 19.291_105;
+/// The launch speeds up (yd/s) of the server's dodges, by kind: the forward roll, the side rolls
+/// and the backflip (`HandleZeldaRollCommand`, `HandleZeldaFlipCommand`).
+const LAUNCH_UP: [f32; 4] = [4.5, 2.5, 2.5, 7.0];
+/// The body turns about this share of its head height above the feet, near the middle.
+const PIVOT_SHARE: f32 = 0.5;
+
+/// The roll asked for this frame, from the script ([`crate::script_calls`]).
+#[derive(Resource, Default)]
+pub(crate) struct ZeldaRollRequest {
+    pub(crate) pending: Option<u8>,
+}
+
+/// The tumble in progress, or the one waiting for the push.
+#[derive(Resource, Default)]
+pub(super) struct ZeldaRollState {
+    /// `(kind, asked at)`: waiting for the body to leave the ground.
+    armed: Option<(u8, f32)>,
+    /// `(kind, started at, lasts)`: turning.
+    rolling: Option<(u8, f32, f32)>,
+}
+
+pub(super) fn plugin(app: &mut App) {
+    app.init_resource::<ZeldaRollRequest>()
+        .init_resource::<ZeldaRollState>()
+        .add_systems(
+            Update,
+            tumble
+                .in_set(benilla_world::schedule::WorldStage::Input)
+                .after(super::control)
+                .run_if(not(resource_exists::<crate::run_mode::CaptureMode>))
+                .in_set(crate::char_select::InWorldGated),
+        );
+}
+
+/// The turn about `kind`'s axis, in the model's own frame (forward −Z, left −X, up +Y), `angle`
+/// of the way round: a positive turn about +X lifts the nose (the swim pitch), one about +Z tips
+/// the head to the left.
+fn spin(kind: u8, angle: f32) -> Quat {
+    match kind {
+        2 => Quat::from_rotation_z(angle),  // cartwheel to the left
+        3 => Quat::from_rotation_z(-angle), // and to the right
+        4 => Quat::from_rotation_x(angle),  // backflip: heels over head
+        _ => Quat::from_rotation_x(-angle), // forward roll: head over heels
+    }
+}
+
+/// Ease in and out, so the tuck and the landing read slower than the middle of the turn.
+fn ease(p: f32) -> f32 {
+    let p = p.clamp(0.0, 1.0);
+    p * p * (3.0 - 2.0 * p)
+}
+
+fn tumble(
+    time: Res<Time>,
+    player: Res<Player>,
+    mut request: ResMut<ZeldaRollRequest>,
+    mut state: ResMut<ZeldaRollState>,
+    mut body: Query<
+        (&mut Transform, Option<&CameraPivot>, Option<&crate::net::NetEntity>),
+        (With<Embodied>, Without<FlyCam>),
+    >,
+) {
+    let now = time.elapsed_secs();
+    if let Some(kind) = request.pending.take() {
+        if state.rolling.is_none() {
+            state.armed = Some((kind, now));
+        }
+    }
+    if let Some((kind, asked)) = state.armed {
+        match player.airborne_since {
+            // the push landed: the arc's time in the air is the turn's
+            Some(since) if since >= asked - 0.05 => {
+                let lasts = 2.0 * LAUNCH_UP[usize::from(kind.clamp(1, 4) - 1)] / GRAVITY;
+                state.rolling = Some((kind, since, lasts));
+                state.armed = None;
+            }
+            _ if now - asked > ARM_SECS => state.armed = None,
+            _ => {}
+        }
+    }
+    let Some((kind, start, lasts)) = state.rolling else {
+        return;
+    };
+    let p = (now - start) / lasts;
+    // done once the arc is over, or the body is back on the ground
+    if p >= 1.0 || (player.airborne_since.is_none() && now - start > 0.05) {
+        state.rolling = None;
+        return;
+    }
+    let Ok((mut t, pivot, net)) = body.single_mut() else {
+        return;
+    };
+    let height = pivot.map_or(1.0, |p| model_pivot_height(p, net.map_or(1.0, |n| n.scale), false));
+    let up = Vec3::Y * height * PIVOT_SHARE;
+    // `control` has just set the body upright at its feet: turn it about its middle instead
+    let base = t.rotation;
+    let turn = spin(kind, ease(p) * TAU);
+    let world_turn = base * turn * base.inverse();
+    let center = t.translation + up;
+    t.translation = center - world_turn * up;
+    t.rotation = base * turn;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_forward_roll_tips_the_head_forward() {
+        // a quarter of the way round, the head (+Y) points along the model's forward (−Z)
+        let head = spin(1, TAU / 4.0) * Vec3::Y;
+        assert!((head - Vec3::NEG_Z).length() < 1e-5, "{head}");
+        // the backflip takes it backward
+        let head = spin(4, TAU / 4.0) * Vec3::Y;
+        assert!((head - Vec3::Z).length() < 1e-5, "{head}");
+    }
+
+    #[test]
+    fn the_side_rolls_tip_toward_their_side() {
+        // the model's left is −X (WoW +Y)
+        let head = spin(2, TAU / 4.0) * Vec3::Y;
+        assert!((head - Vec3::NEG_X).length() < 1e-5, "{head}");
+        let head = spin(3, TAU / 4.0) * Vec3::Y;
+        assert!((head - Vec3::X).length() < 1e-5, "{head}");
+    }
+
+    #[test]
+    fn the_turn_is_whole_and_eased() {
+        assert_eq!(ease(0.0), 0.0);
+        assert_eq!(ease(1.0), 1.0);
+        assert!((ease(0.5) - 0.5).abs() < 1e-6);
+    }
+}

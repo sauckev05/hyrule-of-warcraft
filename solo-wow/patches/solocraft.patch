@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..38343388b
+index 000000000..5edd01a5a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5244 @@
+@@ -0,0 +1,5493 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1905,6 +1905,14 @@ index 000000000..38343388b
 +        uint32 forgeInstance = 0;
 +        int8 ironfoeHeld = -1;                          // Ironfoe in hand when the anvil was last shown
 +        bool forgeBagsTold = false;
++        // Sul'thraze: Zan'thraze the Hexblade, risen at the Jintha'Alor altar for this hero
++        ObjectGuid hexblade;
++        uint32 sulthrazeCheckIn = 0;
++        bool echoBagsTold = false;
++        // The Rite of Sul'thraze: the Atal'ai called by the rite, and the fight with them
++        std::vector<ObjectGuid> riteGuardians;
++        bool riteTrial = false;
++        uint32 riteInstance = 0;
 +        std::unordered_map<uint64, uint32> bgMight;     // Warsong Gulch: the flags each soldier is stronger by
 +        uint32 bgMightTold[2] = { 0, 0 };               // the captures already announced, per side
 +        uint32 bgGuardDeadAt[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -2013,7 +2021,7 @@ index 000000000..38343388b
 +        return uint32(std::min(1000.0f, std::max(300.0f, speed * 0.25f)));
 +    }
 +    const uint32 DODGE_COOLDOWN_MS = 900;
-+    const uint32 DODGE_INVULN_MS = 450;
++    const uint32 DODGE_LANDING_MS = 150;     // the roll's dodge outlasts its arc by this much
 +    const uint32 BOOMERANG_COOLDOWN_MS = 5000;
 +    const float BOOMERANG_RANGE = 30.0f;
 +    const uint32 BOOMERANG_SPELL = 15712;          // Linken's Boomerang: throw, flight and return visuals
@@ -3135,10 +3143,12 @@ index 000000000..38343388b
 +
 +static void ZeldaEnemyMechanics(Player* player, ZeldaState& state);
 +static void ZeldaGifts(Player* player);
++static void ZeldaTakeBack(Player* player);
 +static void ZeldaDoneQuests(Player* player);
 +static void ZeldaUnderWorldRescue(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaForgeTrial(Player* player, ZeldaState& state);
++static void ZeldaSulthraze(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaDoomLordWatch(Player* player);
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
 +static void ZeldaFrostBreath(Unit* azuregos);
@@ -3160,6 +3170,7 @@ index 000000000..38343388b
 +        state.sold.clear();                     // the pawnbroker forgets what was sold before
 +        state.shield = state.parry = state.guardRooted = false;     // a fresh login holds no guard
 +        ZeldaGifts(player);
++        ZeldaTakeBack(player);
 +    }
 +
 +    // the Gurubashi Arena challenge
@@ -3167,6 +3178,7 @@ index 000000000..38343388b
 +    ZeldaEnemyMechanics(player, state);
 +    ZeldaSoloBattleground(player, state, diff);
 +    ZeldaForgeTrial(player, state);
++    ZeldaSulthraze(player, state, diff);
 +    ZeldaDoomLordWatch(player);
 +    ZeldaDefianceStrikesBack(player, state);
 +
@@ -3747,6 +3759,15 @@ index 000000000..38343388b
 +    return category == 4; // SPELLCATEGORY_HEALTH_MANA_POTIONS: healing, mana and rejuvenation potions
 +}
 +
++bool ZeldaRolling(Unit const* victim)
++{
++    if (!victim || !victim->IsPlayer())
++        return false;
++    std::lock_guard<std::mutex> guard(s_statesLock);
++    auto itr = s_states.find(victim->GetGUIDLow());
++    return itr != s_states.end() && WorldTimer::getMSTime() < itr->second.invulnerableUntil;
++}
++
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage)
 +{
 +    if (!victim || damage == 0)
@@ -3849,6 +3870,37 @@ index 000000000..38343388b
 +            MailDraft(proto->Name1, "Hey! Listen! You dropped this - your bags were full, so here it is.")
 +                .AddItem(item).SendMailTo(player, MailSender(MAIL_CREATURE, uint32(190601)), MAIL_CHECK_MASK_COPIED);
 +            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: your %s was sent to your mailbox.|r", proto->Name1);
++        }
++    }
++}
++
++// Items taken back from a character once (Zelda.TakeBack: "Name:item Name:item ..."), from the
++// bags, the bank and the hands alike; marker 'takeback:<item>' per character. Sul'thraze, given by
++// Zelda.Gifts before it could be earned (build_sulthraze.py), goes back so the quest can be tried.
++static void ZeldaTakeBack(Player* player)
++{
++    static std::string const items = sConfig.GetStringDefault("Zelda.TakeBack", "Kale:9372");
++    std::istringstream in(items);
++    std::string word;
++    while (in >> word)
++    {
++        size_t const colon = word.find(':');
++        if (colon == std::string::npos || word.substr(0, colon) != player->GetName())
++            continue;
++        uint32 const itemId = uint32(std::strtoul(word.c_str() + colon + 1, nullptr, 10));
++        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
++        if (!proto)
++            continue;
++        std::string const key = "takeback:" + std::to_string(itemId);
++        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
++                                     player->GetGUIDLow(), key.c_str()))
++            continue;
++        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
++                                   player->GetGUIDLow(), key.c_str());
++        if (uint32 const count = player->GetItemCount(itemId, true))
++        {
++            player->DestroyItemCount(itemId, count, true, false, true);
++            ChatHandler(player).PSendSysMessage("|cff33ff99%s was taken back - earn it with its quest.|r", proto->Name1);
 +        }
 +    }
 +}
@@ -4509,6 +4561,156 @@ index 000000000..38343388b
 +    }
 +}
 +
++// ---------------------------------------------------------------------------------- Sul'thraze
++// Sul'thraze the Lasher is earned (build_sulthraze.py): Antu'sul's Hex Idol starts The Deflector's
++// Echo, whose Zan'thraze the Hexblade rises at the Jintha'Alor altar when the hero comes near and
++// gives Sang'thraze when he falls; Sang'thraze starts The Rite of Sul'thraze, finished at the Altar
++// of Jammal'an in the Sunken Temple: ten seconds of rite (Rite of Sul'thraze, 40027), then the
++// Atal'ai it calls, and once they fall the two blades are Sul'thraze.
++namespace
++{
++    uint32 const QUEST_DEFLECTORS_ECHO = 90540;
++    uint32 const QUEST_RITE_OF_SULTHRAZE = 90541;
++    uint32 const NPC_HEXBLADE = 191200;
++    uint32 const GO_ALTAR_OF_JAMMALAN = 191210;
++    uint32 const SPELL_RITE_OF_SULTHRAZE = 40027;
++    uint32 const ITEM_JANG_THRAZE = 11086, ITEM_SANG_THRAZE = 9379;
++    // the Vilebranch altar at the summit of Jintha'Alor (map 0)
++    float const SUMMIT_ALTAR[3] = { -531.1f, -3872.8f, 232.5f };
++    float const SUMMIT_REACH = 28.0f;
++    // the Atal'ai who answer the rite: two Deathwalkers, a High Priest, two Warriors
++    uint32 const RITE_GUARDIANS[5] = { 5271, 5273, 5256, 5271, 5256 };
++
++    // a quest the core rewards itself, once it is complete and the bags have room (told once when not)
++    bool RewardHere(Player* player, uint32 questId, bool& told)
++    {
++        Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
++        if (!quest || player->GetQuestStatus(questId) != QUEST_STATUS_COMPLETE)
++            return false;
++        for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
++        {
++            ItemPosCountVec dest;
++            if (quest->RewItemId[i] &&
++                player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewItemId[i], quest->RewItemCount[i]) != EQUIP_ERR_OK)
++            {
++                if (!told)
++                {
++                    told = true;
++                    player->GetSession()->SendNotification("Your bags are full - make room for your reward.");
++                }
++                return false;
++            }
++        }
++        player->RewardQuest(quest, 0, player, true);
++        return true;
++    }
++
++    // the rite can begin: Jammal'an slain and both blades in the bags (the quest complete), and room
++    // for Sul'thraze - told to the hero when not
++    bool RiteReady(Player* player, bool tell)
++    {
++        QuestStatus const status = player->GetQuestStatus(QUEST_RITE_OF_SULTHRAZE);
++        if (status != QUEST_STATUS_COMPLETE && status != QUEST_STATUS_INCOMPLETE)
++        {
++            if (tell)
++                player->GetSession()->SendNotification("The altar is cold. Only the rite of Sul'thraze wakes it.");
++            return false;
++        }
++        if (status != QUEST_STATUS_COMPLETE)
++        {
++            if (tell)
++            {
++                auto const itr = player->getQuestStatusMap().find(QUEST_RITE_OF_SULTHRAZE);
++                bool const slain = itr != player->getQuestStatusMap().end() && itr->second.m_creatureOrGOcount[0] >= 1;
++                if (!slain)
++                    player->GetSession()->SendNotification("Jammal'an the Prophet still lives.");
++                else
++                    player->GetSession()->SendNotification("The rite needs both Jang'thraze and Sang'thraze.");
++            }
++            return false;
++        }
++        return true;
++    }
++}
++
++static void ZeldaSulthraze(Player* player, ZeldaState& state, uint32 diff)
++{
++    if (!player->IsInWorld() || player->IsBeingTeleported())
++        return;
++
++    // The Rite of Sul'thraze: the Atal'ai it called
++    if (state.riteTrial)
++    {
++        auto despawn = [&]()
++        {
++            for (ObjectGuid const& guid : state.riteGuardians)
++                if (Creature* c = player->GetMap()->GetAnyTypeCreature(guid))
++                    if (c->IsAlive())
++                        c->ForcedDespawn();
++            state.riteGuardians.clear();
++            state.riteTrial = false;
++        };
++        // falling, or leaving the temple, breaks the rite: the altar can begin it again
++        if (!player->IsAlive() || player->GetInstanceId() != state.riteInstance)
++        {
++            despawn();
++            player->GetSession()->SendAreaTriggerMessage("|cffff4040The rite is broken. Return to the Altar of Jammal'an to begin it again.|r");
++            return;
++        }
++        for (ObjectGuid const& guid : state.riteGuardians)
++            if (Creature* c = player->GetMap()->GetAnyTypeCreature(guid))
++                if (c->IsAlive())
++                    return;
++        bool told = false;
++        if (RewardHere(player, QUEST_RITE_OF_SULTHRAZE, told))
++        {
++            despawn();
++            player->HandleEmoteCommand(EMOTE_ONESHOT_CHEER);
++            player->GetSession()->SendAreaTriggerMessage("|cffa335eeThe blades draw together - Sul'thraze the Lasher is whole!|r");
++        }
++        else if (player->GetQuestStatus(QUEST_RITE_OF_SULTHRAZE) != QUEST_STATUS_COMPLETE)
++            despawn();          // a blade left the bags: nothing to make whole
++        return;
++    }
++
++    // the rest twice a second
++    state.sulthrazeCheckIn = state.sulthrazeCheckIn > diff ? state.sulthrazeCheckIn - diff : 0;
++    if (state.sulthrazeCheckIn)
++        return;
++    state.sulthrazeCheckIn = 500;
++
++    QuestStatus const echo = player->GetQuestStatus(QUEST_DEFLECTORS_ECHO);
++    // the Hexblade slain: the quest ends there, Sang'thraze in hand
++    if (echo == QUEST_STATUS_COMPLETE)
++    {
++        if (RewardHere(player, QUEST_DEFLECTORS_ECHO, state.echoBagsTold))
++            player->GetSession()->SendAreaTriggerMessage("|cff1eff00Sang'thraze the Deflector is yours. It trembles toward the south...|r");
++        return;
++    }
++    if (echo != QUEST_STATUS_INCOMPLETE || player->GetMapId() != 0 || !player->IsAlive())
++        return;
++    // Zan'thraze rises at the summit when the hero comes near the altar, once at a time
++    if (player->GetDistance(SUMMIT_ALTAR[0], SUMMIT_ALTAR[1], SUMMIT_ALTAR[2]) > SUMMIT_REACH)
++        return;
++    if (!state.hexblade.IsEmpty())
++        if (Creature* c = player->GetMap()->GetAnyTypeCreature(state.hexblade))
++            if (c->IsAlive())
++                return;
++    float const angle = std::atan2(player->GetPositionY() - SUMMIT_ALTAR[1], player->GetPositionX() - SUMMIT_ALTAR[0]);
++    float x = SUMMIT_ALTAR[0] + 5.0f * std::cos(angle);
++    float y = SUMMIT_ALTAR[1] + 5.0f * std::sin(angle);
++    float z = SUMMIT_ALTAR[2];
++    player->UpdateAllowedPositionZ(x, y, z);
++    if (Creature* c = player->SummonCreature(NPC_HEXBLADE, x, y, z, angle, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 120000))
++    {
++        state.hexblade = c->GetObjectGuid();
++        c->MonsterYell("Sang'thraze belongs to the Vilebranch! Your blood will feed the altar!", LANG_UNIVERSAL, player);
++        if (c->AI())
++            c->AI()->AttackStart(player);
++        c->AddThreat(player, 100.0f);
++    }
++}
++
 +bool ZeldaGameObjectAwake(Player* player, GameObject const* go)
 +{
 +    return !player || !go || go->GetEntry() != GO_BLACK_ANVIL || IronfoeInHand(player);
@@ -4516,6 +4718,20 @@ index 000000000..38343388b
 +
 +bool ZeldaGameObjectUse(Player* player, GameObject* go)
 +{
++    // the Altar of Jammal'an: ten seconds of rite, then the Atal'ai it calls (ZeldaSpellFinished)
++    if (player && go && go->GetEntry() == GO_ALTAR_OF_JAMMALAN)
++    {
++        if (StateFor(player).riteTrial || player->IsNonMeleeSpellCasted(false) || !RiteReady(player, true))
++            return true;
++        if (SpellEntry const* rite = sSpellTemplate.LookupEntry<SpellEntry>(SPELL_RITE_OF_SULTHRAZE))
++        {
++            Spell* spell = new Spell(player, rite, TRIGGERED_NONE);
++            SpellCastTargets targets;
++            targets.setUnitTarget(player);
++            spell->SpellStart(&targets);
++        }
++        return true;
++    }
 +    if (!player || !go || go->GetEntry() != GO_BLACK_ANVIL)
 +        return false;
 +    if (!IronfoeInHand(player))
@@ -4543,6 +4759,37 @@ index 000000000..38343388b
 +        spell->GetCaster()->GetEntry() == 6109)
 +    {
 +        ZeldaFrostBreath(spell->GetCaster());
++        return;
++    }
++    // the rite's end: the Atal'ai answer it, in a ring around the altar
++    if (spell && spell->m_spellInfo->Id == SPELL_RITE_OF_SULTHRAZE && spell->GetCaster() && spell->GetCaster()->IsPlayer())
++    {
++        Player* player = static_cast<Player*>(spell->GetCaster());
++        ZeldaState& state = StateFor(player);
++        if (state.riteTrial || !RiteReady(player, false))
++            return;
++        state.riteGuardians.clear();
++        uint32 const count = sizeof(RITE_GUARDIANS) / sizeof(RITE_GUARDIANS[0]);
++        for (uint32 n = 0; n < count; ++n)
++        {
++            float const angle = float(n) * float(M_PI) * 2.0f / float(count);
++            float const dist = frand(8.0f, 11.0f);
++            float x = player->GetPositionX() + dist * std::cos(angle);
++            float y = player->GetPositionY() + dist * std::sin(angle);
++            float z = player->GetPositionZ();
++            player->UpdateAllowedPositionZ(x, y, z);
++            if (Creature* c = player->SummonCreature(RITE_GUARDIANS[n], x, y, z, angle + float(M_PI),
++                                                     TEMPSPAWN_CORPSE_TIMED_DESPAWN, 60000))
++            {
++                if (c->AI())
++                    c->AI()->AttackStart(player);
++                c->AddThreat(player, 100.0f);
++                state.riteGuardians.push_back(c->GetObjectGuid());
++            }
++        }
++        state.riteTrial = true;
++        state.riteInstance = player->GetInstanceId();
++        player->GetSession()->SendAreaTriggerMessage("|cffff4040The Atal'ai answer the rite! Defeat them to make the blades one.|r");
 +        return;
 +    }
 +    if (!spell || spell->m_spellInfo->Id != SPELL_REFORGING || !spell->GetCaster() || !spell->GetCaster()->IsPlayer())
@@ -5588,7 +5835,9 @@ index 000000000..38343388b
 +    if (now < state.dodgeReadyAt)
 +        return;
 +    state.dodgeReadyAt = now + DODGE_COOLDOWN_MS;
-+    state.invulnerableUntil = now + DODGE_INVULN_MS;
++    // every blow is dodged for as long as the roll lasts: its time in the air (an arc launched up at
++    // v lasts 2v/g), which the client tumbles the hero through, and a little more for the landing
++    state.invulnerableUntil = now + uint32(2.0f * vertical / 19.291105f * 1000.0f) + DODGE_LANDING_MS;
 +
 +    // KnockBackWithAngle launches the hero along the angle given (0 = straight ahead, pi/2 = left).
 +    float angle = MapManager::NormalizeOrientation(player->GetOrientation() + angleOffset);
@@ -7040,10 +7289,10 @@ index 000000000..38343388b
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..a3f218297
+index 000000000..e5845f93e
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,307 @@
+@@ -0,0 +1,309 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -7065,6 +7314,8 @@ index 000000000..a3f218297
 +class ObjectGuid;
 +
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
++// a hero in the middle of a dodge roll: every blow and spell aimed at her is dodged
++bool ZeldaRolling(Unit const* victim);
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
 +
 +// Zelda of Warcraft: the class whose stat formulas weapons scale with. Every hero fights like a
@@ -8113,7 +8364,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..8d903d9c9 100644
+index 00986af9e..98d3000f8 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -8222,10 +8473,13 @@ index 00986af9e..8d903d9c9 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -2711,6 +2753,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+@@ -2711,6 +2753,16 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
      if (pVictim->GetCombatManager().IsInEvadeMode())
          return MELEE_HIT_EVADE;
  
++    // Zelda of Warcraft: a hero mid-roll dodges every blow, arrows too
++    if (ZeldaRolling(pVictim))
++        return MELEE_HIT_DODGE;
 +    // Zelda of Warcraft: a hero holding the weapon up parries every melee blow from the front
 +    if (attType != RANGED_ATTACK && ZeldaParryHolds(pVictim, this))
 +        return MELEE_HIT_PARRY;
@@ -8236,7 +8490,7 @@ index 00986af9e..8d903d9c9 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
      if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
-@@ -2829,6 +2878,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+@@ -2829,6 +2881,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
  
  SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
  {
@@ -8250,10 +8504,13 @@ index 00986af9e..8d903d9c9 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
      die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
-@@ -2924,6 +2980,18 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2924,6 +2983,21 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
  
          return SPELL_MISS_NONE;
      }
++    // Zelda of Warcraft: a hero mid-roll dodges every harmful spell aimed at her
++    if (caster != pVictim && ZeldaRolling(pVictim))
++        return SPELL_MISS_DODGE;
 +    // Zelda of Warcraft: a stun meets the hero's guard - a raised shield blocks it, a weapon held
 +    // up parries it, from any enemy in front, whatever school it is
 +    if (caster != pVictim && caster && caster->IsUnit() && pVictim->IsPlayer() &&
@@ -8269,7 +8526,7 @@ index 00986af9e..8d903d9c9 100644
      // !!!UNHACKME: Self-resists suppression hack for channeled spells until spellInfo execution is modernized with effectmasks: Drain Soul, Blizzard, RoF
      if (pVictim == caster && IsChanneledSpell(spellInfo))
      {
-@@ -2942,7 +3010,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2942,7 +3016,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
      // Reflect (when available)
      if (reflectable)
      {
@@ -8279,7 +8536,7 @@ index 00986af9e..8d903d9c9 100644
          if (roll_chance_combat(chance))
              return SPELL_MISS_REFLECT;
      }
-@@ -3628,7 +3697,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3703,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -8289,7 +8546,7 @@ index 00986af9e..8d903d9c9 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3713,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3719,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -8298,7 +8555,7 @@ index 00986af9e..8d903d9c9 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5046,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5052,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -8310,7 +8567,7 @@ index 00986af9e..8d903d9c9 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6172,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6178,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -8319,7 +8576,7 @@ index 00986af9e..8d903d9c9 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7125,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7131,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -8328,7 +8585,7 @@ index 00986af9e..8d903d9c9 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7242,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7248,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -8342,7 +8599,7 @@ index 00986af9e..8d903d9c9 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7391,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7397,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -8356,7 +8613,7 @@ index 00986af9e..8d903d9c9 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8184,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8190,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -8370,7 +8627,7 @@ index 00986af9e..8d903d9c9 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8500,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8506,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {

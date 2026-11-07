@@ -61,6 +61,10 @@ pub enum ScriptCall {
     /// Zelda of Warcraft: `ZeldaGuardAnim(kind, held)`, the guard key pressed (`held` true) or let
     /// go: `kind` 1 raises the shield, 2 holds the weapon up to parry.
     ZeldaGuard { kind: u8, held: bool, secs: f32 },
+    /// Zelda of Warcraft: `ZeldaRollAnim(kind)`, a dodge the hero has just asked the server for:
+    /// 1 the forward roll, 2 and 3 the left and right side rolls, 4 the backflip. The body tumbles
+    /// through it when the server's push lifts it off the ground.
+    ZeldaRoll(u8),
     /// Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)` turns the Minimap into the big dungeon map
     /// (square, zoomed out to `zoom` 0..3, widest first) or back into the corner disc.
     ZeldaDungeonMap { on: bool, zoom: u8 },

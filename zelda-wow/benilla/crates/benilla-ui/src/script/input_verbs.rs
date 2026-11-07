@@ -393,6 +393,21 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
             Ok(())
         })?,
     )?;
+    // Zelda of Warcraft: `ZeldaRollAnim(kind)`, a roll (1 forward, 2 left, 3 right) or the
+    // backflip (4) just asked of the server: the hero tumbles through it when the push lands.
+    g.set(
+        "ZeldaRollAnim",
+        lua.create_function(|lua, kind: Option<Value>| {
+            let kind = match kind {
+                Some(Value::Integer(n)) => n as i64,
+                Some(Value::Number(n)) => n as i64,
+                _ => 1,
+            }
+            .clamp(1, 4) as u8;
+            push_call(lua, ScriptCall::ZeldaRoll(kind));
+            Ok(())
+        })?,
+    )?;
     // Zelda of Warcraft: `ZeldaSetCrest(emblem, emblemColor, border, borderColor, background)`,
     // the guildless hero's crest as the server keeps it (the ZeldaHUD addon relays it).
     g.set(

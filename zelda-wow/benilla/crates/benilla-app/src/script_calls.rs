@@ -37,6 +37,7 @@ pub(crate) fn apply_script_calls(
         Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
         Option<ResMut<crate::minimap::ZeldaBigMap>>,
         Option<ResMut<crate::ui_tabard::TabardDesign>>,
+        Option<ResMut<crate::player::ZeldaRollRequest>>,
     ),
 ) {
     let Some(mut script) = script else {
@@ -95,6 +96,11 @@ pub(crate) fn apply_script_calls(
                         guard.draw_secs = secs;
                     }
                     guard.held = held;
+                }
+            }
+            ScriptCall::ZeldaRoll(kind) => {
+                if let Some(roll) = zelda.4.as_deref_mut() {
+                    roll.pending = Some(kind);
                 }
             }
             ScriptCall::ZeldaCrest(crest) => {

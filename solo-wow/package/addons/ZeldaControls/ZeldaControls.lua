@@ -27,7 +27,14 @@ local BOW_HOLD = SPIN_HOLD * 2   -- a Charged Shot takes twice as long to charge
 local attackDownAt = nil
 local bowDownAt = nil          -- the bow key is held: a Charged Shot when it is let go after BOW_HOLD
 
+-- the roll the Zelda client tumbles the hero through when the server's push lands: 1 forward,
+-- 2 left, 3 right, 4 the backflip
+local ROLL_KINDS = { [".zroll f"] = 1, [".zroll l"] = 2, [".zroll r"] = 3, [".zflip"] = 4 }
+
 function ZeldaControls_Command(cmd)
+	if ROLL_KINDS[cmd] and ZeldaRollAnim then
+		ZeldaRollAnim(ROLL_KINDS[cmd])
+	end
 	SendChatMessage(cmd, "SAY")
 end
 

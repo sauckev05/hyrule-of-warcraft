@@ -72,6 +72,9 @@ MIRROR_SHIELD_LOOK = 60300
 MIRROR_SHIELD_TEXTURE = 'Shield_ZeldaMirror'
 MIRROR_WARD, MIRROR_LAST_STAND, MIRROR_REFLECTION, PLACE_MIRROR_PLATE = 40022, 40023, 40024, 40025
 BERSERKER_FURY = 40026
+RITE_OF_SULTHRAZE = 40027
+CALL_OF_SULTHRAZE = 11654         # Jang'thraze's own combining spell
+CAST_10_SECONDS = 7
 DEATH_WISH = 12328
 DURATION_10_SEC = 1                 # SpellDuration.dbc
 ARENA_WARD = 23506                  # the Arena Grand Master's Aura of Protection
@@ -145,6 +148,12 @@ SPELLS = [
           tooltip='Attack power and spell power increased by $s1% per stack.')),
     (PLACE_MIRROR_PLATE, PLACE_UNFIRED_BLADE, 'Place Mirror Plate', 'Sets the Tarnished Mirror Plate on the ground.',
      dict(EffectMiscValue1=191182)),
+    # The Rite of Sul'thraze (build_sulthraze.py): ten seconds at the Altar of Jammal'an, whose end
+    # calls the Atal'ai (ZeldaCommands.cpp, ZeldaSpellFinished); Call of Sul'thraze's look, no reagents
+    (RITE_OF_SULTHRAZE, CALL_OF_SULTHRAZE, "Rite of Sul'thraze",
+     "Begins the rite that makes Jang'thraze and Sang'thraze one blade again.",
+     dict(Effect1=3, EffectItemType1=0, EffectImplicitTargetA1=1, Reagent2=0, ReagentCount2=0,
+          CastingTimeIndex=CAST_10_SECONDS)),
     (REFORGING, COPPER_BRACERS, 'Reforging', "Reforges Linken's sword on the Black Anvil.",
      dict(Effect1=3, EffectItemType1=0, EffectImplicitTargetA1=1, Totem1=0, RequiresSpellFocus=0, Reagent1=0,
           ReagentCount1=0, CastingTimeIndex=CAST_30_SECONDS)),
@@ -172,6 +181,8 @@ ITEM_EDITS = {
 # stock spell texts changed in the client (patch-Z only): mana potions are shields now
 DESCRIPTION_EDITS = {sid: 'Shields you, absorbing $s1 damage for 20 sec.'
                      for sid in (437, 438, 2023, 11903, 17530, 17531, 21395, 21396)}
+DESCRIPTION_EDITS[11658] = ("Strikes an enemy with the rage of Sul'thraze, dealing $s1 Shadow damage and an "
+                            "additional $o3 damage over $d. The target deals 15% less damage for $d.")
 # Dual Wield Specialization (warrior and rogue): 2% melee hit a point while two weapons are held, not
 # off-hand damage (ZeldaDualWieldHit); a dummy aura whose $s1 is the percent
 DUAL_WIELD_SPEC = (23584, 23585, 23586, 23587, 23588, 13715, 13848, 13849, 13851, 13852)
@@ -186,6 +197,10 @@ for _n, _sid in enumerate(MACE_SPEC):
 # stock spells changed in place: {spell id: {spell_template column: value}}
 SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
+    # Sul'thraze the Lasher (build_sulthraze.py): 25% on a hit; the target deals 15% less damage instead of
+    # losing 15 Strength; 200 Shadow every 3 sec for 15 sec (1000) instead of 125 in all
+    11658: dict(ProcChance=25, EffectApplyAuraName2=79, EffectBasePoints2=-16, EffectMiscValue2=127,
+                EffectBasePoints3=199),
 }
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=2 * (_n % 5 + 1) - 1)   # SPELL_AURA_DUMMY, 2% a rank
@@ -290,7 +305,7 @@ CREATURE_COLUMNS = ['Entry', 'Name', 'SubName', 'MinLevel', 'MaxLevel', 'Display
                     'SpellList', 'CharmedSpellList', 'StringId1', 'StringId2', 'EquipmentTemplateId', 'Civilian',
                     'AIName', 'ScriptName', 'DamageMultiplierOLD', 'DamageVarianceOLD']
 
-DBC_FIELD = {'RecoveryTime': 19, 'DurationIndex': 30, 'StackAmount': 39, 'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
+DBC_FIELD = {'ProcChance': 25, 'RecoveryTime': 19, 'DurationIndex': 30, 'StackAmount': 39, 'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
              'SpellIconID': 117, 'School': 1, 'Attributes': 6, 'AttributesEx': 7, 'AttributesEx3': 9, 'CastingTimeIndex': 18, 'InterruptFlags': 21, 'PowerType': 31,
              'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'SpellFamilyName': 160,
              'SpellFamilyFlags': 161, 'DmgClass': 164}
@@ -518,7 +533,7 @@ def patch_spells(path):
         byid[rank][DBC_TARGET_AURA_STATE] = 0
     for sid, changes in SPELL_EDITS.items():
         for k, v in changes.items():
-            byid[sid][DBC_FIELD[k]] = v
+            byid[sid][DBC_FIELD[k]] = v & 0xFFFFFFFF
     for sid, source, name, text, changes in SPELLS:
         assert sid > top, sid
         row = list(byid[source])
