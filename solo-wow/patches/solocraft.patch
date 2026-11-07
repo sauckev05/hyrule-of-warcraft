@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..3457a951c
+index 000000000..768c0cd56
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5219 @@
+@@ -0,0 +1,5240 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5430,6 +5430,8 @@ index 000000000..3457a951c
 +        PlaySpellVisual(player, SHIELD_SLAM_SPELL, {});   // the slam at the air
 +}
 +
++static const uint32 BERSERKER_FURY_SPELL = 40026;
++
 +// Berserker Stance's charged attack: a leaping strike on one enemy in front (the selected one when
 +// it is there), for twice the hero's attack power. A melee-class spell (Leaping Strike, 40008), so
 +// it crits like a melee hit and never glances. The Zelda client plays the leap (Special2H) itself.
@@ -5443,14 +5445,33 @@ index 000000000..3457a951c
 +    if (!clientAnimates)
 +        player->HandleEmoteCommand(EMOTE_ONESHOT_SPECIALATTACK1H);
 +    int32 const damage = std::max<int32>(1, int32(player->GetTotalAttackPowerValue(BASE_ATTACK) * 2.0f));
++    bool landed = false;
 +    for (Unit* unit : enemies)
 +    {
 +        if (!unit->IsAlive() || !player->IsWithinDistInMap(unit, reach.slashRange + unit->GetCombatReach()) ||
 +            !player->HasInArc(unit, reach.slashArc))
 +            continue;
++        uint32 const before = unit->GetHealth();
 +        player->CastCustomSpell(unit, LEAPING_STRIKE_SPELL, &damage, nullptr, nullptr,
 +                                TriggerCastFlags(TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS));
++        // a miss, dodge or parry leaves the enemy's health as it was
++        if (!unit->IsAlive() || unit->GetHealth() < before)
++            landed = true;
 +    }
++    // Berserker's Fury: one stack for each Leaping Strike that lands, however many it hits - +10%
++    // attack power and spell power a stack, up to 10, for 10 seconds (a new stack renews them all)
++    if (landed)
++        player->CastSpell(player, BERSERKER_FURY_SPELL, TRIGGERED_OLD_TRIGGERED);
++}
++
++// Berserker's Fury's share of spell power, in percent (its third, dummy effect, 10 a stack)
++int32 ZeldaBerserkerFuryPercent(Unit const* unit)
++{
++    int32 pct = 0;
++    for (Aura const* aura : unit->GetAurasByType(SPELL_AURA_DUMMY))
++        if (aura->GetId() == BERSERKER_FURY_SPELL)
++            pct += aura->GetModifier()->m_amount;
++    return pct;
 +}
 +
 +bool ChatHandler::HandleZeldaStatsCommand(char* /*args*/)
@@ -7015,10 +7036,10 @@ index 000000000..3457a951c
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..52b12c295
+index 000000000..a3f218297
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,307 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -7234,6 +7255,8 @@ index 000000000..52b12c295
 +// Zelda of Warcraft: intellect gives spell power (Zelda.IntellectSpellPower per point, 2) and spirit
 +// spell crit (as agility gives melee crit) to heroes, who all scale as warriors
 +int32 ZeldaSpellPowerFromStats(Player const* player);
++// Berserker's Fury: the percent its stacks add to spell power (0 without it)
++int32 ZeldaBerserkerFuryPercent(Unit const* unit);
 +bool ZeldaSpiritSpellCrit(Player const* player);
 +float ZeldaSpellCritFromSpirit(Player const* player);
 +// Zelda of Warcraft: crit and hit chance from gear count for spells as well (Zelda.GearCritForSpells)
@@ -8086,7 +8109,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..c701448bc 100644
+index 00986af9e..8d903d9c9 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -8301,27 +8324,35 @@ index 00986af9e..c701448bc 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7242,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7242,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
 +        // Zelda of Warcraft: intellect gives spell power as strength gives attack power
 +        if (schoolMask & SPELL_SCHOOL_MASK_MAGIC)
 +            DoneAdvertisedBenefit += ZeldaSpellPowerFromStats(static_cast<Player*>(this));
++        // and Berserker's Fury raises it by 10% a stack
++        if (DoneAdvertisedBenefit > 0)
++            if (int32 fury = ZeldaBerserkerFuryPercent(this))
++                DoneAdvertisedBenefit += DoneAdvertisedBenefit * fury / 100;
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7387,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7391,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
 +    // Zelda of Warcraft: intellect's spell power heals too
 +    if (GetTypeId() == TYPEID_PLAYER)
 +        AdvertisedBenefit += ZeldaSpellPowerFromStats(static_cast<Player*>(this));
++    // and Berserker's Fury raises it by 10% a stack
++    if (AdvertisedBenefit > 0)
++        if (int32 fury = ZeldaBerserkerFuryPercent(this))
++            AdvertisedBenefit += AdvertisedBenefit * fury / 100;
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8176,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8184,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -8335,7 +8366,7 @@ index 00986af9e..c701448bc 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8492,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8500,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {

@@ -71,6 +71,9 @@ SHIELD_WALL_LOOK = 31746            # ItemDisplayInfo of the Shield Wall
 MIRROR_SHIELD_LOOK = 60300
 MIRROR_SHIELD_TEXTURE = 'Shield_ZeldaMirror'
 MIRROR_WARD, MIRROR_LAST_STAND, MIRROR_REFLECTION, PLACE_MIRROR_PLATE = 40022, 40023, 40024, 40025
+BERSERKER_FURY = 40026
+DEATH_WISH = 12328
+DURATION_10_SEC = 1                 # SpellDuration.dbc
 ARENA_WARD = 23506                  # the Arena Grand Master's Aura of Protection
 PLACE_UNFIRED_BLADE = 22905         # Quel'Serrar's
 BLOCK_VALUE_30, BLOCK_CHANCE_5, DEFENSE_10 = 23562, 21482, 13390
@@ -129,6 +132,17 @@ SPELLS = [
     (MIRROR_REFLECTION, 9335, 'Mirror Reflection',
      'While your guard is raised, harmful spells cast at you are turned back upon their caster.',
      dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0)),
+    # Berserker Stance's charged attack, each time its Leaping Strike lands (ZeldaLeapingStrike): +10%
+    # attack power (melee and ranged) a stack, up to 10 stacks, 10 sec; the third, dummy effect is the
+    # spell power, which the core adds itself (ZeldaBerserkerFurySpellPower)
+    (BERSERKER_FURY, DEATH_WISH, "Berserker's Fury",
+     'Each Leaping Strike that lands increases your attack power and spell power by 10% for $d, '
+     'stacking up to 10 times.',
+     dict(Attributes=0, AttributesEx=0, RecoveryTime=0, ManaCost=0, PowerType=0, DurationIndex=DURATION_10_SEC,
+          StackAmount=10, EffectApplyAuraName1=166, EffectApplyAuraName2=167, EffectApplyAuraName3=4,
+          EffectBasePoints1=9, EffectBasePoints2=9, EffectBasePoints3=9, EffectMiscValue1=0, EffectMiscValue2=0,
+          EffectMiscValue3=0, InterruptFlags=0, SpellFamilyName=0, SpellFamilyFlags=0,
+          tooltip='Attack power and spell power increased by $s1% per stack.')),
     (PLACE_MIRROR_PLATE, PLACE_UNFIRED_BLADE, 'Place Mirror Plate', 'Sets the Tarnished Mirror Plate on the ground.',
      dict(EffectMiscValue1=191182)),
     (REFORGING, COPPER_BRACERS, 'Reforging', "Reforges Linken's sword on the Black Anvil.",
@@ -276,7 +290,7 @@ CREATURE_COLUMNS = ['Entry', 'Name', 'SubName', 'MinLevel', 'MaxLevel', 'Display
                     'SpellList', 'CharmedSpellList', 'StringId1', 'StringId2', 'EquipmentTemplateId', 'Civilian',
                     'AIName', 'ScriptName', 'DamageMultiplierOLD', 'DamageVarianceOLD']
 
-DBC_FIELD = {'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
+DBC_FIELD = {'RecoveryTime': 19, 'DurationIndex': 30, 'StackAmount': 39, 'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
              'SpellIconID': 117, 'School': 1, 'Attributes': 6, 'AttributesEx': 7, 'AttributesEx3': 9, 'CastingTimeIndex': 18, 'InterruptFlags': 21, 'PowerType': 31,
              'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'SpellFamilyName': 160,
              'SpellFamilyFlags': 161, 'DmgClass': 164}
