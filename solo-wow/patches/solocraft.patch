@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..768c0cd56
+index 000000000..38343388b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5240 @@
+@@ -0,0 +1,5244 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5579,6 +5579,10 @@ index 000000000..768c0cd56
 +
 +static void ZeldaDodge(Player* player, float angleOffset, float horizontal, float vertical)
 +{
++    // rolls, side rolls and the backflip push off the ground: none starts in the air (mid-jump,
++    // falling, or still flying from the last roll)
++    if (player->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)))
++        return;
 +    ZeldaState& state = StateFor(player);
 +    uint32 now = WorldTimer::getMSTime();
 +    if (now < state.dodgeReadyAt)
