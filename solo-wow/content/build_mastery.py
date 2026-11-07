@@ -73,6 +73,15 @@ MIRROR_SHIELD_TEXTURE = 'Shield_ZeldaMirror'
 MIRROR_WARD, MIRROR_LAST_STAND, MIRROR_REFLECTION, PLACE_MIRROR_PLATE = 40022, 40023, 40024, 40025
 BERSERKER_FURY = 40026
 RITE_OF_SULTHRAZE = 40027
+# the warrior talents' new effects (ZeldaCommands.cpp, "talents")
+BLEEDING_EDGE_BLEED, DUAL_WIELD_ENRAGE, SHIELD_FURY, SHIELD_CLEAVE = 40028, 40029, 40030, 40031
+REND_TOP_RANK, ENRAGE_RANK1, SHIELD_BLOCK, CLEAVE_VISUAL = 11574, 12880, 2565, 219
+DURATION_30_SEC = 9
+BLEEDING_EDGE = (12286, 12658, 12659)                       # was Improved Rend
+DEEP_WOUNDS = (12834, 12849, 12867)
+TWO_HANDED_SPEC = (12163, 12711, 12712, 12713, 12714)
+WARRIOR_DUAL_WIELD = (23584, 23585, 23586, 23587, 23588)
+ONE_HANDED_SPEC = (16538, 16539, 16540, 16541, 16542)
 CALL_OF_SULTHRAZE = 11654         # Jang'thraze's own combining spell
 CAST_10_SECONDS = 7
 DEATH_WISH = 12328
@@ -154,6 +163,25 @@ SPELLS = [
      "Begins the rite that makes Jang'thraze and Sang'thraze one blade again.",
      dict(Effect1=3, EffectItemType1=0, EffectImplicitTargetA1=1, Reagent2=0, ReagentCount2=0,
           CastingTimeIndex=CAST_10_SECONDS)),
+    # Bleeding Edge's bleed: Rend's look, 10 sec in 5 ticks; the core sets each tick's damage
+    (BLEEDING_EDGE_BLEED, REND_TOP_RANK, 'Bleeding Edge', 'Bleeding.',
+     dict(DurationIndex=DURATION_10_SEC, EffectAmplitude1=2000, Stances=0, ManaCost=0, PowerType=0,
+          SpellFamilyName=0, SpellFamilyFlags=0, tooltip='Bleeding.')),
+    # Dual Wield Specialization's Enrage, a stack a talent point: each swing uses one, always a hit and a
+    # critical strike (12 sec)
+    (DUAL_WIELD_ENRAGE, ENRAGE_RANK1, 'Enrage', 'Your next swings always hit and strike critically.',
+     dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0, StackAmount=5, ProcCharges=0,
+          ProcFlags=0, SpellFamilyName=0, SpellFamilyFlags=0,
+          tooltip='Your next swings always hit and strike critically.')),
+    # One-Handed Weapon Specialization's blocks counted, up to 5 (30 sec)
+    (SHIELD_FURY, SHIELD_BLOCK, 'Shield Fury', 'Each block builds the fury; at 5 it strikes back.',
+     dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0, StackAmount=5, ProcCharges=0,
+          ProcFlags=0, DurationIndex=DURATION_30_SEC, Stances=0, ManaCost=0, PowerType=0, SpellVisual=0, SpellFamilyName=0,
+          SpellFamilyFlags=0, tooltip='At 5 blocks, a cleave strikes every enemy around you.')),
+    # and the cleave the fifth block unleashes: a plain melee strike whose damage the core sets, in
+    # Cleave's look (its Special1H swing)
+    (SHIELD_CLEAVE, 2816, 'Shield Cleave', 'Strikes every enemy around you, always critically.',
+     dict(SpellVisual=CLEAVE_VISUAL)),
     (REFORGING, COPPER_BRACERS, 'Reforging', "Reforges Linken's sword on the Black Anvil.",
      dict(Effect1=3, EffectItemType1=0, EffectImplicitTargetA1=1, Totem1=0, RequiresSpellFocus=0, Reagent1=0,
           ReagentCount1=0, CastingTimeIndex=CAST_30_SECONDS)),
@@ -181,6 +209,28 @@ ITEM_EDITS = {
 # stock spell texts changed in the client (patch-Z only): mana potions are shields now
 DESCRIPTION_EDITS = {sid: 'Shields you, absorbing $s1 damage for 20 sec.'
                      for sid in (437, 438, 2023, 11903, 17530, 17531, 21395, 21396)}
+# the warrior talents' new effects (the core: ZeldaCommands.cpp, "talents")
+NAME_EDITS = {sid: 'Bleeding Edge' for sid in BLEEDING_EDGE}
+for n, sid in enumerate(BLEEDING_EDGE, start=1):
+    DESCRIPTION_EDITS[sid] = ('Your melee hits have a $s1%% chance to make the enemy bleed for %d%% of your weapon '
+                              'damage over 10 sec.' % (100 * n))
+for n, sid in enumerate(DEEP_WOUNDS, start=1):
+    DESCRIPTION_EDITS[sid] = ('Your critical strikes cause the opponent to bleed, dealing %d%% of your attack power '
+                              'as damage over 12 sec.' % (20 * n))
+for n, sid in enumerate(TWO_HANDED_SPEC, start=1):
+    DESCRIPTION_EDITS[sid] = ('Increases the damage you deal with two-handed melee weapons by $s1%%. While you '
+                              'wield a two-handed weapon, an enemy attack that hits you has a %d%% chance to '
+                              'provoke your counterattack, which always strikes critically.' % (5 * n))
+for n, sid in enumerate(WARRIOR_DUAL_WIELD, start=1):
+    DESCRIPTION_EDITS[sid] = ('Increases your chance to hit by %d%% while dual wielding. While dual wielding, a '
+                              'critical strike against you sends you into an Enrage: your next %s always %s and '
+                              'strike%s critically. Lasts 12 sec.'
+                              % (2 * n, 'swing' if n == 1 else '%d swings' % n, 'hits' if n == 1 else 'hit',
+                                 's' if n == 1 else ''))
+for n, sid in enumerate(ONE_HANDED_SPEC, start=1):
+    DESCRIPTION_EDITS[sid] = ('Increases the damage you deal with one-handed melee weapons by $s1%%. With a shield '
+                              'equipped, every 5th block unleashes a cleave on all enemies around you, always a '
+                              'critical strike, for %d times the damage of a normal swing.' % (2 * n))
 DESCRIPTION_EDITS[11658] = ("Strikes an enemy with the rage of Sul'thraze, dealing $s1 Shadow damage and an "
                             "additional $o3 damage over $d, both increased by 45% of your spell power. The target "
                             "deals 15% less damage for $d.")
@@ -188,7 +238,8 @@ DESCRIPTION_EDITS[11658] = ("Strikes an enemy with the rage of Sul'thraze, deali
 # off-hand damage (ZeldaDualWieldHit); a dummy aura whose $s1 is the percent
 DUAL_WIELD_SPEC = (23584, 23585, 23586, 23587, 23588, 13715, 13848, 13849, 13851, 13852)
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
-    DESCRIPTION_EDITS[_sid] = 'Increases your chance to hit with melee attacks by $s1% while dual wielding.'
+    if _sid not in WARRIOR_DUAL_WIELD:          # the warrior's also enrages (above)
+        DESCRIPTION_EDITS[_sid] = 'Increases your chance to hit with melee attacks by $s1% while dual wielding.'
 # Mace Specialization: its stun stays, and every mace hit also crushes armor (Crushing Blows, 40013)
 MACE_SPEC = (12284, 12701, 12702, 12703, 12704)
 for _n, _sid in enumerate(MACE_SPEC):
@@ -198,6 +249,11 @@ for _n, _sid in enumerate(MACE_SPEC):
 # stock spells changed in place: {spell id: {spell_template column: value}}
 SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
+    # Two-Handed Weapon Specialization: 2% more damage a point instead of 1%
+    **{sid: dict(EffectBasePoints1=2 * (n + 1) - 1) for n, sid in enumerate(TWO_HANDED_SPEC)},
+    # Bleeding Edge (was Improved Rend): no longer Rend's damage, a 10% a point chance on hit (the core)
+    **{sid: dict(EffectApplyAuraName1=4, EffectBasePoints1=10 * (n + 1) - 1, EffectMiscValue1=0)
+       for n, sid in enumerate(BLEEDING_EDGE)},
     # the boomerang (Linken's Boomerang, ZeldaCommands.cpp): thrown from right beside the enemy too, out
     # to the same 30 yards (no 8-yard minimum)
     15712: dict(RangeIndex=4),
@@ -310,7 +366,7 @@ CREATURE_COLUMNS = ['Entry', 'Name', 'SubName', 'MinLevel', 'MaxLevel', 'Display
                     'SpellList', 'CharmedSpellList', 'StringId1', 'StringId2', 'EquipmentTemplateId', 'Civilian',
                     'AIName', 'ScriptName', 'DamageMultiplierOLD', 'DamageVarianceOLD']
 
-DBC_FIELD = {'ProcChance': 25, 'RecoveryTime': 19, 'DurationIndex': 30, 'StackAmount': 39, 'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
+DBC_FIELD = {'Stances': 11, 'ProcFlags': 24, 'ProcCharges': 26, 'ProcChance': 25, 'RecoveryTime': 19, 'DurationIndex': 30, 'StackAmount': 39, 'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
              'SpellIconID': 117, 'School': 1, 'Attributes': 6, 'AttributesEx': 7, 'AttributesEx3': 9, 'CastingTimeIndex': 18, 'InterruptFlags': 21, 'PowerType': 31,
              'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'SpellFamilyName': 160,
              'SpellFamilyFlags': 161, 'DmgClass': 164}
@@ -350,6 +406,8 @@ def spell_sql():
     for sid, changes in SPELL_EDITS.items():
         out.append('UPDATE `spell_template` SET %s WHERE `Id` = %d;\n'
                    % (', '.join('`%s` = %d' % kv for kv in changes.items()), sid))
+    for sid, name in NAME_EDITS.items():
+        out.append('UPDATE `spell_template` SET `SpellName` = %s WHERE `Id` = %d;\n' % (sql_str(name), sid))
     # epic first, so a regular mount raised to 149 is not raised again
     for old, new in sorted(MOUNT_SPEED.items(), reverse=True):
         out.append('UPDATE `spell_template` SET `EffectBasePoints2` = %d WHERE `EffectApplyAuraName2` = %d AND '
@@ -557,6 +615,8 @@ def patch_spells(path):
         row[DBC_DESCRIPTION] = add_string(strings, text)
         row[DBC_TOOLTIP] = add_string(strings, changes['tooltip']) if 'tooltip' in changes else 0
         rows.append(row)
+    for sid, name in NAME_EDITS.items():
+        byid[sid][DBC_NAME] = add_string(strings, name)
     for sid, text in DESCRIPTION_EDITS.items():
         byid[sid][DBC_DESCRIPTION] = add_string(strings, text)
     aura = DBC_FIELD['EffectApplyAuraName1']

@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..d0e28cfd3
+index 000000000..5c2daedfa
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5614 @@
+@@ -0,0 +1,5793 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1905,6 +1905,10 @@ index 000000000..d0e28cfd3
 +        uint32 forgeInstance = 0;
 +        int8 ironfoeHeld = -1;                          // Ironfoe in hand when the anvil was last shown
 +        bool forgeBagsTold = false;
++        // Two-Handed Weapon Specialization: the enemy to counterattack on the next update
++        ObjectGuid counterTarget;
++        // One-Handed Weapon Specialization: the fifth block's cleave, waiting for the next update
++        bool shieldCleaveReady = false;
 +        // Sul'thraze: Zan'thraze the Hexblade, risen at the Jintha'Alor altar for this hero
 +        ObjectGuid hexblade;
 +        uint32 sulthrazeCheckIn = 0;
@@ -2416,6 +2420,7 @@ index 000000000..d0e28cfd3
 +    std::vector<SetBonusRow> s_setBonuses;
 +
 +    thread_local bool t_bonusSwing = false;     // an extra swing from a set never chains another
++    thread_local bool t_forceCrit = false;      // a talent's sure critical swing (counterattack)
 +
 +    float SetBonusOf(Unit const* unit, uint32 type)
 +    {
@@ -3149,6 +3154,7 @@ index 000000000..d0e28cfd3
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaForgeTrial(Player* player, ZeldaState& state);
 +static void ZeldaSulthraze(Player* player, ZeldaState& state, uint32 diff);
++static void ZeldaTalentStrikes(Player* player, ZeldaState& state);
 +static void ZeldaDoomLordWatch(Player* player);
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
 +static void ZeldaFrostBreath(Unit* azuregos);
@@ -3180,6 +3186,7 @@ index 000000000..d0e28cfd3
 +    ZeldaSoloBattleground(player, state, diff);
 +    ZeldaForgeTrial(player, state);
 +    ZeldaSulthraze(player, state, diff);
++    ZeldaTalentStrikes(player, state);
 +    ZeldaDoomLordWatch(player);
 +    ZeldaDefianceStrikesBack(player, state);
 +
@@ -3621,6 +3628,163 @@ index 000000000..d0e28cfd3
 +    return 2.0f * float(std::max(warrior, rogue));     // 2% a point, 10% at 5/5
 +}
 +
++// ---------------------------------------------------------------------------------- talents
++// The warrior talents' Zelda effects (build_mastery.py has their tooltips and spells):
++//  - Bleeding Edge (was Improved Rend): 10% a point on a melee hit, the enemy bleeds for 100% a point
++//    of the weapon's damage over 10 sec (40028)
++//  - Deep Wounds: 20% a point of the attack power over 12 sec on a critical strike (the proc itself:
++//    UnitAuraProcHandler.cpp)
++//  - Two-Handed Weapon Specialization: 2% a point (the talent's aura); with a two-hander, an enemy
++//    attack that hits the hero has 5% a point to provoke a counterattack that always crits
++//  - Dual Wield Specialization: dual wielding, being critically hit enrages the hero (40029): a stack
++//    a point, each swing uses one and always hits critically; 12 sec
++//  - One-Handed Weapon Specialization: with a shield, each block builds Shield Fury (40030); the
++//    fifth unleashes Shield Cleave (40031) on every enemy around, a sure crit for 2x a point a swing
++namespace
++{
++    uint32 const SPELL_BLEEDING_EDGE = 40028, SPELL_DW_ENRAGE = 40029, SPELL_SHIELD_FURY = 40030,
++                 SPELL_SHIELD_CLEAVE = 40031;
++    std::initializer_list<uint32> const TALENT_BLEEDING_EDGE = { 12286, 12658, 12659 };
++    std::initializer_list<uint32> const TALENT_TWO_HANDED = { 12163, 12711, 12712, 12713, 12714 };
++    std::initializer_list<uint32> const TALENT_DUAL_WIELD = { 23584, 23585, 23586, 23587, 23588 };
++    std::initializer_list<uint32> const TALENT_ONE_HANDED = { 16538, 16539, 16540, 16541, 16542 };
++    uint32 const SHIELD_FURY_BLOCKS = 5;
++
++    bool DualWielding(Player const* player)
++    {
++        Item* main = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
++        Item* off = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
++        return main && off && main->GetProto()->Class == ITEM_CLASS_WEAPON && off->GetProto()->Class == ITEM_CLASS_WEAPON;
++    }
++
++    bool TwoHanded(Player const* player)
++    {
++        Item* main = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
++        return main && main->GetProto()->Class == ITEM_CLASS_WEAPON && main->GetProto()->InventoryType == INVTYPE_2HWEAPON;
++    }
++}
++
++// a melee swing that must strike critically: the counterattack, or a swing of the Enrage (which it uses up)
++bool ZeldaForcedMeleeCrit(Unit const* attacker)
++{
++    if (t_forceCrit)
++        return true;
++    if (!attacker || !attacker->IsPlayer())
++        return false;
++    Unit* hero = const_cast<Unit*>(attacker);
++    SpellAuraHolder* enrage = hero->GetSpellAuraHolder(SPELL_DW_ENRAGE);
++    if (!enrage)
++        return false;
++    if (enrage->GetStackAmount() > 1)
++        enrage->SetStackAmount(enrage->GetStackAmount() - 1, hero);
++    else
++        hero->RemoveAurasDueToSpell(SPELL_DW_ENRAGE);
++    return true;
++}
++
++// a spell that always strikes critically: Shield Cleave
++bool ZeldaForcedSpellCrit(SpellEntry const* spellInfo)
++{
++    return spellInfo && spellInfo->Id == SPELL_SHIELD_CLEAVE;
++}
++
++// the hero blocked an attack - a blow, a melee ability, a Heavy Blow - with a shield
++void ZeldaShieldBlocked(Player* hero)
++{
++    if (!hero || !hero->IsAlive() || !hero->GetShield(true))
++        return;
++    uint32 const rank = ZeldaTalentRank(hero, TALENT_ONE_HANDED);
++    if (!rank)
++        return;
++    ZeldaState& state = StateFor(hero);
++    if (state.shieldCleaveReady)
++        return;
++    SpellAuraHolder* fury = hero->GetSpellAuraHolder(SPELL_SHIELD_FURY);
++    uint32 const blocks = (fury ? fury->GetStackAmount() : 0) + 1;
++    if (blocks >= SHIELD_FURY_BLOCKS)
++    {
++        hero->RemoveAurasDueToSpell(SPELL_SHIELD_FURY);
++        state.shieldCleaveReady = true;             // struck on the next update, not inside the blow
++        return;
++    }
++    if (!fury)
++        hero->CastSpell(hero, SPELL_SHIELD_FURY, TRIGGERED_OLD_TRIGGERED);
++    else
++        fury->SetStackAmount(blocks, hero);
++}
++
++// an enemy's attack hit the hero: melee (`melee`), or a spell's direct damage; `crit` when it struck critically
++void ZeldaHitTaken(Player* hero, Unit* attacker, bool crit)
++{
++    if (!hero || !attacker || attacker == hero || !hero->IsAlive() || attacker->IsPlayer())
++        return;
++    // Dual Wield Specialization: a critical strike against the dual-wielding hero enrages him
++    if (crit && DualWielding(hero))
++        if (uint32 const rank = ZeldaTalentRank(hero, TALENT_DUAL_WIELD))
++        {
++            hero->RemoveAurasDueToSpell(SPELL_DW_ENRAGE);
++            hero->CastSpell(hero, SPELL_DW_ENRAGE, TRIGGERED_OLD_TRIGGERED);
++            if (SpellAuraHolder* enrage = hero->GetSpellAuraHolder(SPELL_DW_ENRAGE))
++                enrage->SetStackAmount(rank, hero);
++            hero->HandleEmoteCommand(EMOTE_ONESHOT_BATTLEROAR);
++        }
++    // Two-Handed Weapon Specialization: the blow may provoke a counterattack (on the next update)
++    if (TwoHanded(hero))
++        if (uint32 const rank = ZeldaTalentRank(hero, TALENT_TWO_HANDED))
++            if (roll_chance_i(int32(5 * rank)))
++            {
++                ZeldaState& state = StateFor(hero);
++                if (state.counterTarget.IsEmpty())
++                    state.counterTarget = attacker->GetObjectGuid();
++            }
++}
++
++// the talents' strikes queued by blows that were still landing
++static void ZeldaTalentStrikes(Player* player, ZeldaState& state)
++{
++    if (state.counterTarget.IsEmpty() && !state.shieldCleaveReady)
++        return;
++    ObjectGuid const counter = state.counterTarget;
++    state.counterTarget.Clear();
++    bool const cleave = state.shieldCleaveReady;
++    state.shieldCleaveReady = false;
++    if (!player->IsInWorld() || !player->IsAlive() || player->IsBeingTeleported() ||
++        player->hasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
++        return;
++
++    // the counterattack: one swing at the enemy who struck, if it is within reach - always a critical strike
++    if (!counter.IsEmpty() && TwoHanded(player))
++        if (Unit* enemy = player->GetMap()->GetUnit(counter))
++            if (enemy->IsAlive() && player->CanReachWithMeleeAttack(enemy) && player->CanAttack(enemy))
++            {
++                player->SetFacingToObject(enemy);
++                t_forceCrit = true;
++                player->AttackerStateUpdate(enemy, BASE_ATTACK, true);
++                t_forceCrit = false;
++                player->GetSession()->SendAreaTriggerMessage("|cffff8040Counterattack!|r");
++            }
++
++    // Shield Cleave: every enemy around the hero, a normal swing's damage times 2 a talent point, a sure crit
++    if (cleave && player->GetShield(true))
++        if (uint32 const rank = ZeldaTalentRank(player, TALENT_ONE_HANDED))
++        {
++            std::list<Unit*> enemies;
++            CollectEnemies(player, 12.0f, enemies);
++            uint32 hit = 0;
++            for (Unit* unit : enemies)
++            {
++                if (!unit->IsAlive() || !player->CanReachWithMeleeAttack(unit))
++                    continue;
++                int32 const damage = std::max<int32>(1, int32(player->CalculateDamage(BASE_ATTACK, false, 0) * 2 * rank));
++                player->CastCustomSpell(unit, SPELL_SHIELD_CLEAVE, &damage, nullptr, nullptr,
++                                        TriggerCastFlags(TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS));
++                ++hit;
++            }
++            if (hit)
++                player->GetSession()->SendAreaTriggerMessage("|cff66ccffShield Cleave!|r");
++        }
++}
++
 +void ZeldaCritHeal(Unit* attacker)
 +{
 +    const uint32 VANQUISHERS_MERCY = 40018;
@@ -3655,6 +3819,20 @@ index 000000000..d0e28cfd3
 +            player->CastSpell(victim, CRUSHING_BLOWS_RANK1 + rank - 1, TRIGGERED_OLD_TRIGGERED);
 +        }
 +    }
++
++    // Bleeding Edge (was Improved Rend): 10% a point, the enemy bleeds for 100% a point of the weapon's
++    // damage over 10 sec (5 ticks)
++    if (victim->IsAlive())
++        if (uint32 const rank = ZeldaTalentRank(player, TALENT_BLEEDING_EDGE))
++            if (roll_chance_i(int32(10 * rank)))
++            {
++                bool const off = attType == OFF_ATTACK;
++                float const weapon = (player->GetFloatValue(off ? UNIT_FIELD_MINOFFHANDDAMAGE : UNIT_FIELD_MINDAMAGE) +
++                                      player->GetFloatValue(off ? UNIT_FIELD_MAXOFFHANDDAMAGE : UNIT_FIELD_MAXDAMAGE)) / 2.0f;
++                int32 const tick = std::max<int32>(1, int32(weapon * float(rank) / 5.0f));
++                victim->RemoveAurasByCasterSpell(SPELL_BLEEDING_EDGE, player->GetObjectGuid());
++                player->CastCustomSpell(victim, SPELL_BLEEDING_EDGE, &tick, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
++            }
 +
 +    // a solid hit sends the enemy back a step
 +    float const knock = SetBonusOf(player, SET_BONUS_KNOCKBACK);
@@ -5613,6 +5791,7 @@ index 000000000..d0e28cfd3
 +    if (snapshot.shield && inFront)
 +    {
 +        Unit::SendSpellMiss(caster, hero, spellId, SPELL_MISS_BLOCK);
++        ZeldaShieldBlocked(hero);
 +        hero->HandleEmoteCommand(EMOTE_ONESHOT_PARRYSHIELD);
 +        GuardRage(hero);
 +        if (melee)
@@ -7410,10 +7589,10 @@ index 000000000..d0e28cfd3
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..88e4bd4df
+index 000000000..bef123b81
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,311 @@
+@@ -0,0 +1,317 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -7437,6 +7616,12 @@ index 000000000..88e4bd4df
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +// a hero in the middle of a dodge roll: every blow and spell aimed at her is dodged
 +bool ZeldaRolling(Unit const* victim);
++// the warrior talents (ZeldaCommands.cpp, "talents"): a swing that must crit, a spell that always crits,
++// a shield block, and an enemy's hit on the hero
++bool ZeldaForcedMeleeCrit(Unit const* attacker);
++bool ZeldaForcedSpellCrit(SpellEntry const* spellInfo);
++void ZeldaShieldBlocked(Player* hero);
++void ZeldaHitTaken(Player* hero, Unit* attacker, bool crit);
 +// the share of spell power a spell cast by an item takes (0 for any other spell)
 +float ZeldaItemSpellCoefficient(SpellEntry const* spellProto, uint32 effectIndex);
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
@@ -8487,7 +8672,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..08ae3880f 100644
+index 00986af9e..267e100bf 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -8537,7 +8722,7 @@ index 00986af9e..08ae3880f 100644
              damage = CalcArmorReducedDamage(this, pVictim, damage);
      }
      else
-@@ -1863,6 +1878,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
+@@ -1863,7 +1878,14 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
  
      // Call default DealDamage (send critical in hit info for threat calculation)
      CleanDamage cleanDamage(spellDamageInfo->damage, BASE_ATTACK, spellDamageInfo->HitInfo & SPELL_HIT_TYPE_CRIT ? MELEE_HIT_CRIT : MELEE_HIT_NORMAL, (spellDamageInfo->damage > 0 || spellDamageInfo->absorb > 0));
@@ -8546,9 +8731,13 @@ index 00986af9e..08ae3880f 100644
 +        spellDamageInfo->attacker && spellDamageInfo->attacker->GetTypeId() == TYPEID_PLAYER && spellDamageInfo->damage > 0)
 +        ZeldaCritHeal(static_cast<Unit*>(spellDamageInfo->attacker));
      DealDamage(affectiveCaster, victim, spellDamageInfo->damage, &cleanDamage, resetLeash ? SPELL_DIRECT_DAMAGE : SPELL_DAMAGE_SHIELD, GetSchoolMask(spellDamageInfo->school), spellProto, durabilityLoss, spellDamageInfo->spell);
++    // Zelda of Warcraft: an enemy's spell that hit the hero - the talents that answer it
++    if (victim->IsPlayer() && affectiveCaster && affectiveCaster != victim && resetLeash && spellDamageInfo->damage > 0)
++        ZeldaHitTaken(static_cast<Player*>(victim), affectiveCaster, (spellDamageInfo->HitInfo & SPELL_HIT_TYPE_CRIT) != 0);
  }
  
-@@ -1933,6 +1952,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+ // TODO for melee need create structure as in
+@@ -1933,6 +1955,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
          // Add melee damage bonus
          subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
@@ -8561,7 +8750,7 @@ index 00986af9e..08ae3880f 100644
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2045,6 +2070,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -2045,6 +2073,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
              calcDamageInfo->TargetState = VICTIMSTATE_NORMAL;
              calcDamageInfo->procEx |= PROC_EX_BLOCK;
              calcDamageInfo->blocked_amount = calcDamageInfo->target->GetShieldBlockValue();
@@ -8571,7 +8760,7 @@ index 00986af9e..08ae3880f 100644
  
              if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
              {
-@@ -2656,10 +2684,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2687,35 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -8583,6 +8772,17 @@ index 00986af9e..08ae3880f 100644
      DealMeleeDamage(&meleeDamageInfo, true);
      ProcDamageAndSpell(ProcSystemArguments(this, meleeDamageInfo.target, meleeDamageInfo.procAttacker, meleeDamageInfo.procVictim, meleeDamageInfo.procEx, meleeDamageInfo.totalDamage, meleeDamageInfo.absorb, meleeDamageInfo.attackType));
  
++    // Zelda of Warcraft: an enemy's blow on the hero - the talents that answer it (a block builds
++    // Shield Fury; a hit may provoke a counterattack, a critical one an Enrage)
++    if (pVictim->IsPlayer() && !IsPlayer())
++    {
++        MeleeHitOutcome const outcome = meleeDamageInfo.hitOutCome;
++        if (outcome == MELEE_HIT_BLOCK)
++            ZeldaShieldBlocked(static_cast<Player*>(pVictim));
++        if (outcome == MELEE_HIT_NORMAL || outcome == MELEE_HIT_CRIT || outcome == MELEE_HIT_CRUSHING ||
++            outcome == MELEE_HIT_GLANCING || (outcome == MELEE_HIT_BLOCK && meleeDamageInfo.totalDamage > 0))
++            ZeldaHitTaken(static_cast<Player*>(pVictim), this, outcome == MELEE_HIT_CRIT);
++    }
 +    // Zelda of Warcraft: armor set effects of a landed hit (push back, another swing)
 +    if (GetTypeId() == TYPEID_PLAYER)
 +        ZeldaAfterMeleeHit(this, pVictim, meleeDamageInfo.totalDamage > 0 && (meleeDamageInfo.hitOutCome == MELEE_HIT_NORMAL ||
@@ -8596,13 +8796,16 @@ index 00986af9e..08ae3880f 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -2711,6 +2753,16 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+@@ -2711,6 +2767,19 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
      if (pVictim->GetCombatManager().IsInEvadeMode())
          return MELEE_HIT_EVADE;
  
 +    // Zelda of Warcraft: a hero mid-roll dodges every blow, arrows too
 +    if (ZeldaRolling(pVictim))
 +        return MELEE_HIT_DODGE;
++    // Zelda of Warcraft: a talent's swing that always strikes critically (a counterattack, the Enrage)
++    if (ZeldaForcedMeleeCrit(this))
++        return MELEE_HIT_CRIT;
 +    // Zelda of Warcraft: a hero holding the weapon up parries every melee blow from the front
 +    if (attType != RANGED_ATTACK && ZeldaParryHolds(pVictim, this))
 +        return MELEE_HIT_PARRY;
@@ -8613,7 +8816,7 @@ index 00986af9e..08ae3880f 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
      if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
-@@ -2829,6 +2881,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+@@ -2829,6 +2898,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
  
  SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
  {
@@ -8627,7 +8830,7 @@ index 00986af9e..08ae3880f 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
      die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
-@@ -2924,6 +2983,21 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2924,6 +3000,21 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
  
          return SPELL_MISS_NONE;
      }
@@ -8649,7 +8852,7 @@ index 00986af9e..08ae3880f 100644
      // !!!UNHACKME: Self-resists suppression hack for channeled spells until spellInfo execution is modernized with effectmasks: Drain Soul, Blizzard, RoF
      if (pVictim == caster && IsChanneledSpell(spellInfo))
      {
-@@ -2942,7 +3016,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2942,7 +3033,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
      // Reflect (when available)
      if (reflectable)
      {
@@ -8659,7 +8862,7 @@ index 00986af9e..08ae3880f 100644
          if (roll_chance_combat(chance))
              return SPELL_MISS_REFLECT;
      }
-@@ -3628,7 +3703,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3720,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -8669,7 +8872,7 @@ index 00986af9e..08ae3880f 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3719,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3736,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -8678,7 +8881,7 @@ index 00986af9e..08ae3880f 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5052,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5069,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -8690,7 +8893,7 @@ index 00986af9e..08ae3880f 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6178,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6195,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -8699,7 +8902,7 @@ index 00986af9e..08ae3880f 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7002,6 +7083,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
+@@ -7002,6 +7100,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
              total += int32(ap_bonus * (GetTotalAttackPowerValue(IsSpellRequiresRangedAP(spellProto) ? RANGED_ATTACK : BASE_ATTACK) + ap_benefit));
          }
      }
@@ -8715,7 +8918,7 @@ index 00986af9e..08ae3880f 100644
  
      if (benefit)
      {
-@@ -7050,7 +7140,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7157,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -8724,7 +8927,7 @@ index 00986af9e..08ae3880f 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7257,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7274,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -8738,7 +8941,7 @@ index 00986af9e..08ae3880f 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7406,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7423,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -8752,7 +8955,7 @@ index 00986af9e..08ae3880f 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8199,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8216,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -8766,7 +8969,7 @@ index 00986af9e..08ae3880f 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8515,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8532,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
@@ -9137,7 +9340,7 @@ index 591908ab5..5cb585b23 100644
      if (!noSpillover)
      {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..9f3baaf04 100644
+index bf5c5c578..7c3f53475 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -9148,7 +9351,17 @@ index bf5c5c578..9f3baaf04 100644
  
  #ifdef ENABLE_PLAYERBOTS
  #include "playerbot/PlayerbotAI.h"
-@@ -1273,8 +1274,9 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
+@@ -1179,6 +1180,9 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
+     WorldObject* caster = affectiveCaster ? affectiveCaster : m_trueCaster;
+ 
+     SpellMissInfo missInfo = target->missCondition;
++    // Zelda of Warcraft: a melee ability blocked by the hero's shield builds Shield Fury
++    if (missInfo == SPELL_MISS_BLOCK && unit->IsPlayer() && unit != m_trueCaster)
++        ZeldaShieldBlocked(static_cast<Player*>(unit));
+     // Need init unitTarget by default unit (can changed in code on reflect)
+     // Or on missInfo!=SPELL_MISS_NONE unitTarget undefined (but need in trigger subsystem)
+     unitTarget = unit;
+@@ -1273,8 +1277,9 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
          // damage mitigation
          if (spellDamageInfo.damage > 0)
          {
@@ -9160,10 +9373,13 @@ index bf5c5c578..9f3baaf04 100644
                  spellDamageInfo.damage = Unit::CalcArmorReducedDamage(affectiveCaster ? affectiveCaster : m_trueCaster, unitTarget, spellDamageInfo.damage);
          }
  
-@@ -1650,6 +1652,12 @@ void Spell::HandleImmediateEffectExecution(TargetInfo* target)
+@@ -1650,6 +1655,15 @@ void Spell::HandleImmediateEffectExecution(TargetInfo* target)
      target->effectMaskProcessed = mask;
      if (m_damage > 0 || m_healing > 0)
          target->isCrit = Unit::RollSpellCritOutcome(affectiveCaster, unit, m_spellSchoolMask, m_spellInfo);
++    // Zelda of Warcraft: Shield Cleave always strikes critically
++    if (m_damage > 0 && ZeldaForcedSpellCrit(m_spellInfo))
++        target->isCrit = true;
 +    // Zelda of Warcraft: a charged shot (.zbow 1) does twice the damage and always strikes critically
 +    if (m_damage > 0 && ZeldaChargedShotCrit(affectiveCaster, m_spellInfo))
 +    {
@@ -9173,7 +9389,7 @@ index bf5c5c578..9f3baaf04 100644
  }
  
  bool Spell::CanSpellDiminish() const
-@@ -3034,6 +3042,11 @@ void Spell::Prepare()
+@@ -3034,6 +3048,11 @@ void Spell::Prepare()
          m_casttime = GetSpellCastTime(m_spellInfo, m_trueCaster, this, true);
      }
  
@@ -9185,7 +9401,7 @@ index bf5c5c578..9f3baaf04 100644
      // set timer base at cast time
      ReSetTimer();
  
-@@ -3111,6 +3124,11 @@ void Spell::cancel()
+@@ -3111,6 +3130,11 @@ void Spell::cancel()
              player->ResetSpellModsDueToCanceledSpell(m_usedAuraCharges);
  
      m_autoRepeat = false;
@@ -9197,7 +9413,7 @@ index bf5c5c578..9f3baaf04 100644
      switch (m_spellState)
      {
          case SPELL_STATE_CREATED:
-@@ -3211,11 +3229,9 @@ SpellCastResult Spell::cast(bool skipCheck)
+@@ -3211,11 +3235,9 @@ SpellCastResult Spell::cast(bool skipCheck)
      {
          case SPELLFAMILY_GENERIC:
          {
@@ -9211,7 +9427,7 @@ index bf5c5c578..9f3baaf04 100644
                  AddPrecastSpell(25771);                     // Forbearance
              break;
          }
-@@ -3280,6 +3296,15 @@ SpellCastResult Spell::cast(bool skipCheck)
+@@ -3280,6 +3302,15 @@ SpellCastResult Spell::cast(bool skipCheck)
      SendCastResult(castResult);
      SendSpellGo();                                          // we must send smsg_spell_go packet before m_castItem delete in TakeCastItem()...
  
@@ -9227,7 +9443,7 @@ index bf5c5c578..9f3baaf04 100644
      InitializeDamageMultipliers();
  
      OnCast();
-@@ -4450,6 +4475,9 @@ void Spell::TakeReagents()
+@@ -4450,6 +4481,9 @@ void Spell::TakeReagents()
      {
          if (m_spellInfo->Reagent[x] <= 0)
              continue;
@@ -9237,7 +9453,7 @@ index bf5c5c578..9f3baaf04 100644
  
          uint32 itemid = m_spellInfo->Reagent[x];
          uint32 itemcount = m_spellInfo->ReagentCount[x];
-@@ -5553,9 +5581,15 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5553,9 +5587,15 @@ SpellCastResult Spell::CheckCast(bool strict)
                          return SPELL_FAILED_TRY_AGAIN;
  
                      lockId = go->GetGOInfo()->GetLockId();
@@ -9254,7 +9470,7 @@ index bf5c5c578..9f3baaf04 100644
                      // check if its in use only when cast is finished (called from spell::cast() with strict = false)
                      if (!strict && go->IsInUse())
                          return SPELL_FAILED_CHEST_IN_USE;
-@@ -5998,6 +6032,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5998,6 +6038,10 @@ SpellCastResult Spell::CheckCast(bool strict)
          }
      }
  
@@ -9265,7 +9481,7 @@ index bf5c5c578..9f3baaf04 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6202,7 +6240,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
+@@ -6202,7 +6246,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
      {
          if (m_spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT) && caster->GetTypeId() == TYPEID_PLAYER)
              if (Item* ranged = static_cast<Player*>(caster)->GetWeaponForAttack(RANGED_ATTACK))
@@ -9274,7 +9490,7 @@ index bf5c5c578..9f3baaf04 100644
  
          if (Player* modOwner = caster->GetSpellModOwner())
              modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_RANGE, maxRange);
-@@ -6499,6 +6537,12 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6543,12 @@ SpellCastResult Spell::CheckItems()
                      }
  
                      Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
@@ -9287,7 +9503,7 @@ index bf5c5c578..9f3baaf04 100644
                      if (target->GetPower(power) == target->GetMaxPower(power))
                      {
                          failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
-@@ -6565,6 +6609,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6565,6 +6615,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;
@@ -9468,6 +9684,42 @@ index 330ad8fea..3916c50e5 100644
      // Special rule for food buffs - TODO: Remove one day
      auto firstItr = m_spellGroupSpellData.find(entry->Id);
      auto secondItr = m_spellGroupSpellData.find(entry2->Id);
+diff --git a/src/game/Spells/UnitAuraProcHandler.cpp b/src/game/Spells/UnitAuraProcHandler.cpp
+index 903a916e1..cd94fd3ab 100644
+--- a/src/game/Spells/UnitAuraProcHandler.cpp
++++ b/src/game/Spells/UnitAuraProcHandler.cpp
+@@ -1324,19 +1324,26 @@ SpellAuraProcResult Unit::HandleProcTriggerSpellAuraProc(ProcExecutionData& data
+                 else
+                     weaponDamage = (GetFloatValue(UNIT_FIELD_MINDAMAGE) + GetFloatValue(UNIT_FIELD_MAXDAMAGE)) / 2;
+ 
++                // Zelda of Warcraft: 20% of the attack power a talent point instead of the weapon's damage
++                (void)weaponDamage;
++                float const attackPower = GetTotalAttackPowerValue(BASE_ATTACK);
+                 switch (auraSpellInfo->Id)
+                 {
+-                    case 12834: basepoints[0] = int32(weaponDamage * 0.2f); break;
+-                    case 12849: basepoints[0] = int32(weaponDamage * 0.4f); break;
+-                    case 12867: basepoints[0] = int32(weaponDamage * 0.6f); break;
++                    case 12834: basepoints[0] = int32(attackPower * 0.2f); break;
++                    case 12849: basepoints[0] = int32(attackPower * 0.4f); break;
++                    case 12867: basepoints[0] = int32(attackPower * 0.6f); break;
+                     // Impossible case
+                     default:
+                         sLog.outError("Unit::HandleProcTriggerSpellAuraProc: DW unknown spell rank %u", auraSpellInfo->Id);
+                         return SPELL_AURA_PROC_FAILED;
+                 }
+ 
+-                // 1 tick/sec * 6 sec = 6 ticks
+-                basepoints[0] /= 6;
++                // over Deep Wound's 12 sec, a tick every 3 sec
++                uint32 ticks = 4;
++                if (SpellEntry const* dot = sSpellTemplate.LookupEntry<SpellEntry>(12721))
++                    if (dot->EffectAmplitude[EFFECT_INDEX_0] > 0 && GetSpellDuration(dot) > 0)
++                        ticks = std::max<uint32>(1, uint32(GetSpellDuration(dot)) / dot->EffectAmplitude[EFFECT_INDEX_0]);
++                basepoints[0] = std::max<int32>(1, basepoints[0] / int32(ticks));
+ 
+                 trigger_spell_id = 12721;
+                 break;
 diff --git a/src/game/World/World.cpp b/src/game/World/World.cpp
 index e344c52c1..c5084ddd5 100644
 --- a/src/game/World/World.cpp
