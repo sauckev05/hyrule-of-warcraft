@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..6d1b51df7
+index 000000000..96ae689fb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5172 @@
+@@ -0,0 +1,5197 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -1879,6 +1879,7 @@ index 000000000..6d1b51df7
 +        // a charged shot (.zbow 1) in flight: its spell strikes critically when it lands
 +        uint32 chargedShotSpell = 0;
 +        uint32 chargedShotUntil = 0;
++        bool bowRooted = false;                         // standing still to draw (.zbow draw)
 +        bool shield = false;
 +        bool parry = false;                             // no shield: the weapon held up to parry
 +        bool guardRooted = false;                       // the guard holds the hero in place
@@ -3596,7 +3597,7 @@ index 000000000..6d1b51df7
 +        return 0.0f;
 +    uint32 const warrior = ZeldaTalentRank(player, { 23584, 23585, 23586, 23587, 23588 });
 +    uint32 const rogue = ZeldaTalentRank(player, { 13715, 13848, 13849, 13851, 13852 });
-+    return float(std::max(warrior, rogue));
++    return 2.0f * float(std::max(warrior, rogue));     // 2% a point, 10% at 5/5
 +}
 +
 +void ZeldaCritHeal(Unit* attacker)
@@ -5750,6 +5751,8 @@ index 000000000..6d1b51df7
 +    else if (!shield && !parry && state.guardRooted)
 +    {
 +        state.guardRooted = false;
++        if (state.bowRooted)
++            return true;                        // still drawing the bow: that root holds
 +        player->clearUnitState(UNIT_STAT_AI_ROOT);
 +        if (!player->IsImmobilizedState())
 +            player->SendMoveRoot(false);
@@ -6226,9 +6229,25 @@ index 000000000..6d1b51df7
 +    return true;
 +}
 +
++// The bow key let go: the draw's root ends (a raised guard keeps its own).
++static void ZeldaBowRelease(Player* player, ZeldaState& state)
++{
++    if (!state.bowRooted)
++        return;
++    state.bowRooted = false;
++    if (state.guardRooted)
++        return;
++    player->clearUnitState(UNIT_STAT_AI_ROOT);
++    if (!player->IsImmobilizedState())
++        player->SendMoveRoot(false);
++}
++
 +bool ChatHandler::HandleZeldaBowCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    bool const draw = args && (*args == 'd' || *args == 'D');
++    if (!draw)
++        ZeldaBowRelease(player, StateFor(player));   // first, so no early return leaves the hero rooted
 +    if (!CanAct(player))
 +        return true;
 +
@@ -6254,14 +6273,20 @@ index 000000000..6d1b51df7
 +
 +    // ".zbow draw": the key went down for a Charged Shot - the ranged weapon comes to hand, so the
 +    // client's slow draw (ZeldaGuardAnim kind 3) has the bow in it
-+    if (args && (*args == 'd' || *args == 'D'))
++    ZeldaState& state = StateFor(player);
++    if (draw)
 +    {
 +        if (player->GetSheath() != SHEATH_STATE_RANGED)
 +            player->SetSheath(SHEATH_STATE_RANGED);
++        // the hero stands to draw: rooted until the key is let go (the shot below)
++        if (!state.bowRooted)
++        {
++            state.bowRooted = true;
++            player->addUnitState(UNIT_STAT_AI_ROOT);
++            player->SendMoveRoot(true);
++        }
 +        return true;
 +    }
-+
-+    ZeldaState& state = StateFor(player);
 +    uint32 now = WorldTimer::getMSTime();
 +    if (now < state.bowReadyAt)
 +        return true;

@@ -158,8 +158,8 @@ ITEM_EDITS = {
 # stock spell texts changed in the client (patch-Z only): mana potions are shields now
 DESCRIPTION_EDITS = {sid: 'Shields you, absorbing $s1 damage for 20 sec.'
                      for sid in (437, 438, 2023, 11903, 17530, 17531, 21395, 21396)}
-# Dual Wield Specialization (warrior and rogue): melee hit while two weapons are held, not off-hand
-# damage (ZeldaDualWieldHit); a dummy aura whose $s1 is the rank
+# Dual Wield Specialization (warrior and rogue): 2% melee hit a point while two weapons are held, not
+# off-hand damage (ZeldaDualWieldHit); a dummy aura whose $s1 is the percent
 DUAL_WIELD_SPEC = (23584, 23585, 23586, 23587, 23588, 13715, 13848, 13849, 13851, 13852)
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
     DESCRIPTION_EDITS[_sid] = 'Increases your chance to hit with melee attacks by $s1% while dual wielding.'
@@ -174,7 +174,7 @@ SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
 }
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
-    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=_n % 5)   # SPELL_AURA_DUMMY, rank - 1
+    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=2 * (_n % 5 + 1) - 1)   # SPELL_AURA_DUMMY, 2% a rank
 
 # Toughness: the shield's armor 5% higher per point, not all armor - and the shield slam (Defensive
 # Stance's charged attack, its damage the shield's armor) with it; Defiance: an enemy that hurts you takes
