@@ -1,6 +1,8 @@
 //! Zelda of Warcraft: the dodge roll's tumble. The 1.12 character models have no roll clip, so the
 //! hero's whole body turns once through the air instead: head over heels for the forward roll,
-//! heels over head for the backflip, a cartwheel to the side for the side rolls.
+//! heels over head for the backflip, a cartwheel to the side for the side rolls. A model that has
+//! the roll's own clips (the human male, from patch-Z: solo-wow/tools/port_roll.py) plays those
+//! for the forward roll and the backflip instead, at the rate that fits the arc.
 //!
 //! The ZeldaControls addon calls `ZeldaRollAnim(kind)` as it asks the server for the dodge
 //! (`.zroll f|l|r`, `.zflip`). The server answers with a knockback, or not at all (on cooldown, in
@@ -37,8 +39,18 @@ pub(crate) struct ZeldaRollRequest {
 pub(super) struct ZeldaRollState {
     /// `(kind, asked at)`: waiting for the body to leave the ground.
     armed: Option<(u8, f32)>,
-    /// `(kind, started at, lasts)`: turning.
-    rolling: Option<(u8, f32, f32)>,
+    /// `(kind, started at, lasts, its own clip plays)`: turning.
+    rolling: Option<(u8, f32, f32, bool)>,
+}
+
+/// The clip a model of its own plays for the roll `kind` (the human male's, from patch-Z), and the
+/// combo step that asks the animation driver for it: the forward roll and the backflip.
+fn own_clip(kind: u8) -> Option<(u16, u8)> {
+    match kind {
+        1 => Some((crate::creature_anim::ROLL_CLIP, 5)),
+        4 => Some((crate::creature_anim::BACKFLIP_CLIP, 6)),
+        _ => None,
+    }
 }
 
 pub(super) fn plugin(app: &mut App) {
@@ -72,13 +84,20 @@ fn ease(p: f32) -> f32 {
     p * p * (3.0 - 2.0 * p)
 }
 
+#[allow(clippy::type_complexity)]
 fn tumble(
     time: Res<Time>,
     player: Res<Player>,
     mut request: ResMut<ZeldaRollRequest>,
     mut state: ResMut<ZeldaRollState>,
+    mut swings: Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
     mut body: Query<
-        (&mut Transform, Option<&CameraPivot>, Option<&crate::net::NetEntity>),
+        (
+            &mut Transform,
+            Option<&CameraPivot>,
+            Option<&crate::net::NetEntity>,
+            Option<&benilla_assets::ModelAnimations>,
+        ),
         (With<Embodied>, Without<FlyCam>),
     >,
 ) {
@@ -93,14 +112,24 @@ fn tumble(
             // the push landed: the arc's time in the air is the turn's
             Some(since) if since >= asked - 0.05 => {
                 let lasts = 2.0 * LAUNCH_UP[usize::from(kind.clamp(1, 4) - 1)] / GRAVITY;
-                state.rolling = Some((kind, since, lasts));
+                // a model with the roll's own clip plays it over the arc; the rest turn whole
+                let has_clip = own_clip(kind).is_some_and(|(clip, _)| {
+                    body.single()
+                        .ok()
+                        .and_then(|(_, _, _, anims)| anims)
+                        .is_some_and(|a| a.clips.iter().any(|c| c.anim_id == clip))
+                });
+                if let (true, Some((_, step)), Some(swings)) = (has_clip, own_clip(kind), swings.as_deref_mut()) {
+                    swings.0.push((step, lasts));
+                }
+                state.rolling = Some((kind, since, lasts, has_clip));
                 state.armed = None;
             }
             _ if now - asked > ARM_SECS => state.armed = None,
             _ => {}
         }
     }
-    let Some((kind, start, lasts)) = state.rolling else {
+    let Some((kind, start, lasts, own)) = state.rolling else {
         return;
     };
     let p = (now - start) / lasts;
@@ -109,7 +138,11 @@ fn tumble(
         state.rolling = None;
         return;
     }
-    let Ok((mut t, pivot, net)) = body.single_mut() else {
+    // the clip turns the body itself
+    if own {
+        return;
+    }
+    let Ok((mut t, pivot, net, _)) = body.single_mut() else {
         return;
     };
     let height = pivot.map_or(1.0, |p| model_pivot_height(p, net.map_or(1.0, |n| n.scale), false));

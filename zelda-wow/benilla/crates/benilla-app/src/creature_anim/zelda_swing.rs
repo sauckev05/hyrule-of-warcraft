@@ -6,7 +6,8 @@
 //! 1. the right slash: the swing clip's variation whose sword hand crosses right to left;
 //! 2. the left slash: the variation crossing left to right;
 //! 3. the special strike, Heroic Strike's Special1H (Special2H with a two-hander);
-//! 4. Berserker Stance's charged attack: the two-hander's leaping Special2H, whatever is held.
+//! 4. Berserker Stance's charged attack: the two-hander's leaping Special2H, whatever is held;
+//! 5. the dodge roll and 6. the backflip, on a model that has their clips (player::zelda_roll).
 //!
 //! Which variation crosses which way differs by model, so [`VARIATIONS`] names them per race and
 //! gender, measured from the 1.12 character models (the right hand's sideways travel over the
@@ -39,6 +40,11 @@ pub(crate) struct ZeldaGuard {
     /// full draw, so the slowed Load clip keeps time with the charge bar (0: its own rate).
     pub(crate) draw_secs: f32,
 }
+
+/// The dodge roll's and the backflip's own clips, where a model has them (the human male, from
+/// patch-Z); a model without them tumbles by turning its whole body instead (player::zelda_roll).
+pub(crate) const ROLL_CLIP: u16 = 153;
+pub(crate) const BACKFLIP_CLIP: u16 = 154;
 
 /// Where in the ranged Load clip the full draw holds (kind 3): near its end, short of the frame
 /// that would finish the one-shot.
@@ -94,8 +100,13 @@ const VARIATIONS: [(u8, u8, [(u8, u8); 4]); 16] = [
 /// armed main hand): the animation id and the variation index among that id's clips.
 pub(super) fn combo_clip(step: u8, main: Option<(u8, u8)>, race: u8, gender: u8) -> (u16, usize) {
     let swing = super::select::swing_anim_main(main);
-    if step >= 4 {
-        return (58, 0); // the leaping two-handed strike, even with a one-hander
+    match step {
+        // the dodge roll and the backflip (player::zelda_roll): Custom0/Custom1, which patch-Z
+        // adds to the human male (solo-wow/tools/port_roll.py)
+        5 => return (ROLL_CLIP, 0),
+        6 => return (BACKFLIP_CLIP, 0),
+        s if s >= 4 => return (58, 0), // the leaping two-handed strike, even with a one-hander
+        _ => {}
     }
     if step == 3 {
         // Heroic Strike's special strike; the play seam turns it unarmed with empty hands

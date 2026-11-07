@@ -1879,7 +1879,7 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..5c2daedfa
+index 000000000..5a8e24b8d
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,5793 @@
@@ -6247,12 +6247,12 @@ index 000000000..5c2daedfa
 +            default: break;
 +        }
 +    }
-+    // the forward roll covers about 9 yards (20 yd/s for ~0.47 s in the air); the side rolls are
-+    // short hops of about 3 yards
++    // the forward roll covers about 14 yards (30 yd/s for ~0.47 s in the air); the side rolls are
++    // hops of about 4.5 yards
 +    if (offset == 0.0f)
-+        ZeldaDodge(player, offset, 20.0f, 4.5f);
++        ZeldaDodge(player, offset, 30.0f, 4.5f);
 +    else
-+        ZeldaDodge(player, offset, 11.0f, 2.5f);
++        ZeldaDodge(player, offset, 16.5f, 2.5f);
 +    return true;
 +}
 +
@@ -6261,7 +6261,7 @@ index 000000000..5c2daedfa
 +    Player* player = m_session->GetPlayer();
 +    if (!CanAct(player) || player->IsInWater())
 +        return true;
-+    ZeldaDodge(player, M_PI_F, 8.0f, 7.0f);
++    ZeldaDodge(player, M_PI_F, 12.0f, 7.0f);     // about 9 yards back
 +    return true;
 +}
 +
