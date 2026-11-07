@@ -20,9 +20,10 @@ import sys
 
 ROLL_ID, BACKFLIP_ID = 153, 154
 # (new id, HD id, milliseconds kept from its start (None: all), the pelvis moves with it): the roll
-# keeps its drop into a ball near the ground; the backflip keeps its turn up to the landing, without
+# keeps its drop into a ball near the ground; the backflip keeps its turn up to the landing (500 ms;
+# what follows is a crouch whose arms look wrong on the 1.12 body), without
 # its own leap (the server's push already lifts the hero)
-CLIPS = [(ROLL_ID, 666, None, True), (BACKFLIP_ID, 736, 600, False)]
+CLIPS = [(ROLL_ID, 666, None, True), (BACKFLIP_ID, 736, 500, False)]
 STEP_MS = 33
 
 # 1.12 bone -> HD object id (bone_bNN in the .mdx), with the 1.12 and HD child that give each its

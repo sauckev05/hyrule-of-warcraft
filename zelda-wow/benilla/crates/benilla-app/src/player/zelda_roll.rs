@@ -20,11 +20,13 @@ use crate::net::Embodied;
 
 /// How long an asked-for roll waits for the server's push before it is dropped (s).
 const ARM_SECS: f32 = 0.5;
-/// The server's gravity (yd/s²): an arc launched up at `v` is `2v / g` long.
-const GRAVITY: f32 = 19.291_105;
-/// The launch speeds up (yd/s) of the server's dodges, by kind: the forward roll, the side rolls
-/// and the backflip (`HandleZeldaRollCommand`, `HandleZeldaFlipCommand`).
-const LAUNCH_UP: [f32; 4] = [4.5, 2.5, 2.5, 7.0];
+/// How long each roll tumbles (s), by kind: the forward roll, the side rolls and the backflip. The
+/// server makes every blow a dodge for the same time (`HandleZeldaRollCommand`,
+/// `HandleZeldaFlipCommand`); the forward roll ends a little after its arc lands.
+const ROLL_SECS: [f32; 4] = [0.65, 0.36, 0.36, 0.726];
+/// The backflip's own clip is its turn up to the landing (port_roll.py keeps 500 ms of 600): it
+/// plays at the pace the whole 600 ms had over the arc, and the arc's last moment is the fall pose.
+const BACKFLIP_CLIP_SHARE: f32 = 500.0 / 600.0;
 /// The body turns about this share of its head height above the feet, near the middle.
 const PIVOT_SHARE: f32 = 0.5;
 
@@ -129,7 +131,7 @@ fn tumble(
         match started {
             // the push landed: the arc's time in the air is the turn's
             Some(since) => {
-                let lasts = 2.0 * LAUNCH_UP[usize::from(kind.clamp(1, 4) - 1)] / GRAVITY;
+                let lasts = ROLL_SECS[usize::from(kind.clamp(1, 4) - 1)];
                 // a model with the roll's own clip plays it over the arc; the rest turn whole
                 let has_clip = own_clip(kind).is_some_and(|(clip, _)| {
                     body.single()
@@ -138,7 +140,8 @@ fn tumble(
                         .is_some_and(|a| a.clips.iter().any(|c| c.anim_id == clip))
                 });
                 if let (true, Some((_, step)), Some(swings)) = (has_clip, own_clip(kind), swings.as_deref_mut()) {
-                    swings.0.push((step, lasts));
+                    let clip_secs = if kind == 4 { lasts * BACKFLIP_CLIP_SHARE } else { lasts };
+                    swings.0.push((step, clip_secs));
                 }
                 trace(|| format!("start kind={kind} pushed={pushed} lasts={lasts:.3} own_clip={has_clip} body={}",
                                  body.single().is_ok()));
@@ -153,8 +156,8 @@ fn tumble(
         }
     }
     if let Some((_, start, lasts, _)) = state.rolling {
-        // done once the arc is over, or the body is back on the ground
-        if (now - start) / lasts >= 1.0 || (!pushed && player.airborne_since.is_none() && now - start > 0.1) {
+        // done when its time is up, landed or not (the forward roll finishes on the ground)
+        if (now - start) / lasts >= 1.0 {
             trace(|| format!("end after {:.3} s", now - start));
             state.rolling = None;
         }
