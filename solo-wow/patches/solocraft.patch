@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..96ae689fb
+index 000000000..2e637cdbe
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5197 @@
+@@ -0,0 +1,5205 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3394,14 +3394,22 @@ index 000000000..96ae689fb
 +            navi->MonsterSay("Hey! Get... up...! I can't - I'm too tired! Not yet! Somebody help!", LANG_UNIVERSAL, player);
 +        return 0;
 +    }
-+    static uint32 const reviveMinutes = uint32(std::max(0, sConfig.GetIntDefault("Zelda.NaviReviveMinutes", 5)));
-+    state.naviReviveReadyAt = now + time_t(reviveMinutes) * 60;
++    // the cooldown starts when the hero takes the light (ZeldaNaviLightTaken), not at the death
 +    if (navi)
 +        navi->MonsterSay("NO! Hey! LISTEN! You don't get to stop here! Take my light - get up!", LANG_UNIVERSAL, player);
 +
 +    // Navi's Light (custom spell 40009, 006_mastery): back on your feet with 10% of your health, in
 +    // a priest's resurrection light
 +    return 40009;
++}
++
++// The hero clicked to take Navi's Light and stands again: now her light needs its rest.
++void ZeldaNaviLightTaken(Player* player)
++{
++    if (!player)
++        return;
++    static uint32 const reviveMinutes = uint32(std::max(0, sConfig.GetIntDefault("Zelda.NaviReviveMinutes", 5)));
++    StateFor(player).naviReviveReadyAt = time(nullptr) + time_t(reviveMinutes) * 60;
 +}
 +
 +void ZeldaHeartPieceDrop(Player* looter, Creature* victim, Loot* loot)
@@ -6993,10 +7001,10 @@ index 000000000..96ae689fb
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..df2cdeb60
+index 000000000..52b12c295
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,303 @@
+@@ -0,0 +1,305 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -7289,6 +7297,8 @@ index 000000000..df2cdeb60
 +// Navi's Light (item 190601): when the hero dies wearing it, the soulstone self-resurrection spell
 +// for their level, at most once every 30 minutes; 0 when it cannot help.
 +uint32 ZeldaNaviResurrection(Player* player);
++// Zelda of Warcraft: Navi's Light was taken (the self-resurrection clicked): its cooldown starts
++void ZeldaNaviLightTaken(Player* player);
 +// Pieces of Heart for Navi's quest: a worthy foe (not grey, not a critter) sometimes drops one.
 +void ZeldaHeartPieceDrop(Player* looter, Creature* victim, Loot* loot);
 +// A raid attunement quest the hero may stand in for with a companion's chapter.
@@ -8854,7 +8864,7 @@ index 500bb08eb..42a4411eb 100644
      target->ApplyAttackTimePercentMod(OFF_ATTACK, amount, apply);
  }
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
-index a9fb2306c..292388600 100644
+index a9fb2306c..e9743d3e0 100644
 --- a/src/game/Spells/SpellEffects.cpp
 +++ b/src/game/Spells/SpellEffects.cpp
 @@ -17,6 +17,7 @@
@@ -8939,7 +8949,7 @@ index a9fb2306c..292388600 100644
      bonus = int32(bonus * totalDamagePercentMod);
  
      // prevent negative damage
-@@ -4963,6 +4992,12 @@ void Spell::EffectSelfResurrect(SpellEffectIndex eff_idx)
+@@ -4963,6 +4992,15 @@ void Spell::EffectSelfResurrect(SpellEffectIndex eff_idx)
      player->SetPower(POWER_RAGE, 0);
      player->SetPower(POWER_ENERGY, player->GetMaxPower(POWER_ENERGY));
  
@@ -8947,7 +8957,10 @@ index a9fb2306c..292388600 100644
 +    // Resurrection impact kit (SpellVisualKit 70), played once the hero stands again so every
 +    // client sees it on the living body
 +    if (m_spellInfo->Id == 40009)
++    {
 +        player->PlaySpellVisual(70);
++        ZeldaNaviLightTaken(player);
++    }
 +
      player->SpawnCorpseBones();
  }
