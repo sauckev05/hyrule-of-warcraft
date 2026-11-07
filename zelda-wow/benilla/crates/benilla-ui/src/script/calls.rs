@@ -60,7 +60,7 @@ pub enum ScriptCall {
     ZeldaSwing { step: u8, seconds: f32 },
     /// Zelda of Warcraft: `ZeldaGuardAnim(kind, held)`, the guard key pressed (`held` true) or let
     /// go: `kind` 1 raises the shield, 2 holds the weapon up to parry.
-    ZeldaGuard { kind: u8, held: bool },
+    ZeldaGuard { kind: u8, held: bool, secs: f32 },
     /// Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)` turns the Minimap into the big dungeon map
     /// (square, zoomed out to `zoom` 0..3, widest first) or back into the corner disc.
     ZeldaDungeonMap { on: bool, zoom: u8 },

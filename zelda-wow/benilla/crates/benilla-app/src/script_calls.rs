@@ -86,12 +86,13 @@ pub(crate) fn apply_script_calls(
                     swings.0.push((step, seconds));
                 }
             }
-            ScriptCall::ZeldaGuard { kind, held } => {
+            ScriptCall::ZeldaGuard { kind, held, secs } => {
                 if let Some(swings) = zelda.1.as_deref_mut() {
                     let guard = &mut swings.1;
                     if held {
                         guard.kind = kind;
                         guard.start = true;
+                        guard.draw_secs = secs;
                     }
                     guard.held = held;
                 }

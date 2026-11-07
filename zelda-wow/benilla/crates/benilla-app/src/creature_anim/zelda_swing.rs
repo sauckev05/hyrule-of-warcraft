@@ -35,16 +35,36 @@ pub(crate) struct ZeldaGuard {
     /// Re-armed while held after something else took the body (the server's root on a raised
     /// guard re-picks the stance): the clip goes straight to its guard pose.
     pub(crate) resume: bool,
+    /// Kind 3, the bow drawn while a Charged Shot charges: the seconds the draw takes to reach
+    /// full draw, so the slowed Load clip keeps time with the charge bar (0: its own rate).
+    pub(crate) draw_secs: f32,
+}
+
+/// Where in the ranged Load clip the full draw holds (kind 3): near its end, short of the frame
+/// that would finish the one-shot.
+pub(super) const DRAW_POSE: f32 = 0.95;
+
+/// The pose fraction the held key stops at, by kind.
+pub(super) fn hold_pose(kind: u8) -> f32 {
+    if kind == 3 {
+        DRAW_POSE
+    } else {
+        GUARD_POSE
+    }
 }
 
 /// Where in the guard clip the pose holds while the key is down, as a fraction of its length: the
 /// shield or blade is at its highest a little before the middle of the block and parry clips.
 pub(super) const GUARD_POSE: f32 = 0.4;
 
-/// The guard clip for `kind` with `main` (`(class, subclass)` of the armed main hand) in hand.
-pub(super) fn guard_clip(kind: u8, main: Option<(u8, u8)>) -> u16 {
+/// The guard clip for `kind` with `main` (`(class, subclass)` of the armed main hand) in hand;
+/// kind 3 is the ranged weapon's Load (LoadBow, LoadRifle, LoadThrown) for `ranged`.
+pub(super) fn guard_clip(kind: u8, main: Option<(u8, u8)>, ranged: Option<(u8, u8)>) -> u16 {
     if kind == 1 {
         return 24; // ShieldBlock
+    }
+    if kind == 3 {
+        return super::select::ranged_load_anim(ranged);
     }
     super::select::defense_anim(3, main).unwrap_or(21)
 }

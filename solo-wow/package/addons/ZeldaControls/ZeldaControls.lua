@@ -224,6 +224,11 @@ function ZeldaControls_Bow(state)
 	if state == "down" then
 		if not attackDownAt then
 			bowDownAt = GetTime()
+			-- the bow comes to hand and is drawn in slow motion, full draw as the bar fills
+			ZeldaControls_Command(".zbow draw")
+			if ZeldaGuardAnim then
+				ZeldaGuardAnim(3, true, SPIN_HOLD)
+			end
 		end
 		return
 	end
@@ -232,6 +237,9 @@ function ZeldaControls_Bow(state)
 	end
 	local charged = GetTime() - bowDownAt >= SPIN_HOLD
 	bowDownAt = nil
+	if ZeldaGuardAnim then
+		ZeldaGuardAnim(3, false)
+	end
 	if not attackDownAt then
 		spinBar:Hide()
 	end

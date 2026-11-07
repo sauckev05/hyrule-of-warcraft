@@ -820,7 +820,7 @@ pub(super) fn drive_animations(
                 if guard.start {
                     guard.start = false;
                     let w = wielded.copied().unwrap_or_default();
-                    guard.id = super::zelda_swing::guard_clip(guard.kind, w.armed_main());
+                    guard.id = super::zelda_swing::guard_clip(guard.kind, w.armed_main(), w.ranged);
                     requests.push((guard.id, None, Some((0, 0.0))));
                 }
             }
@@ -1032,9 +1032,17 @@ pub(super) fn drive_animations(
                     }
                     match (node.and_then(|n| player.animation_mut(n)), duration) {
                         (Some(active), Some(duration)) if guard.held => {
-                            let pose = duration * super::zelda_swing::GUARD_POSE;
+                            let pose = duration * super::zelda_swing::hold_pose(guard.kind);
                             if std::mem::take(&mut guard.resume) && active.seek_time() < pose {
                                 active.seek_to(pose);
+                            }
+                            // the bow's draw in slow motion, reaching full draw as the charge
+                            // bar fills
+                            if guard.kind == 3
+                                && guard.draw_secs > 0.0
+                                && active.seek_time() < pose
+                            {
+                                active.set_speed((pose / guard.draw_secs).max(0.05));
                             }
                             if active.seek_time() >= pose {
                                 if active.seek_time() - pose > 0.02 {

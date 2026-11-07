@@ -369,20 +369,27 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
     // Zelda of Warcraft: `ZeldaGuardAnim(kind, held)`, the guard key: pressed (held true) or let go.
     g.set(
         "ZeldaGuardAnim",
-        lua.create_function(|lua, (kind, held): (Option<Value>, Option<Value>)| {
+        lua.create_function(|lua, (kind, held, secs): (Option<Value>, Option<Value>, Option<Value>)| {
             let kind = match kind {
                 Some(Value::Integer(n)) => n as i64,
                 Some(Value::Number(n)) => n as i64,
                 _ => 1,
             }
-            .clamp(1, 2) as u8;
+            .clamp(1, 3) as u8;
+            // kind 3, the bow drawn while the shot charges: how long the full draw takes
+            let secs = match secs {
+                Some(Value::Integer(n)) => n as f32,
+                Some(Value::Number(n)) => n as f32,
+                _ => 0.0,
+            }
+            .max(0.0);
             let held = match held {
                 Some(Value::Boolean(b)) => b,
                 Some(Value::Integer(n)) => n != 0,
                 Some(Value::Number(n)) => n != 0.0,
                 _ => false,
             };
-            push_call(lua, ScriptCall::ZeldaGuard { kind, held });
+            push_call(lua, ScriptCall::ZeldaGuard { kind, held, secs });
             Ok(())
         })?,
     )?;
