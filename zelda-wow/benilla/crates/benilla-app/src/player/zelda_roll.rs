@@ -41,6 +41,15 @@ pub(super) struct ZeldaRollState {
     armed: Option<(u8, f32)>,
     /// `(kind, started at, lasts, its own clip plays)`: turning.
     rolling: Option<(u8, f32, f32, bool)>,
+    /// What the turn last wrote onto the body, and the upright pose it turned: a frame `control`
+    /// skipped still holds the written pose, which must not be turned again.
+    written: Option<(Transform, Transform)>,
+}
+
+fn trace(msg: impl FnOnce() -> String) {
+    if benilla_assets::trace::enabled_for("zroll") {
+        benilla_assets::trace::line("zroll", &msg());
+    }
 }
 
 /// The clip a model of its own plays for the roll `kind` (the human male's, from patch-Z), and the
@@ -63,6 +72,14 @@ pub(super) fn plugin(app: &mut App) {
                 .after(super::control)
                 .run_if(not(resource_exists::<crate::run_mode::CaptureMode>))
                 .in_set(crate::char_select::InWorldGated),
+        )
+        // the turn itself goes on last, after every Update writer of the body, just before the
+        // transforms propagate to the model
+        .add_systems(
+            PostUpdate,
+            turn_body
+                .before(bevy::transform::TransformSystems::Propagate)
+                .run_if(not(resource_exists::<crate::run_mode::CaptureMode>)),
         );
 }
 
@@ -88,63 +105,91 @@ fn ease(p: f32) -> f32 {
 fn tumble(
     time: Res<Time>,
     player: Res<Player>,
+    mut knocks: MessageReader<crate::net::KnockBackMessage>,
     mut request: ResMut<ZeldaRollRequest>,
     mut state: ResMut<ZeldaRollState>,
     mut swings: Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
-    mut body: Query<
-        (
-            &mut Transform,
-            Option<&CameraPivot>,
-            Option<&crate::net::NetEntity>,
-            Option<&benilla_assets::ModelAnimations>,
-        ),
-        (With<Embodied>, Without<FlyCam>),
-    >,
+    body: Query<Option<&benilla_assets::ModelAnimations>, (With<Embodied>, Without<FlyCam>)>,
 ) {
     let now = time.elapsed_secs();
     if let Some(kind) = request.pending.take() {
+        trace(|| format!("asked kind={kind} rolling={}", state.rolling.is_some()));
         if state.rolling.is_none() {
             state.armed = Some((kind, now));
         }
     }
+    // the server's push for the asked roll: the turn starts with it
+    let pushed = knocks.read().count() > 0;
     if let Some((kind, asked)) = state.armed {
-        match player.airborne_since {
+        let started = if pushed {
+            Some(now)
+        } else {
+            player.airborne_since.filter(|&since| since >= asked - 0.05)
+        };
+        match started {
             // the push landed: the arc's time in the air is the turn's
-            Some(since) if since >= asked - 0.05 => {
+            Some(since) => {
                 let lasts = 2.0 * LAUNCH_UP[usize::from(kind.clamp(1, 4) - 1)] / GRAVITY;
                 // a model with the roll's own clip plays it over the arc; the rest turn whole
                 let has_clip = own_clip(kind).is_some_and(|(clip, _)| {
                     body.single()
                         .ok()
-                        .and_then(|(_, _, _, anims)| anims)
+                        .flatten()
                         .is_some_and(|a| a.clips.iter().any(|c| c.anim_id == clip))
                 });
                 if let (true, Some((_, step)), Some(swings)) = (has_clip, own_clip(kind), swings.as_deref_mut()) {
                     swings.0.push((step, lasts));
                 }
+                trace(|| format!("start kind={kind} pushed={pushed} lasts={lasts:.3} own_clip={has_clip} body={}",
+                                 body.single().is_ok()));
                 state.rolling = Some((kind, since, lasts, has_clip));
                 state.armed = None;
             }
-            _ if now - asked > ARM_SECS => state.armed = None,
-            _ => {}
+            None if now - asked > ARM_SECS => {
+                trace(|| format!("dropped kind={kind}: no push in {ARM_SECS} s"));
+                state.armed = None;
+            }
+            None => {}
         }
     }
+    if let Some((_, start, lasts, _)) = state.rolling {
+        // done once the arc is over, or the body is back on the ground
+        if (now - start) / lasts >= 1.0 || (!pushed && player.airborne_since.is_none() && now - start > 0.1) {
+            trace(|| format!("end after {:.3} s", now - start));
+            state.rolling = None;
+        }
+    }
+}
+
+/// Turns the body through the roll, last thing before the transforms propagate.
+#[allow(clippy::type_complexity)]
+fn turn_body(
+    time: Res<Time>,
+    mut state: ResMut<ZeldaRollState>,
+    mut body: Query<
+        (&mut Transform, Option<&CameraPivot>, Option<&crate::net::NetEntity>),
+        (With<Embodied>, Without<FlyCam>),
+    >,
+) {
     let Some((kind, start, lasts, own)) = state.rolling else {
+        state.written = None;
         return;
     };
-    let p = (now - start) / lasts;
-    // done once the arc is over, or the body is back on the ground
-    if p >= 1.0 || (player.airborne_since.is_none() && now - start > 0.05) {
-        state.rolling = None;
-        return;
-    }
     // the clip turns the body itself
     if own {
         return;
     }
-    let Ok((mut t, pivot, net, _)) = body.single_mut() else {
+    let p = (time.elapsed_secs() - start) / lasts;
+    let Ok((mut t, pivot, net)) = body.single_mut() else {
         return;
     };
+    // a frame whose Update did not set the body upright again still holds the last turn
+    if let Some((written, upright)) = state.written {
+        if *t == written {
+            *t = upright;
+        }
+    }
+    let upright = *t;
     let height = pivot.map_or(1.0, |p| model_pivot_height(p, net.map_or(1.0, |n| n.scale), false));
     let up = Vec3::Y * height * PIVOT_SHARE;
     // `control` has just set the body upright at its feet: turn it about its middle instead
@@ -154,6 +199,7 @@ fn tumble(
     let center = t.translation + up;
     t.translation = center - world_turn * up;
     t.rotation = base * turn;
+    state.written = Some((*t, upright));
 }
 
 #[cfg(test)]
