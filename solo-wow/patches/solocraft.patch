@@ -7699,7 +7699,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..0f4f9932c 100644
+index 4d8e9160a..b2949ec8d 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -7910,7 +7910,35 @@ index 4d8e9160a..0f4f9932c 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -19665,6 +19734,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -18152,6 +18221,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
+ 
+     DEBUG_LOG("SendTransferAbortedByLockStatus: Called for %s on map %u, LockAreaStatus %u, miscRequirement %u)", GetGuidStr().c_str(), mapEntry->MapID, lockStatus, miscRequirement);
+ 
++    // Zelda of Warcraft: the client keeps quiet about a refused transfer, so say why in the chat
++    // (and in the server log) instead of leaving the hero standing in a portal that does nothing
++    {
++        char const* why = "the way is barred";
++        switch (lockStatus)
++        {
++            case AREA_LOCKSTATUS_TOO_LOW_LEVEL:          why = "you are too low a level"; break;
++            case AREA_LOCKSTATUS_ZONE_IN_COMBAT:         why = "a battle is still raging inside"; break;
++            case AREA_LOCKSTATUS_INSTANCE_IS_FULL:       why = "it is full"; break;
++            case AREA_LOCKSTATUS_QUEST_NOT_COMPLETED:    why = "a quest must be finished first"; break;
++            case AREA_LOCKSTATUS_MISSING_ITEM:           why = "you are missing the key"; break;
++            case AREA_LOCKSTATUS_TOO_MANY_INSTANCE:      why = "too many dungeons were entered recently"; break;
++            case AREA_LOCKSTATUS_HAS_BIND:               why = "you are bound to another copy of it"; break;
++            case AREA_LOCKSTATUS_RAID_LOCKED:            why = "it is a raid"; break;
++            default: break;
++        }
++        sLog.outString("Zelda: %s could not enter map %u (lock status %u, requirement %u)", GetName(), mapEntry->MapID, lockStatus, miscRequirement);
++        if (mapEntry->IsDungeon())
++            ChatHandler(GetSession()).PSendSysMessage("|cffff8040You cannot enter %s: %s.|r", mapEntry->name[GetSession()->GetSessionDbcLocale()], why);
++    }
++
+     if (!at->status_failed_text.empty())
+     {
+         switch (lockStatus)
+@@ -19665,6 +19755,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -7938,7 +7966,7 @@ index 4d8e9160a..0f4f9932c 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20122,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20143,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -7947,7 +7975,7 @@ index 4d8e9160a..0f4f9932c 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20311,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20332,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -7958,6 +7986,21 @@ index 4d8e9160a..0f4f9932c 100644
      bool haveToSendEvent = false;
      bool wasPermanent = false;
      uint32 oldItemId = 0;
+@@ -20436,10 +20551,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
+     if (IsGameMaster())
+         return true;
+ 
+-    if (m_enteredInstances.find(instanceId) != m_enteredInstances.end())
+-        return true;
+-
+-    return m_enteredInstances.size() < PLAYER_NEW_INSTANCE_LIMIT_PER_HOUR;
++    // Zelda of Warcraft: a solo world whose dungeons never reset has no use for the five-instances-
++    // an-hour cap; it only ever locked the hero out of a dungeon after a busy hour of delving
++    (void)instanceId;
++    return true;
+ }
+ 
+ // when instance was entered
 diff --git a/src/game/Entities/Player.h b/src/game/Entities/Player.h
 index 010b0034f..9c00f68eb 100644
 --- a/src/game/Entities/Player.h
