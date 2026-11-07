@@ -23,8 +23,9 @@ BINDING_NAME_ZELDA_STANCE_NEXT = "Next stance"
 BINDING_NAME_ZELDA_TARGET = "Z-Target (hold to lock on) - tapping Shift already toggles it"
 
 local SPIN_HOLD = 0.8
+local BOW_HOLD = SPIN_HOLD * 2   -- a Charged Shot takes twice as long to charge as the sword
 local attackDownAt = nil
-local bowDownAt = nil          -- the bow key is held: a Charged Shot when it is let go after SPIN_HOLD
+local bowDownAt = nil          -- the bow key is held: a Charged Shot when it is let go after BOW_HOLD
 
 function ZeldaControls_Command(cmd)
 	SendChatMessage(cmd, "SAY")
@@ -93,9 +94,11 @@ spinBar:SetScript("OnUpdate", function()
 	end
 	local held = GetTime() - downAt
 	local name = attackDownAt and ChargedAttackName() or "Charged Shot"
-	this:SetValue(math.min(held, SPIN_HOLD))
-	spinSpark:SetPoint("CENTER", this, "LEFT", 195 * math.min(held, SPIN_HOLD) / SPIN_HOLD, 0)
-	if held >= SPIN_HOLD then
+	local hold = attackDownAt and SPIN_HOLD or BOW_HOLD
+	this:SetMinMaxValues(0, hold)
+	this:SetValue(math.min(held, hold))
+	spinSpark:SetPoint("CENTER", this, "LEFT", 195 * math.min(held, hold) / hold, 0)
+	if held >= hold then
 		if attackDownAt and SpinRageShort() then
 			this:SetStatusBarColor(0.6, 0.6, 0.6)
 			spinText:SetText(name .. " - not enough rage")
@@ -227,7 +230,7 @@ function ZeldaControls_Bow(state)
 			-- the bow comes to hand and is drawn in slow motion, full draw as the bar fills
 			ZeldaControls_Command(".zbow draw")
 			if ZeldaGuardAnim then
-				ZeldaGuardAnim(3, true, SPIN_HOLD)
+				ZeldaGuardAnim(3, true, BOW_HOLD)
 			end
 		end
 		return
@@ -235,7 +238,7 @@ function ZeldaControls_Bow(state)
 	if not bowDownAt then
 		return
 	end
-	local charged = GetTime() - bowDownAt >= SPIN_HOLD
+	local charged = GetTime() - bowDownAt >= BOW_HOLD
 	bowDownAt = nil
 	if ZeldaGuardAnim then
 		ZeldaGuardAnim(3, false)
