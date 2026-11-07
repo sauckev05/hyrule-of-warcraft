@@ -8829,7 +8829,7 @@ index 500bb08eb..42a4411eb 100644
      target->ApplyAttackTimePercentMod(OFF_ATTACK, amount, apply);
  }
 diff --git a/src/game/Spells/SpellEffects.cpp b/src/game/Spells/SpellEffects.cpp
-index a9fb2306c..817661b55 100644
+index a9fb2306c..292388600 100644
 --- a/src/game/Spells/SpellEffects.cpp
 +++ b/src/game/Spells/SpellEffects.cpp
 @@ -17,6 +17,7 @@
@@ -8914,6 +8914,19 @@ index a9fb2306c..817661b55 100644
      bonus = int32(bonus * totalDamagePercentMod);
  
      // prevent negative damage
+@@ -4963,6 +4992,12 @@ void Spell::EffectSelfResurrect(SpellEffectIndex eff_idx)
+     player->SetPower(POWER_RAGE, 0);
+     player->SetPower(POWER_ENERGY, player->GetMaxPower(POWER_ENERGY));
+ 
++    // Zelda of Warcraft: Navi's Light raises the hero in a priest's resurrection light - the
++    // Resurrection impact kit (SpellVisualKit 70), played once the hero stands again so every
++    // client sees it on the living body
++    if (m_spellInfo->Id == 40009)
++        player->PlaySpellVisual(70);
++
+     player->SpawnCorpseBones();
+ }
+ 
 diff --git a/src/game/Spells/SpellStacking.cpp b/src/game/Spells/SpellStacking.cpp
 index 330ad8fea..3916c50e5 100644
 --- a/src/game/Spells/SpellStacking.cpp
