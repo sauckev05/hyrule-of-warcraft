@@ -22,6 +22,10 @@ POTION_GUID_BASE = 9103001
 POTION_DISPLAY = 7178     # a goblin alchemist
 POTION_ITEMS = [118, 858, 929, 1710, 3928, 13446,       # healing potions
                 2455, 3385, 3827, 6149, 13443, 13444]   # mana potions
+# their stock buy prices (copper), so the factor applies once however often the SQL runs
+POTION_STOCK_PRICES = {118: 20, 858: 100, 929: 300, 1710: 500, 3928: 1000, 13446: 4000,
+                       2455: 40, 3385: 120, 3827: 480, 6149: 480, 13443: 1600, 13444: 6000}
+POTION_PRICE_FACTOR = 10
 # (place, map, x, y, z, orientation): between the alchemy vendors of each shop
 POTION_SPOTS = [
     ('Gurubashi Arena', 0, -13187.4, 333.6, 40.3, 4.4),
@@ -89,6 +93,9 @@ def main():
                                    for i, (_, m, x, y, z, o) in enumerate(POTION_SPOTS)]))
     out.append(insert('npc_vendor', [dict(entry=POTION_GOBLIN, item=i, maxcount=0, incrtime=0, slot=n, condition_id=0)
                                      for n, i in enumerate(POTION_ITEMS)]))
+    # healing and mana potions cost ten times their stock price (what they sell for is unchanged)
+    out += ['UPDATE `item_template` SET `BuyPrice` = %d WHERE `entry` = %d;' % (price * POTION_PRICE_FACTOR, item)
+            for item, price in sorted(POTION_STOCK_PRICES.items())]
     # the pawnbroker, a step to the side of each potion goblin
     b = creature_template(PAWNBROKER, 'Grizzle Pawnwick', 'Pawnbroker', PAWN_DISPLAY, 35, 0, 50, 1, 'npc_zelda_pawnbroker')
     b['NpcFlags'] = 0x1                   # gossip

@@ -139,6 +139,18 @@ INSERT INTO `npc_vendor` (`entry`,`item`,`maxcount`,`incrtime`,`slot`,`condition
 (190651,13443,0,0,10,0),
 (190651,13444,0,0,11,0);
 
+UPDATE `item_template` SET `BuyPrice` = 200 WHERE `entry` = 118;
+UPDATE `item_template` SET `BuyPrice` = 1000 WHERE `entry` = 858;
+UPDATE `item_template` SET `BuyPrice` = 3000 WHERE `entry` = 929;
+UPDATE `item_template` SET `BuyPrice` = 5000 WHERE `entry` = 1710;
+UPDATE `item_template` SET `BuyPrice` = 400 WHERE `entry` = 2455;
+UPDATE `item_template` SET `BuyPrice` = 1200 WHERE `entry` = 3385;
+UPDATE `item_template` SET `BuyPrice` = 4800 WHERE `entry` = 3827;
+UPDATE `item_template` SET `BuyPrice` = 10000 WHERE `entry` = 3928;
+UPDATE `item_template` SET `BuyPrice` = 4800 WHERE `entry` = 6149;
+UPDATE `item_template` SET `BuyPrice` = 16000 WHERE `entry` = 13443;
+UPDATE `item_template` SET `BuyPrice` = 60000 WHERE `entry` = 13444;
+UPDATE `item_template` SET `BuyPrice` = 40000 WHERE `entry` = 13446;
 DELETE FROM `creature` WHERE `id` = 190652;
 DELETE FROM `creature_template` WHERE `Entry` = 190652;
 DELETE FROM `npc_text` WHERE `ID` IN (902001,902002);
