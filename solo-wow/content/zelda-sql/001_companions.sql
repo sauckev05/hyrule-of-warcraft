@@ -481,6 +481,8 @@ UPDATE `creature_template` SET `UnitFlags` = `UnitFlags` & ~256 WHERE `Entry` = 
 
 UPDATE `gameobject_template` SET `data0` = 1 WHERE `type` = 18;
 
+UPDATE `gameobject_template` SET `faction` = 35 WHERE `entry` = 178404;
+
 UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;
 
 UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;
