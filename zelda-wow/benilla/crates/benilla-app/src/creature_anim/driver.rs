@@ -509,6 +509,7 @@ pub(super) fn drive_animations(
         // The creep vis flag off the unit's own descriptor (`[[unit+0x110]+0x213] & 2`), never
         // predicted: the crouch lands with the server's aura.
         mv.stealthed = store.is_some_and(|s| s.0.unit_is_stealthed());
+        mv.stunned = store.is_some_and(|s| s.0.unit_flags() & 0x0004_0000 != 0);
         let moving = mv.flags & move_flags::ANY_MOVE != 0;
         // An arc's launch vertical speed splits a jump (the JumpStart/Jump bracket; jump
         // `0x60e480`, land `0x602c60`) from a step-off fall, which has no bracket and keeps the

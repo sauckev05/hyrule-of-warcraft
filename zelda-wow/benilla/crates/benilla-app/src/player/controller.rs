@@ -360,7 +360,10 @@ pub(super) fn control(
             return;
         }
         // `0x514560`, after `apply_server_moves`, so this frame's root edge is already in `modes`.
-        let may_translate = mover.may_translate(player.modes.rooted);
+        // Zelda of Warcraft: a stun holds the feet as well as the turn, root packet or not (the
+        // server's `SMSG_FORCE_MOVE_ROOT` can trail the flag, and a stun under a lowered guard
+        // has been seen to let the hero walk).
+        let may_translate = mover.may_translate(player.modes.rooted || stunned);
         let axes = input::move_axes(
             binds,
             &buttons,

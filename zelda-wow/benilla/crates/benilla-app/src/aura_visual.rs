@@ -219,6 +219,7 @@ pub(crate) fn apply_aura_anim_rate(
         Option<&crate::entities::mount::MountChild>,
     )>,
     mut rigs: Query<(&mut AnimationPlayer, Has<AnimRateFreeze>)>,
+    mut recomputes: MessageWriter<crate::creature_anim::BaseAnimRecompute>,
     mut commands: Commands,
 ) {
     for (entity, nodes, mount) in &units {
@@ -244,6 +245,14 @@ pub(crate) fn apply_aura_anim_rate(
                     }
                     trace_clock_edge("thaw", rig, &player);
                     commands.entity(rig).try_remove::<AnimRateFreeze>();
+                    // Zelda of Warcraft: a clip armed under the freeze took its 0 speed and held
+                    // the stone pose until the next move; re-pick the base so it arms afresh.
+                    if rig == entity {
+                        recomputes.write(crate::creature_anim::BaseAnimRecompute {
+                            entity,
+                            anim_id: u16::MAX,
+                        });
+                    }
                 }
                 (false, false) => {}
             }

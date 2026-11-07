@@ -56,6 +56,8 @@ pub(crate) const MOUNT_SPECIAL: u16 = 94;
 /// Knockdown (121), with [`LIFT_OFF`] and [`LAND`] the ids whose arm takes the base-animation lock
 /// (`0x5fdba0`, table `0x5fdd90`): `PlayAnimation` refuses every base request while one holds.
 pub(crate) const KNOCKDOWN: u16 = 121;
+/// Stun (14), the dazed sway a stunned unit holds (Zelda of Warcraft: picked off the stun flag).
+pub(crate) const STUN: u16 = 14;
 /// See [`KNOCKDOWN`]: the taxi pair takes the same lock under the reference's other bit.
 pub(crate) const LIFT_OFF: u16 = 192;
 /// See [`KNOCKDOWN`].
@@ -191,6 +193,9 @@ pub(crate) struct MovementState {
     /// On a flying server spline (a taxi): the selector plays Fly 135 on its Flying bit 0x200
     /// (`0x5fd19c`); [`unify`] stamps it from the live [`Spline`].
     pub(crate) flying: bool,
+    /// Zelda of Warcraft: `UNIT_FLAG_STUNNED` off the unit's own descriptor, every unit and self
+    /// alike: a stunned unit sways in the Stun loop (14) rather than standing at ease.
+    pub(crate) stunned: bool,
 }
 
 /// A bracketed animation state: an enter one-shot, a loop, an exit one-shot.
@@ -357,6 +362,11 @@ fn claimed_candidates(
     use move_flags::*;
     let f = state.flags;
     let swimming = f & SWIMMING != 0;
+    // Zelda of Warcraft: stunned on the ground, the dazed Stun loop (14), Stand where a model has
+    // none; a stunned swimmer still treads water.
+    if state.stunned && !swimming && !state.flying {
+        return Some(&[STUN, STAND]);
+    }
     // Swimming locomotion (`0x5fd100`): turn, then strafe, then backward, then forward.
     // Zelda of Warcraft: only while the swimmer actually goes somewhere - a stroke clip runs at the
     // swim speed, so a still swimmer with a move bit standing would hold one frozen frame; it
