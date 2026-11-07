@@ -104,7 +104,9 @@ INSERT INTO `zelda_itemset_item` (`item`,`set_id`) VALUES
 (190733,4),
 (190734,4),
 (190735,4),
-(190736,4);
+(190736,4),
+(11086,5),
+(9379,5);
 
 INSERT INTO `zelda_itemset_bonus` (`set_id`,`pieces`,`bonus_type`,`value`) VALUES
 (1,2,1,1.0),
@@ -128,4 +130,6 @@ INSERT INTO `zelda_itemset_bonus` (`set_id`,`pieces`,`bonus_type`,`value`) VALUE
 (4,3,6,15.0),
 (4,6,5,6.0),
 (4,6,4,6.0),
-(4,6,2,20.0);
+(4,6,2,20.0),
+(5,2,5,10.0),
+(5,2,9,10.0);

@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS `zelda_itemset_bonus` (
   `value` float NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COMMENT='Zelda of Warcraft: armor set bonuses (see ZeldaCommands.cpp)';
 """)
-    entries = [p[0] for s in SETS for p in s['pieces']]
+    entries = [p[0] for s in SETS if not s.get('existing') for p in s['pieces']]
     item_list = ','.join(map(str, entries))
     out.append('DELETE FROM `item_template` WHERE `entry` IN (%s);\n' % item_list)
     out.append('DELETE FROM `creature_loot_template` WHERE `item` IN (%s);\n' % item_list)
@@ -100,12 +100,14 @@ CREATE TABLE IF NOT EXISTS `zelda_itemset_bonus` (
            'ZELDA_SETS = {']
     for s in SETS:
         for piece in s['pieces']:
+            set_items.append(dict(item=piece[0], set_id=s['id']))
+            if s.get('existing'):
+                continue        # the game's own items, dropped as they always were
             items.append(item_row(s, piece))
             sources = piece[4] if isinstance(piece[4], tuple) else ((piece[4], DROP_CHANCE),)
             for source, chance in sources:
                 loot.append(dict(entry=source, item=piece[0], ChanceOrQuestChance=chance, groupid=0,
                                  mincountOrRef=1, maxcount=1, condition_id=0, comments='Zelda armor set: ' + s['name']))
-            set_items.append(dict(item=piece[0], set_id=s['id']))
         for pieces, kind, value in s['bonuses']:
             bonuses.append(dict(set_id=s['id'], pieces=pieces, bonus_type=BONUS_TYPES[kind], value=float(value)))
         lua.append('  [%d] = {' % s['id'])

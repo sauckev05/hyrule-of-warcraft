@@ -20,4 +20,9 @@ ZELDA_SETS = {
     items = { { 190731, "Hylian Knight's Helm", "Witch Doctor Zum'rah (Zul'Farrak)" }, { 190732, "Hylian Knight's Pauldrons", "Princess Theradras (Maraudon)" }, { 190733, "Hylian Knight's Breastplate", "Archaedas (Uldaman)" }, { 190734, "Hylian Knight's Gauntlets", "Grimlok (Uldaman)" }, { 190735, "Hylian Knight's Legplates", "Chief Ukorz Sandscalp (Zul'Farrak)" }, { 190736, "Hylian Knight's Greaves", "Jammal'an the Prophet (Sunken Temple)" } },
     bonuses = { { 2, "(2) Set: +5 Weapon Damage." }, { 2, "(2) Set: Defeating an enemy restores 5% of your health." }, { 3, "(3) Set: Increases your chance to get a critical strike by 3%." }, { 3, "(3) Set: Your Charge Attack costs 15 less rage." }, { 6, "(6) Set: Your melee hits have a 6% chance to swing again at once." }, { 6, "(6) Set: Your melee hits have a 6% chance to knock the enemy back." }, { 6, "(6) Set: Your critical strikes deal 20% more damage." } },
   },
+  [5] = {
+    name = "Blades of Thraze",
+    items = { { 11086, "Jang'thraze the Protector", "Chief Ukorz Sandscalp (Zul'Farrak)" }, { 9379, "Sang'thraze the Deflector", "The Deflector's Echo (quest)" } },
+    bonuses = { { 2, "(2) Set: Your melee hits have a 10% chance to swing again at once." }, { 2, "(2) Set: +10 Weapon Damage." } },
+  },
 }

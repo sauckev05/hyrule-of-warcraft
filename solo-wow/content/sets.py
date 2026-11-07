@@ -86,4 +86,12 @@ SETS = [
              (190735, 'legs', "Hylian Knight's Legplates", 27377, 7267, "Chief Ukorz Sandscalp (Zul'Farrak)"),
              (190736, 'feet', "Hylian Knight's Greaves", 27376, 5710, "Jammal'an the Prophet (Sunken Temple)"),
          ]),
+    # the two halves of Sul'thraze, wielded together: the game's own swords (existing=True: their items
+    # and drops stay as they are, build_sulthraze.py has those)
+    dict(id=5, name='Blades of Thraze', level=48, existing=True,
+         bonuses=[(2, 'extra_swing', 10), (2, 'weapon_flat', 10)],
+         pieces=[
+             (11086, 'weapon', "Jang'thraze the Protector", 0, 7267, "Chief Ukorz Sandscalp (Zul'Farrak)"),
+             (9379, 'weapon', "Sang'thraze the Deflector", 0, 0, "The Deflector's Echo (quest)"),
+         ]),
 ]
