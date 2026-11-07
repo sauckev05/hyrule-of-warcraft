@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..fa3464eab
+index 000000000..6d1b51df7
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5160 @@
+@@ -0,0 +1,5172 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5810,9 +5810,18 @@ index 000000000..fa3464eab
 +        return true;
 +    }
 +
-+    state.boomerangReadyAt = now + BOOMERANG_COOLDOWN_MS;
++    // the 5 seconds start only when the boomerang strikes (ZeldaBoomerangTrigger); a throw that
++    // cannot leave the hand (out of reach, out of sight) starts nothing, and one in flight holds the
++    // next back only until it is home
 +    player->SetFacingToObject(target);
-+    player->CastSpell(target, BOOMERANG_SPELL, TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
++    SpellCastResult const thrown = player->CastSpell(target, BOOMERANG_SPELL, TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
++    if (thrown != SPELL_CAST_OK)
++    {
++        player->GetSession()->SendNotification(thrown == SPELL_FAILED_OUT_OF_RANGE ? "Out of range for the boomerang"
++                                               : "The boomerang can't reach that enemy");
++        return true;
++    }
++    state.boomerangReadyAt = now + 2 * uint32(1000.0f * player->GetDistance(target) / 20.0f) + 300;   // out and back
 +    return true;
 +}
 +
@@ -6197,6 +6206,9 @@ index 000000000..fa3464eab
 +
 +bool ZeldaBoomerangTrigger(Player* player, Unit* target, uint8 effIndex)
 +{
++    // the boomerang struck: its 5 seconds start now
++    if (effIndex == 1)
++        StateFor(player).boomerangReadyAt = WorldTimer::getMSTime() + BOOMERANG_COOLDOWN_MS;
 +    if (effIndex == 1 && target && target->IsAlive())
 +        player->CastSpell(target, roll_chance_i(50) ? 15753u : 15752u, TRIGGERED_OLD_TRIGGERED); // Knockdown : Disarm
 +    return true; // the DBC's own triggers (both at 101%) are replaced by the 50/50 above
@@ -7982,7 +7994,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..2180aa6f0 100644
+index 00986af9e..becb88565 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -8020,7 +8032,19 @@ index 00986af9e..2180aa6f0 100644
      if (responsiblePlayer)                                  // killedby Player, inform BG
          if (BattleGround* bg = responsiblePlayer->GetBattleGround())
              bg->HandleKillUnit(victim, responsiblePlayer);
-@@ -1863,6 +1877,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
+@@ -1833,8 +1847,9 @@ void Unit::CalculateSpellDamage(SpellNonMeleeDamage* spellDamageInfo, int32 dama
+     // damage mitigation
+     if (damage > 0)
+     {
+-        // physical damage => armor
+-        if (damageSchoolMask & SPELL_SCHOOL_MASK_NORMAL)
++        // physical damage => armor (Zelda of Warcraft: Berserker Stance's Leaping Strike, 40008,
++        // goes clean through it)
++        if ((damageSchoolMask & SPELL_SCHOOL_MASK_NORMAL) && !(spellInfo && spellInfo->Id == 40008))
+             damage = CalcArmorReducedDamage(this, pVictim, damage);
+     }
+     else
+@@ -1863,6 +1878,10 @@ void Unit::DealSpellDamage(Unit* affectiveCaster, SpellNonMeleeDamage* spellDama
  
      // Call default DealDamage (send critical in hit info for threat calculation)
      CleanDamage cleanDamage(spellDamageInfo->damage, BASE_ATTACK, spellDamageInfo->HitInfo & SPELL_HIT_TYPE_CRIT ? MELEE_HIT_CRIT : MELEE_HIT_NORMAL, (spellDamageInfo->damage > 0 || spellDamageInfo->absorb > 0));
@@ -8031,7 +8055,7 @@ index 00986af9e..2180aa6f0 100644
      DealDamage(affectiveCaster, victim, spellDamageInfo->damage, &cleanDamage, resetLeash ? SPELL_DIRECT_DAMAGE : SPELL_DAMAGE_SHIELD, GetSchoolMask(spellDamageInfo->school), spellProto, durabilityLoss, spellDamageInfo->spell);
  }
  
-@@ -1933,6 +1951,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -1933,6 +1952,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
          // Add melee damage bonus
          subDamage->damage = MeleeDamageBonusDone(calcDamageInfo->target, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
          subDamage->damage = calcDamageInfo->target->MeleeDamageBonusTaken(this, subDamage->damage, calcDamageInfo->attackType, subDamage->damageSchoolMask, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, i == 0);
@@ -8044,7 +8068,7 @@ index 00986af9e..2180aa6f0 100644
  
          // Calculate armor reduction
          if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
-@@ -2045,6 +2069,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -2045,6 +2070,9 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
              calcDamageInfo->TargetState = VICTIMSTATE_NORMAL;
              calcDamageInfo->procEx |= PROC_EX_BLOCK;
              calcDamageInfo->blocked_amount = calcDamageInfo->target->GetShieldBlockValue();
@@ -8054,7 +8078,7 @@ index 00986af9e..2180aa6f0 100644
  
              if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
              {
-@@ -2656,10 +2683,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2684,24 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -8079,7 +8103,7 @@ index 00986af9e..2180aa6f0 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -2711,6 +2752,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+@@ -2711,6 +2753,13 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
      if (pVictim->GetCombatManager().IsInEvadeMode())
          return MELEE_HIT_EVADE;
  
@@ -8093,7 +8117,7 @@ index 00986af9e..2180aa6f0 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
      if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
-@@ -2829,6 +2877,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+@@ -2829,6 +2878,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
  
  SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
  {
@@ -8107,7 +8131,7 @@ index 00986af9e..2180aa6f0 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
      die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
-@@ -2942,7 +2997,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2942,7 +2998,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
      // Reflect (when available)
      if (reflectable)
      {
@@ -8117,7 +8141,7 @@ index 00986af9e..2180aa6f0 100644
          if (roll_chance_combat(chance))
              return SPELL_MISS_REFLECT;
      }
-@@ -3628,7 +3684,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3685,8 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -8127,7 +8151,7 @@ index 00986af9e..2180aa6f0 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3700,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3701,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -8136,7 +8160,7 @@ index 00986af9e..2180aa6f0 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5033,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5034,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -8148,7 +8172,7 @@ index 00986af9e..2180aa6f0 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6159,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6160,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -8157,7 +8181,7 @@ index 00986af9e..2180aa6f0 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7112,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7113,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -8166,7 +8190,7 @@ index 00986af9e..2180aa6f0 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7229,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7230,9 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -8176,7 +8200,7 @@ index 00986af9e..2180aa6f0 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7374,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7375,9 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -8186,7 +8210,7 @@ index 00986af9e..2180aa6f0 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8163,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8164,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -8200,7 +8224,7 @@ index 00986af9e..2180aa6f0 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8479,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8480,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
@@ -8571,7 +8595,7 @@ index 591908ab5..5cb585b23 100644
      if (!noSpillover)
      {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..8871d1bbc 100644
+index bf5c5c578..9f3baaf04 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -8582,7 +8606,19 @@ index bf5c5c578..8871d1bbc 100644
  
  #ifdef ENABLE_PLAYERBOTS
  #include "playerbot/PlayerbotAI.h"
-@@ -1650,6 +1651,12 @@ void Spell::HandleImmediateEffectExecution(TargetInfo* target)
+@@ -1273,8 +1274,9 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
+         // damage mitigation
+         if (spellDamageInfo.damage > 0)
+         {
+-            // physical damage => armor
+-            if (m_spellSchoolMask & SPELL_SCHOOL_MASK_NORMAL)
++            // physical damage => armor (Zelda of Warcraft: Berserker Stance's Leaping Strike, 40008,
++            // goes clean through it)
++            if ((m_spellSchoolMask & SPELL_SCHOOL_MASK_NORMAL) && m_spellInfo->Id != 40008)
+                 spellDamageInfo.damage = Unit::CalcArmorReducedDamage(affectiveCaster ? affectiveCaster : m_trueCaster, unitTarget, spellDamageInfo.damage);
+         }
+ 
+@@ -1650,6 +1652,12 @@ void Spell::HandleImmediateEffectExecution(TargetInfo* target)
      target->effectMaskProcessed = mask;
      if (m_damage > 0 || m_healing > 0)
          target->isCrit = Unit::RollSpellCritOutcome(affectiveCaster, unit, m_spellSchoolMask, m_spellInfo);
@@ -8595,7 +8631,7 @@ index bf5c5c578..8871d1bbc 100644
  }
  
  bool Spell::CanSpellDiminish() const
-@@ -3034,6 +3041,11 @@ void Spell::Prepare()
+@@ -3034,6 +3042,11 @@ void Spell::Prepare()
          m_casttime = GetSpellCastTime(m_spellInfo, m_trueCaster, this, true);
      }
  
@@ -8607,7 +8643,7 @@ index bf5c5c578..8871d1bbc 100644
      // set timer base at cast time
      ReSetTimer();
  
-@@ -3111,6 +3123,11 @@ void Spell::cancel()
+@@ -3111,6 +3124,11 @@ void Spell::cancel()
              player->ResetSpellModsDueToCanceledSpell(m_usedAuraCharges);
  
      m_autoRepeat = false;
@@ -8619,7 +8655,7 @@ index bf5c5c578..8871d1bbc 100644
      switch (m_spellState)
      {
          case SPELL_STATE_CREATED:
-@@ -3211,11 +3228,9 @@ SpellCastResult Spell::cast(bool skipCheck)
+@@ -3211,11 +3229,9 @@ SpellCastResult Spell::cast(bool skipCheck)
      {
          case SPELLFAMILY_GENERIC:
          {
@@ -8633,7 +8669,7 @@ index bf5c5c578..8871d1bbc 100644
                  AddPrecastSpell(25771);                     // Forbearance
              break;
          }
-@@ -3280,6 +3295,15 @@ SpellCastResult Spell::cast(bool skipCheck)
+@@ -3280,6 +3296,15 @@ SpellCastResult Spell::cast(bool skipCheck)
      SendCastResult(castResult);
      SendSpellGo();                                          // we must send smsg_spell_go packet before m_castItem delete in TakeCastItem()...
  
@@ -8649,7 +8685,7 @@ index bf5c5c578..8871d1bbc 100644
      InitializeDamageMultipliers();
  
      OnCast();
-@@ -4450,6 +4474,9 @@ void Spell::TakeReagents()
+@@ -4450,6 +4475,9 @@ void Spell::TakeReagents()
      {
          if (m_spellInfo->Reagent[x] <= 0)
              continue;
@@ -8659,7 +8695,7 @@ index bf5c5c578..8871d1bbc 100644
  
          uint32 itemid = m_spellInfo->Reagent[x];
          uint32 itemcount = m_spellInfo->ReagentCount[x];
-@@ -5553,9 +5580,15 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5553,9 +5581,15 @@ SpellCastResult Spell::CheckCast(bool strict)
                          return SPELL_FAILED_TRY_AGAIN;
  
                      lockId = go->GetGOInfo()->GetLockId();
@@ -8676,7 +8712,7 @@ index bf5c5c578..8871d1bbc 100644
                      // check if its in use only when cast is finished (called from spell::cast() with strict = false)
                      if (!strict && go->IsInUse())
                          return SPELL_FAILED_CHEST_IN_USE;
-@@ -5998,6 +6031,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5998,6 +6032,10 @@ SpellCastResult Spell::CheckCast(bool strict)
          }
      }
  
@@ -8687,7 +8723,7 @@ index bf5c5c578..8871d1bbc 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6202,7 +6239,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
+@@ -6202,7 +6240,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
      {
          if (m_spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT) && caster->GetTypeId() == TYPEID_PLAYER)
              if (Item* ranged = static_cast<Player*>(caster)->GetWeaponForAttack(RANGED_ATTACK))
@@ -8696,7 +8732,7 @@ index bf5c5c578..8871d1bbc 100644
  
          if (Player* modOwner = caster->GetSpellModOwner())
              modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_RANGE, maxRange);
-@@ -6499,6 +6536,12 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6537,12 @@ SpellCastResult Spell::CheckItems()
                      }
  
                      Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
@@ -8709,7 +8745,7 @@ index bf5c5c578..8871d1bbc 100644
                      if (target->GetPower(power) == target->GetMaxPower(power))
                      {
                          failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
-@@ -6565,6 +6608,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6565,6 +6609,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;
