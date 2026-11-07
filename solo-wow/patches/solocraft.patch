@@ -1768,6 +1768,26 @@ index 00fde0a85..1e68b80d7 100644
          bool HandleTaxiCheatCommand(char* args);
          bool HandleWhispersCommand(char* args);
          bool HandleWhisperRestrictionCommand(char* args);
+diff --git a/src/game/Chat/ChatHandler.cpp b/src/game/Chat/ChatHandler.cpp
+index b94694c8b..1d159be87 100644
+--- a/src/game/Chat/ChatHandler.cpp
++++ b/src/game/Chat/ChatHandler.cpp
+@@ -644,6 +644,15 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
+             std::string msg;
+             recv_data >> msg;
+ 
++            // Zelda of Warcraft: a solo hero is never away - the client's idle AFK (and /afk) is
++            // ignored, and a flag left from before is dropped quietly
++            if (type == CHAT_MSG_AFK)
++            {
++                if (_player->isAFK())
++                    _player->ToggleAFK();
++                break;
++            }
++
+             const bool flagged = (type == CHAT_MSG_AFK ? _player->isAFK() : _player->isDND());
+ 
+             if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
 index 000000000..cb9b3316b
