@@ -198,6 +198,9 @@ for _n, _sid in enumerate(MACE_SPEC):
 # stock spells changed in place: {spell id: {spell_template column: value}}
 SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
+    # the boomerang (Linken's Boomerang, ZeldaCommands.cpp): thrown from right beside the enemy too, out
+    # to the same 30 yards (no 8-yard minimum)
+    15712: dict(RangeIndex=4),
     # Sul'thraze the Lasher (build_sulthraze.py): 25% on a hit; the target deals 15% less damage instead of
     # losing 15 Strength; 200 Shadow every 3 sec for 15 sec (1000) instead of 125 in all
     # and 210 Shadow on the hit itself, no range (45% of the spell power, as every item spell: the core)

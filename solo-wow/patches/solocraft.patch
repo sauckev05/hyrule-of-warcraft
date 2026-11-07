@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..2fb4273be
+index 000000000..ccdb870a7
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5579 @@
+@@ -0,0 +1,5591 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2021,7 +2021,7 @@ index 000000000..2fb4273be
 +        return uint32(std::min(1000.0f, std::max(300.0f, speed * 0.25f)));
 +    }
 +    const uint32 DODGE_COOLDOWN_MS = 900;
-+    const uint32 BOOMERANG_COOLDOWN_MS = 5000;
++    const uint32 BOOMERANG_COOLDOWN_MS = 3000;
 +    const float BOOMERANG_RANGE = 30.0f;
 +    const uint32 BOOMERANG_SPELL = 15712;          // Linken's Boomerang: throw, flight and return visuals
 +    const float BOW_RANGE = 70.0f;                // twice a bow's usual 35 yards (Spell::GetMinMaxRange)
@@ -5728,6 +5728,7 @@ index 000000000..2fb4273be
 +    const uint32 SHIELD_SLAM_SPELL = 23922;     // Shield Slam (rank 1): the shield-bash strike and look
 +    const uint32 SLAM_STUN_SPELL = 7922;        // Charge Stun, held for 2 seconds
 +    const int32 SLAM_STUN_MS = 2000;
++    const uint32 SLAM_SILENCE_SPELL = 18498;    // Shield Bash - Silenced, held as long as the stun
 +
 +    StyleStats const reach = StatsFor(Style::OneHanded);
 +    std::list<Unit*> enemies;
@@ -5749,8 +5750,15 @@ index 000000000..2fb4273be
 +        ++hit;
 +        if (!unit->IsAlive())
 +            continue;
-+        // the blow breaks any spell being cast - bosses too, who shrug off the stun
-+        unit->InterruptNonMeleeSpells(false);
++        // the blow silences the enemy for as long as it stuns (Shield Bash - Silenced), which also
++        // stops any spell being cast
++        player->CastSpell(unit, SLAM_SILENCE_SPELL, TRIGGERED_OLD_TRIGGERED);
++        if (SpellAuraHolder* holder = unit->GetSpellAuraHolder(SLAM_SILENCE_SPELL, player->GetObjectGuid()))
++        {
++            holder->SetAuraMaxDuration(SLAM_STUN_MS);
++            holder->SetAuraDuration(SLAM_STUN_MS);
++            holder->UpdateAuraDuration();
++        }
 +        player->CastSpell(unit, SLAM_STUN_SPELL, TRIGGERED_OLD_TRIGGERED);
 +        if (SpellAuraHolder* holder = unit->GetSpellAuraHolder(SLAM_STUN_SPELL, player->GetObjectGuid()))
 +        {
@@ -6173,7 +6181,8 @@ index 000000000..2fb4273be
 +}
 +
 +// Linken's Boomerang, the hero's boomerang: thrown at the enemy, it hits as hard as the weapon in
-+// hand and either stuns (Knockdown) or disarms the enemy, 50/50, then flies back. 5 s per throw.
++// hand, breaks off any spell being cast, and either stuns (Knockdown) or disarms the enemy, 50/50,
++// then flies back. 3 s per throw that strikes; close in or at range, out to 30 yards.
 +bool ChatHandler::HandleZeldaBoomerangCommand(char* /*args*/)
 +{
 +    Player* player = m_session->GetPlayer();
@@ -6195,7 +6204,7 @@ index 000000000..2fb4273be
 +        return true;
 +    }
 +
-+    // the 5 seconds start only when the boomerang strikes (ZeldaBoomerangTrigger); a throw that
++    // the 3 seconds start only when the boomerang strikes (ZeldaBoomerangTrigger); a throw that
 +    // cannot leave the hand (out of reach, out of sight) starts nothing, and one in flight holds the
 +    // next back only until it is home
 +    player->SetFacingToObject(target);
@@ -6591,9 +6600,12 @@ index 000000000..2fb4273be
 +
 +bool ZeldaBoomerangTrigger(Player* player, Unit* target, uint8 effIndex)
 +{
-+    // the boomerang struck: its 5 seconds start now
++    // the boomerang struck: its 3 seconds start now, and whatever the enemy was casting - any enemy,
++    // bosses too - is broken off
 +    if (effIndex == 1)
 +        StateFor(player).boomerangReadyAt = WorldTimer::getMSTime() + BOOMERANG_COOLDOWN_MS;
++    if (effIndex == 1 && target && target->IsAlive())
++        target->InterruptNonMeleeSpells(false);
 +    if (effIndex == 1 && target && target->IsAlive())
 +        player->CastSpell(target, roll_chance_i(50) ? 15753u : 15752u, TRIGGERED_OLD_TRIGGERED); // Knockdown : Disarm
 +    return true; // the DBC's own triggers (both at 101%) are replaced by the 50/50 above
