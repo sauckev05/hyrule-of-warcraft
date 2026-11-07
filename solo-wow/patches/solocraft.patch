@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..f9d138b55
+index 000000000..3457a951c
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5214 @@
+@@ -0,0 +1,5219 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5477,7 +5477,11 @@ index 000000000..f9d138b55
 +
 +    ZeldaState& state = StateFor(player);
 +    uint32 now = WorldTimer::getMSTime();
-+    if (now < state.spinReadyAt)
++    // only the Leaping Strike and the Shield Slam rest between uses; the Spin Attack itself has no
++    // cooldown, so a spin can follow a spin as soon as the sword is charged again
++    bool const leaps = player->GetShapeshiftForm() == FORM_BERSERKERSTANCE;
++    bool const slams = player->GetShapeshiftForm() == FORM_DEFENSIVESTANCE && player->GetShield(true);
++    if ((leaps || slams) && now < state.spinReadyAt)
 +        return true;
 +
 +    // The spin costs 50 rage; without it there is no spin.
@@ -5493,7 +5497,8 @@ index 000000000..f9d138b55
 +    if (usesRage)
 +        player->ModifyPower(POWER_RAGE, -int32(spinCost));
 +
-+    state.spinReadyAt = now + SPIN_COOLDOWN_MS;
++    if (leaps || slams)
++        state.spinReadyAt = now + SPIN_COOLDOWN_MS;
 +    state.comboCount = 0;
 +
 +    // Berserker Stance: a leaping strike on every enemy in front (".zspin 1" when the client animates it)
