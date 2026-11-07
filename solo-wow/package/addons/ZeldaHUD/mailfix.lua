@@ -39,3 +39,15 @@ if stock then
 		end
 	end
 end
+
+-- The auction list colours each row by its item's quality, which is unknown (nil, or -1 when the
+-- row is not filled in yet) until the item's details arrive; the stock code then indexes a missing
+-- colour and fails (Blizzard_AuctionUI.lua:471). An unknown quality now reads as a common item's
+-- white until the details come.
+if ITEM_QUALITY_COLORS and setmetatable and not getmetatable(ITEM_QUALITY_COLORS) then
+	setmetatable(ITEM_QUALITY_COLORS, {
+		__index = function(colours, quality)
+			return rawget(colours, 1)
+		end,
+	})
+end

@@ -86,7 +86,7 @@ local function Layout()
 	anchor:SetWidth(width)
 	anchor:ClearAllPoints()
 	if under then
-		anchor:SetPoint("BOTTOM", under, "TOP", 0, 30)
+		anchor:SetPoint("BOTTOM", under, "TOP", 0, 4)
 	else
 		anchor:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 60)
 	end
