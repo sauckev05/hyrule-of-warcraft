@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..724fe574e
+index 000000000..5dec93dab
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5492 @@
+@@ -0,0 +1,5525 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3143,6 +3143,7 @@ index 000000000..724fe574e
 +static void ZeldaEnemyMechanics(Player* player, ZeldaState& state);
 +static void ZeldaGifts(Player* player);
 +static void ZeldaTakeBack(Player* player);
++static void ZeldaResetOnce(Player* player);
 +static void ZeldaDoneQuests(Player* player);
 +static void ZeldaUnderWorldRescue(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
@@ -3170,6 +3171,7 @@ index 000000000..724fe574e
 +        state.shield = state.parry = state.guardRooted = false;     // a fresh login holds no guard
 +        ZeldaGifts(player);
 +        ZeldaTakeBack(player);
++        ZeldaResetOnce(player);
 +    }
 +
 +    // the Gurubashi Arena challenge
@@ -3901,6 +3903,37 @@ index 000000000..724fe574e
 +            player->DestroyItemCount(itemId, count, true, false, true);
 +            ChatHandler(player).PSendSysMessage("|cff33ff99%s was taken back - earn it with its quest.|r", proto->Name1);
 +        }
++    }
++}
++
++// Dungeons reset once for a character (Zelda.ResetOnce: "Name:map Name:map ..."): the bind is
++// dropped, so the next visit is a fresh instance; marker 'reset:<map>' per character. Waits for a
++// login outside that dungeon. Zul'Farrak, for Sul'thraze's new drops (build_sulthraze.py).
++static void ZeldaResetOnce(Player* player)
++{
++    static std::string const resets = sConfig.GetStringDefault("Zelda.ResetOnce", "Kale:209");
++    std::istringstream in(resets);
++    std::string word;
++    while (in >> word)
++    {
++        size_t const colon = word.find(':');
++        if (colon == std::string::npos || word.substr(0, colon) != player->GetName())
++            continue;
++        uint32 const mapId = uint32(std::strtoul(word.c_str() + colon + 1, nullptr, 10));
++        if (!mapId || player->GetMapId() == mapId)
++            continue;
++        std::string const key = "reset:" + std::to_string(mapId);
++        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
++                                     player->GetGUIDLow(), key.c_str()))
++            continue;
++        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
++                                   player->GetGUIDLow(), key.c_str());
++        Player::BoundInstancesMap& binds = player->GetBoundInstances();
++        auto itr = binds.find(mapId);
++        if (itr != binds.end())
++            player->UnbindInstance(itr, true);
++        if (MapEntry const* entry = sMapStore.LookupEntry(mapId))
++            ChatHandler(player).PSendSysMessage("|cff33ff99%s has been reset.|r", entry->name[player->GetSession()->GetSessionDbcLocale()]);
 +    }
 +}
 +
