@@ -1,17 +1,17 @@
 -- Zelda HUD: enemy charge-ups.
 --
 -- Every enemy ability aimed at you charges up first (the server makes it take at least a moment),
--- long enough to raise the shield. While one charges, a bar under the target's portrait shows who
--- is charging what and how long is left. The server sends the hidden line
+-- long enough to raise the shield. While one charges, a thin light-blue line above the target's
+-- health bar (targetbar.lua) shows what is charging and how long is left. The server sends the hidden line
 -- "ZCAST:caster;ability;milliseconds" when a charge-up starts, and "ZCAST:caster;;0" when one is
 -- cut short.
 
 local bar = CreateFrame("StatusBar", "ZeldaEnemyCastBar", UIParent)
-bar:SetWidth(190)
-bar:SetHeight(14)
+bar:SetWidth(360)
+bar:SetHeight(10)
 bar:SetFrameStrata("MEDIUM")
 bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-bar:SetStatusBarColor(1.0, 0.45, 0.0)
+bar:SetStatusBarColor(0.55, 0.88, 1.0)
 bar:SetMinMaxValues(0, 1)
 bar:SetValue(0)
 bar:Hide()
@@ -21,28 +21,30 @@ bg:SetTexture(0, 0, 0, 0.65)
 bg:SetAllPoints(bar)
 
 local border = CreateFrame("Frame", nil, bar)
-border:SetPoint("TOPLEFT", bar, "TOPLEFT", -4, 4)
-border:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 4, -4)
+border:SetPoint("TOPLEFT", bar, "TOPLEFT", -3, 3)
+border:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 3, -3)
 border:SetBackdrop({
 	edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-	tile = true, tileSize = 12, edgeSize = 12,
-	insets = { left = 3, right = 3, top = 3, bottom = 3 },
+	tile = true, tileSize = 8, edgeSize = 8,
+	insets = { left = 2, right = 2, top = 2, bottom = 2 },
 })
-border:SetBackdropBorderColor(1.0, 0.6, 0.2, 1)
+border:SetBackdropBorderColor(0.66, 0.94, 1.0, 1)
 
 local label = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-label:SetPoint("BOTTOM", bar, "TOP", 0, 4)
+label:SetPoint("CENTER", bar, "CENTER", 0, 0)
 local timeText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-timeText:SetPoint("CENTER", bar, "CENTER", 0, 0)
+timeText:SetPoint("LEFT", bar, "RIGHT", 6, 0)
 
 local caster, startAt, endAt
 
+-- above the target bar's title (targetbar.lua), 60% of its width
 local function Place()
 	bar:ClearAllPoints()
-	if TargetFrame then
-		bar:SetPoint("TOP", TargetFrame, "BOTTOM", -20, -18)
+	if ZeldaTargetAnchor then
+		bar:SetWidth(ZeldaTargetAnchor:GetWidth() * 0.6)
+		bar:SetPoint("BOTTOM", ZeldaTargetAnchor, "TOP", 0, 28)
 	else
-		bar:SetPoint("TOP", UIParent, "TOP", 0, -140)
+		bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 110)
 	end
 end
 
@@ -59,9 +61,9 @@ local function Start(who, ability, ms)
 	bar:SetMinMaxValues(0, ms / 1000)
 	bar:SetValue(0)
 	if who == UnitName("target") then
-		label:SetText("|cffff9933" .. (ability ~= "" and ability or "Attack") .. "|r  - shield up!")
+		label:SetText((ability ~= "" and ability or "Attack") .. "  - shield up!")
 	else
-		label:SetText(who .. ":  |cffff9933" .. (ability ~= "" and ability or "Attack") .. "|r  - shield up!")
+		label:SetText(who .. ":  " .. (ability ~= "" and ability or "Attack") .. "  - shield up!")
 	end
 	bar:Show()
 end

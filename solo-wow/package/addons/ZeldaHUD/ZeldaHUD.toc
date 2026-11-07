@@ -14,4 +14,5 @@ crest.lua
 chat.lua
 actionbar.lua
 mailfix.lua
+targetbar.lua
 castbar.lua
