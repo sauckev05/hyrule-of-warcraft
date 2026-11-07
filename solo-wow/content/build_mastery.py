@@ -181,9 +181,9 @@ ITEM_EDITS = {
 # stock spell texts changed in the client (patch-Z only): mana potions are shields now
 DESCRIPTION_EDITS = {sid: 'Shields you, absorbing $s1 damage for 20 sec.'
                      for sid in (437, 438, 2023, 11903, 17530, 17531, 21395, 21396)}
-DESCRIPTION_EDITS[11658] = ("Strikes an enemy with the rage of Sul'thraze, dealing $s1 Shadow damage, increased by "
-                            "your spell power, and an additional $o3 damage over $d. The target deals 15% less "
-                            "damage for $d.")
+DESCRIPTION_EDITS[11658] = ("Strikes an enemy with the rage of Sul'thraze, dealing $s1 Shadow damage and an "
+                            "additional $o3 damage over $d, both increased by 45% of your spell power. The target "
+                            "deals 15% less damage for $d.")
 # Dual Wield Specialization (warrior and rogue): 2% melee hit a point while two weapons are held, not
 # off-hand damage (ZeldaDualWieldHit); a dummy aura whose $s1 is the percent
 DUAL_WIELD_SPEC = (23584, 23585, 23586, 23587, 23588, 13715, 13848, 13849, 13851, 13852)
@@ -200,7 +200,7 @@ SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
     # Sul'thraze the Lasher (build_sulthraze.py): 25% on a hit; the target deals 15% less damage instead of
     # losing 15 Strength; 200 Shadow every 3 sec for 15 sec (1000) instead of 125 in all
-    # and 210 Shadow on the hit itself, no range (its spell power share: build_sulthraze.py)
+    # and 210 Shadow on the hit itself, no range (45% of the spell power, as every item spell: the core)
     11658: dict(ProcChance=25, EffectBasePoints1=209, EffectDieSides1=1, EffectApplyAuraName2=79,
                 EffectBasePoints2=-16, EffectMiscValue2=127, EffectBasePoints3=199),
 }

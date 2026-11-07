@@ -1790,10 +1790,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..5dec93dab
+index 000000000..2fb4273be
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5525 @@
+@@ -0,0 +1,5579 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3758,6 +3758,60 @@ index 000000000..5dec93dab
 +        if (itemSpell.SpellId == spell.Id && itemSpell.SpellCategory)
 +            category = itemSpell.SpellCategory;
 +    return category == 4; // SPELLCATEGORY_HEALTH_MANA_POTIONS: healing, mana and rejuvenation potions
++}
++
++// The spells items cast (Zelda.ItemSpellPower, 0.45 of the spell power): every spell an item's slots
++// name, but a consumable's (potions, food, scrolls), and the spells those trigger in turn.
++float ZeldaItemSpellCoefficient(SpellEntry const* spellProto, uint32 effectIndex)
++{
++    static float const share = std::max(0.0f, sConfig.GetFloatDefault("Zelda.ItemSpellPower", 0.45f));
++    static std::unordered_set<uint32> const spells = []()
++    {
++        std::unordered_set<uint32> found;
++        std::vector<uint32> todo;
++        for (uint32 id = 1; id < sItemStorage.GetMaxEntry(); ++id)
++        {
++            ItemPrototype const* proto = sItemStorage.LookupEntry<ItemPrototype>(id);
++            if (!proto || proto->Class == ITEM_CLASS_CONSUMABLE)
++                continue;
++            for (auto const& spell : proto->Spells)
++                if (spell.SpellId > 0 && found.insert(uint32(spell.SpellId)).second)
++                    todo.push_back(uint32(spell.SpellId));
++        }
++        // what they trigger: a proc aura's spell, a triggered spell, a periodic trigger's (twice over)
++        for (int depth = 0; depth < 2 && !todo.empty(); ++depth)
++        {
++            std::vector<uint32> next;
++            for (uint32 spellId : todo)
++            {
++                SpellEntry const* entry = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
++                if (!entry)
++                    continue;
++                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
++                {
++                    bool const triggers = entry->Effect[i] == SPELL_EFFECT_TRIGGER_SPELL ||
++                        (entry->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
++                         (entry->EffectApplyAuraName[i] == SPELL_AURA_PROC_TRIGGER_SPELL ||
++                          entry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_TRIGGER_SPELL));
++                    if (triggers && entry->EffectTriggerSpell[i] && found.insert(entry->EffectTriggerSpell[i]).second)
++                        next.push_back(entry->EffectTriggerSpell[i]);
++                }
++            }
++            todo.swap(next);
++        }
++        return found;
++    }();
++    if (!spellProto || share <= 0.0f || spells.find(spellProto->Id) == spells.end())
++        return 0.0f;
++    // a periodic effect shares it out over its ticks, so the whole of it is the 45%
++    uint32 const amplitude = spellProto->EffectAmplitude[effectIndex];
++    if (spellProto->Effect[effectIndex] == SPELL_EFFECT_APPLY_AURA && amplitude > 0)
++    {
++        int32 const duration = GetSpellDuration(spellProto);
++        uint32 const ticks = duration > 0 ? std::max<uint32>(1, uint32(duration) / amplitude) : 1;
++        return share / float(ticks);
++    }
++    return share;
 +}
 +
 +bool ZeldaRolling(Unit const* victim)
@@ -7321,10 +7375,10 @@ index 000000000..5dec93dab
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..e5845f93e
+index 000000000..88e4bd4df
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,309 @@
+@@ -0,0 +1,311 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -7348,6 +7402,8 @@ index 000000000..e5845f93e
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +// a hero in the middle of a dodge roll: every blow and spell aimed at her is dodged
 +bool ZeldaRolling(Unit const* victim);
++// the share of spell power a spell cast by an item takes (0 for any other spell)
++float ZeldaItemSpellCoefficient(SpellEntry const* spellProto, uint32 effectIndex);
 +uint32 ZeldaModifyIncomingDamage(Player* victim, Unit* attacker, uint32 damage);
 +
 +// Zelda of Warcraft: the class whose stat formulas weapons scale with. Every hero fights like a
@@ -8396,7 +8452,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..98d3000f8 100644
+index 00986af9e..08ae3880f 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -8608,7 +8664,23 @@ index 00986af9e..98d3000f8 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7050,7 +7131,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7002,6 +7083,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
+             total += int32(ap_bonus * (GetTotalAttackPowerValue(IsSpellRequiresRangedAP(spellProto) ? RANGED_ATTACK : BASE_ATTACK) + ap_benefit));
+         }
+     }
++    // Zelda of Warcraft: every spell an item casts - a weapon's chance on hit, a trinket's use, an
++    // equip effect's proc - takes 45% of the hero's spell power (split over a periodic effect's ticks)
++    if ((IsPlayer() || IsPlayerControlled()) && spellProto->DmgClass != SPELL_DAMAGE_CLASS_MELEE &&
++            spellProto->DmgClass != SPELL_DAMAGE_CLASS_RANGED)
++    {
++        float const itemCoeff = ZeldaItemSpellCoefficient(spellProto, effectIndex);
++        if (itemCoeff > 0.0f)
++            coeff = itemCoeff;
++    }
+ 
+     if (benefit)
+     {
+@@ -7050,7 +7140,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -8617,7 +8689,7 @@ index 00986af9e..98d3000f8 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7248,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7257,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -8631,7 +8703,7 @@ index 00986af9e..98d3000f8 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7397,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7406,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -8645,7 +8717,7 @@ index 00986af9e..98d3000f8 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8190,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8199,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -8659,7 +8731,7 @@ index 00986af9e..98d3000f8 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8506,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8515,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {

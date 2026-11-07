@@ -14,9 +14,9 @@ Writes zelda-sql/022_sulthraze.sql, which the server applies to the world databa
     then, with both blades, use the Altar of Jammal'an where he stood. Ten seconds of ritual call
     the Atal'ai; when they fall, the blades are one - Sul'thraze the Lasher.
   - The two blades no longer combine by themselves (Jang'thraze's Call of Sul'thraze is gone).
-  - Sul'thraze's spell (build_mastery.py, SPELL_EDITS 11658): 25% on a hit, 210 Shadow plus all of
-    the wielder's spell power, the target deals 15% less damage, and 1000 more Shadow damage over
-    15 sec.
+  - Sul'thraze's spell (build_mastery.py, SPELL_EDITS 11658): 25% on a hit, 210 Shadow and 1000 more over
+    15 sec (each with 45% of the wielder's spell power, as every item spell: ZeldaItemSpellCoefficient),
+    and the target deals 15% less damage.
 """
 import os
 
@@ -137,8 +137,9 @@ def main():
                % (JANG_THRAZE, JANG_THRAZE_OLD))
     out.append('UPDATE `item_template` SET `startquest` = %d WHERE `entry` = %d;\n' % (QUEST_RITE, SANG_THRAZE))
     out.append('UPDATE `item_template` SET `Quality` = 4 WHERE `entry` = %d;\n' % SUL_THRAZE)
-    # Sul'thraze's 210 Shadow (build_mastery.py, SPELL_EDITS 11658) grows by all of the wielder's spell power
-    out.append('UPDATE `spell_template` SET `EffectBonusCoefficient1` = 1.0 WHERE `Id` = 11658;\n')
+    # an earlier build gave Sul'thraze's hit all of the spell power; every item spell now takes 45% of
+    # it in the core instead (ZeldaItemSpellCoefficient, Zelda.ItemSpellPower)
+    out.append('UPDATE `spell_template` SET `EffectBonusCoefficient1` = 0 WHERE `Id` = 11658;\n')
 
     # Zan'thraze the Hexblade
     out.append(clone('creature_template', 'Entry', HEXBLADE, AMANZASI_GUARD, CREATURE_COLUMNS))
