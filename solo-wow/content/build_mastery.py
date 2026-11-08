@@ -169,7 +169,8 @@ SPELLS = [
           SpellFamilyName=0, SpellFamilyFlags=0, tooltip='Bleeding.')),
     # Dual Wield Specialization's Enrage, two stacks a talent point: each swing uses one, always a hit
     # and a critical strike (12 sec)
-    (DUAL_WIELD_ENRAGE, ENRAGE_RANK1, 'Enrage', 'Your next swings always hit and strike critically.',
+    # named Wrath, apart from the Enrage talent's own buff (its look is still Enrage's)
+    (DUAL_WIELD_ENRAGE, ENRAGE_RANK1, 'Wrath', 'Your next swings always hit and strike critically.',
      dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0, StackAmount=10, ProcCharges=0,
           ProcFlags=0, SpellFamilyName=0, SpellFamilyFlags=0,
           tooltip='Your next swings always hit and strike critically.')),
@@ -223,7 +224,7 @@ for n, sid in enumerate(TWO_HANDED_SPEC, start=1):
                               'provoke your counterattack, which always strikes critically.' % (5 * n))
 for n, sid in enumerate(WARRIOR_DUAL_WIELD, start=1):
     DESCRIPTION_EDITS[sid] = ('Increases your chance to hit by %d%% while dual wielding. While dual wielding, a '
-                              'critical strike against you sends you into an Enrage: your next %d swings always '
+                              'critical strike against you sends you into a Wrath: your next %d swings always '
                               'hit and strike critically. Lasts 12 sec.' % (2 * n, 2 * n))
 for n, sid in enumerate(ONE_HANDED_SPEC, start=1):
     DESCRIPTION_EDITS[sid] = ('Increases the damage you deal with one-handed melee weapons by $s1%%. With a shield '
@@ -245,6 +246,9 @@ for _n, _sid in enumerate(MACE_SPEC):
                                'mace also lowers the target\'s armor by %d%%, stacking up to 5 times.' % (_n + 1))
 
 # stock spells changed in place: {spell id: {spell_template column: value}}
+# the Enrage talent's buff lasts 10 swings instead of 12, the same as Wrath's at 5 points of Dual
+# Wield Specialization (the talent's text reads its $n from here)
+ENRAGE_BUFFS = (12880, 14201, 14202, 14203, 14204)
 SPELL_EDITS = {
     7381: dict(EffectBasePoints1=9),    # Berserker Stance Passive: 10% critical strike instead of 3%
     # Two-Handed Weapon Specialization: 2% more damage a point instead of 1%
@@ -261,6 +265,8 @@ SPELL_EDITS = {
     11658: dict(ProcChance=25, EffectBasePoints1=209, EffectDieSides1=1, EffectApplyAuraName2=79,
                 EffectBasePoints2=-16, EffectMiscValue2=127, EffectBasePoints3=199),
 }
+for _sid in ENRAGE_BUFFS:
+    SPELL_EDITS[_sid] = dict(ProcCharges=10)
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=2 * (_n % 5 + 1) - 1)   # SPELL_AURA_DUMMY, 2% a rank
 
