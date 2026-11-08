@@ -9511,6 +9511,40 @@ index 09b927f41..065c3058f 100644
  
          MovementGeneratorType GetCurrentMovementGeneratorType() const;
  
+diff --git a/src/game/MotionGenerators/PathMovementGenerator.cpp b/src/game/MotionGenerators/PathMovementGenerator.cpp
+index d6c2b0e5e..5e825ccfe 100644
+--- a/src/game/MotionGenerators/PathMovementGenerator.cpp
++++ b/src/game/MotionGenerators/PathMovementGenerator.cpp
+@@ -16,6 +16,7 @@
+  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+  */
+ 
++#include "Config/Config.h"
+ #include "MotionGenerators/PathMovementGenerator.h"
+ #include "Movement/MoveSpline.h"
+ #include "Movement/MoveSplineInit.h"
+@@ -372,6 +373,12 @@ bool TaxiMovementGenerator::Update(Unit& unit, const uint32& diff)
+ }
+ 
+ #define TAXI_FLIGHT_SPEED        32.0f
++// Zelda of Warcraft: flight paths fly twice as fast (Zelda.FlightSpeedRate)
++static float ZeldaTaxiSpeed()
++{
++    static float const rate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.FlightSpeedRate", 2.0f));
++    return TAXI_FLIGHT_SPEED * rate;
++}
+ 
+ bool TaxiMovementGenerator::Move(Unit& unit)
+ {
+@@ -380,7 +387,7 @@ bool TaxiMovementGenerator::Move(Unit& unit)
+     std::copy((m_spline.begin() + m_pathIndex), m_spline.end(), back_inserter(spline));
+     init.SetFirstPointId(m_pathIndex);
+     init.SetFly();
+-    init.SetVelocity(TAXI_FLIGHT_SPEED);
++    init.SetVelocity(ZeldaTaxiSpeed());
+     return bool(init.Launch());
+ }
+ 
 diff --git a/src/game/Reputation/ReputationMgr.cpp b/src/game/Reputation/ReputationMgr.cpp
 index 591908ab5..5cb585b23 100644
 --- a/src/game/Reputation/ReputationMgr.cpp
