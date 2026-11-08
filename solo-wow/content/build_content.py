@@ -364,6 +364,9 @@ def main():
     out.append('UPDATE `gameobject_template` SET `faction` = 35 WHERE `entry` = 178404;\n')
     # Ironfoe (the anvil answers only to it in hand): 30% from Emperor Dagran Thaurissan instead of 1%
     out.append('UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;\n')
+    # extra swings have no timer of their own: Hand of Justice (15600) could not proc again for 3 sec,
+    # the only extra-attack proc that had one (every source stacks, ZeldaAfterMeleeHit)
+    out.append('UPDATE `spell_proc_event` SET `Cooldown` = 0 WHERE `entry` = 15600;\n')
     # Linken's story now begins with Navi: The Hero of Time ends at the Wrecked Raft, whose It's a
     # Secret to Everybody (3844, then the pack's 3845) leads to Linken and on to 3908 as it always did
     out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3844;\n')

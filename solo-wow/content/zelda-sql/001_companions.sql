@@ -489,6 +489,8 @@ UPDATE `gameobject_template` SET `faction` = 35 WHERE `entry` = 178404;
 
 UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;
 
+UPDATE `spell_proc_event` SET `Cooldown` = 0 WHERE `entry` = 15600;
+
 UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3844;
 
 UPDATE `quest_template` SET `PrevQuestId` = 3845 WHERE `entry` = 3908;
