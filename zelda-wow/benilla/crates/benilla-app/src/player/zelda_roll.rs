@@ -5,9 +5,10 @@
 //! for the forward roll and the backflip instead, at the rate that fits the arc.
 //!
 //! The ZeldaControls addon calls `ZeldaRollAnim(kind)` as it asks the server for the dodge
-//! (`.zroll f|l|r`, `.zflip`). The server answers with a knockback, or not at all (on cooldown, in
-//! the air, stunned), so the request only arms the tumble: it starts when the body actually leaves
-//! the ground within [`ARM_SECS`], and turns once over the arc's time in the air, which is the
+//! (`.zroll f|l|r`, `.zflip`). The server answers with a knockback (the side rolls and the
+//! backflip), a ground spline like a charge's (the forward roll, which follows the ground), or not
+//! at all (on cooldown, in the air, stunned), so the request only arms the tumble: it starts when
+//! the push or the ride does within [`ARM_SECS`], and turns once over the arc's time in the air, which is the
 //! same window the server makes every blow a dodge for (`ZeldaDodge`, ZeldaCommands.cpp).
 
 use std::f32::consts::TAU;
@@ -132,7 +133,8 @@ fn tumble(
     // the server's push for the asked roll: the turn starts with it
     let pushed = knocks.read().count() > 0;
     if let Some((kind, asked)) = state.armed {
-        let started = if pushed {
+        // the forward roll is a ground spline instead (`ZeldaDodge`): it starts as the ride does
+        let started = if pushed || player.server_riding {
             Some(now)
         } else {
             player.airborne_since.filter(|&since| since >= asked - 0.05)
@@ -153,8 +155,8 @@ fn tumble(
                     let clip_secs = if kind == 4 { lasts * BACKFLIP_CLIP_SHARE } else { lasts };
                     swings.0.push((step, clip_secs));
                 }
-                trace(|| format!("start kind={kind} pushed={pushed} lasts={lasts:.3} own_clip={has_clip} body={}",
-                                 body.single().is_ok()));
+                trace(|| format!("start kind={kind} pushed={pushed} ride={} lasts={lasts:.3} own_clip={has_clip} body={}",
+                                 player.server_riding, body.single().is_ok()));
                 state.rolling = Some((kind, since, lasts, has_clip));
                 state.armed = None;
             }

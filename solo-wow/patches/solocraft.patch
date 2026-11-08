@@ -1879,10 +1879,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..3e8631440
+index 000000000..2228359ff
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5793 @@
+@@ -0,0 +1,5808 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -6209,6 +6209,9 @@ index 000000000..3e8631440
 +    return true;
 +}
 +
++// the forward roll's ground spline (its movement id, for nothing else to mistake it for a charge)
++uint32 const ZELDA_ROLL_MOVE_ID = 0x2D0D;
++
 +static void ZeldaDodge(Player* player, float angleOffset, float horizontal, float vertical, uint32 rollMs)
 +{
 +    // rolls, side rolls and the backflip push off the ground: none starts in the air (mid-jump,
@@ -6224,8 +6227,20 @@ index 000000000..3e8631440
 +    // tumbles for the same time: player/zelda_roll.rs, ROLL_SECS)
 +    state.invulnerableUntil = now + rollMs;
 +
-+    // KnockBackWithAngle launches the hero along the angle given (0 = straight ahead, pi/2 = left).
 +    float angle = MapManager::NormalizeOrientation(player->GetOrientation() + angleOffset);
++    // no lift: a roll along the ground, as fast as the tumble (the forward roll). The hero runs a
++    // ground spline, as a charge does, up to the first wall or drop in the way, so it follows the
++    // ground's rise and fall instead of hopping off it.
++    if (vertical <= 0.0f)
++    {
++        Position to;
++        player->GetFirstCollisionPosition(to, horizontal * rollMs / 1000.0f, angle);
++        float const dist = player->GetDistance2d(to.x, to.y);
++        if (dist > 1.0f)
++            player->GetMotionMaster()->MoveCharge(to.x, to.y, to.z, dist * 1000.0f / rollMs, ZELDA_ROLL_MOVE_ID);
++        return;
++    }
++    // KnockBackWithAngle launches the hero along the angle given (0 = straight ahead, pi/2 = left).
 +    player->KnockBackWithAngle(angle, horizontal, vertical);
 +}
 +
@@ -6247,10 +6262,10 @@ index 000000000..3e8631440
 +            default: break;
 +        }
 +    }
-+    // the forward roll covers about 14 yards (24.5 yd/s for ~0.57 s in the air) and tumbles for
-+    // 0.65 s; the side rolls are hops of about 4.5 yards that tumble for 0.36 s
++    // the forward roll covers about 14 yards along the ground (21.5 yd/s for its 0.65 s tumble);
++    // the side rolls are hops of about 4.5 yards that tumble for 0.36 s
 +    if (offset == 0.0f)
-+        ZeldaDodge(player, offset, 24.5f, 5.5f, 650);
++        ZeldaDodge(player, offset, 21.5f, 0.0f, 650);
 +    else
 +        ZeldaDodge(player, offset, 14.5f, 3.0f, 360);
 +    return true;
