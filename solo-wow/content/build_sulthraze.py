@@ -32,6 +32,10 @@ UKORZ, ANTU_SUL = 7267, 8127
 JAMMALAN = 5710
 
 HEX_IDOL = 190540
+# the blood the rite needs: Gahz'rilla's Heart, from Gahz'rilla in Zul'Farrak (risen by the gong and
+# the Mallet of Zul'Farrak, as he always was), only while the rite is in the quest log
+GAHZ_HEART = 190541
+GAHZRILLA = 7273
 QUEST_ECHO, QUEST_RITE = 90540, 90541
 HEXBLADE = 191200
 AMANZASI_GUARD = 2648              # the Hexblade's template: a Vilebranch Aman'zasi Guard, grown up
@@ -95,12 +99,17 @@ QUESTS = [
         "Sang'thraze were one blade once: Sul'thraze the Lasher. The Atal'ai split it with blood magic, so "
         "that no one could wield its rage again, and only that same magic can make it whole.$B$BGo down into "
         "the Sunken Temple in the Swamp of Sorrows. Slay Jammal'an the Prophet, and where he stood, perform the "
-        "rite with both blades in hand. The Atal'ai will not let it happen quietly.",
-        "Slay Jammal'an the Prophet in the Sunken Temple. Then, with Jang'thraze the Protector and Sang'thraze "
-        "the Deflector, use the Altar of Jammal'an to perform the rite, and defeat the Atal'ai who answer it.",
-        "Jammal'an's altar, and both blades.",
+        "rite with both blades in hand. The Atal'ai will not let it happen quietly.$B$BBlood magic wants blood. "
+        "The Sandfury of Zul'Farrak keep a beast in their sacred pool, Gahz'rilla, whose heart still beats with "
+        "the old Zandalari power. Strike the gong with the Mallet of Zul'Farrak, call him up, and carry "
+        "his heart to the altar.",
+        "Bring Gahz'rilla's Heart from Zul'Farrak and slay Jammal'an the Prophet in the Sunken Temple. Then, "
+        "with Jang'thraze the Protector, Sang'thraze the Deflector and the heart, use the Altar of Jammal'an to "
+        "perform the rite, and defeat the Atal'ai who answer it.",
+        "Jammal'an's altar, both blades, and the beast's heart.",
         "*The two blades draw together, and the rage that split them closes like a wound.*",
-        kills=[(JAMMALAN, 1)], items=[(JANG_THRAZE, 1), (SANG_THRAZE, 1)], reward_item=SUL_THRAZE, start_item=0),
+        kills=[(JAMMALAN, 1)], items=[(JANG_THRAZE, 1), (SANG_THRAZE, 1), (GAHZ_HEART, 1)], reward_item=SUL_THRAZE,
+        start_item=0),
 ]
 
 # Zan'thraze the Hexblade: Mortal Strike, Whirlwind and a Demoralizing Shout, enraged at 30%
@@ -132,6 +141,18 @@ def main():
         Flags=0, BuyCount=1, BuyPrice=0, SellPrice=0, InventoryType=0, AllowableClass=-1, AllowableRace=-1,
         ItemLevel=48, RequiredLevel=0, maxcount=1, stackable=1, bonding=1, startquest=QUEST_ECHO,
         description='It whispers of a blade carried to the summit of Jintha\'Alor.', Material=4, sheath=0)]))
+
+    # Gahz'rilla's Heart: his drop while The Rite of Sul'thraze asks for it (a quest-only drop)
+    out.append('DELETE FROM `creature_loot_template` WHERE `entry` = %d AND `item` = %d;\n' % (GAHZRILLA, GAHZ_HEART))
+    out.append(insert('creature_loot_template', [dict(
+        entry=GAHZRILLA, item=GAHZ_HEART, ChanceOrQuestChance=-100, groupid=0, mincountOrRef=1, maxcount=1,
+        condition_id=0, comments="Zelda: The Rite of Sul'thraze")]))
+    out.append('DELETE FROM `item_template` WHERE `entry` = %d;\n' % GAHZ_HEART)
+    out.append(insert('item_template', [dict(
+        entry=GAHZ_HEART, **{'class': 12}, subclass=0, name="Gahz'rilla's Heart", displayid=3422, Quality=1,
+        Flags=0, BuyCount=1, BuyPrice=0, SellPrice=0, InventoryType=0, AllowableClass=-1, AllowableRace=-1,
+        ItemLevel=46, RequiredLevel=0, maxcount=1, stackable=1, bonding=4, startquest=0,
+        description='It still beats, slow and heavy, with the old Zandalari power.', Material=4, sheath=0)]))
 
     # the blades: no combining by hand, Sang'thraze starts the rite, Sul'thraze is epic
     out.append('UPDATE `item_template` SET `spellid_1` = 0, `spelltrigger_1` = 0 WHERE `entry` IN (%d, %d);\n'

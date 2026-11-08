@@ -1879,7 +1879,7 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..bdb499481
+index 000000000..afce2301f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,5829 @@
@@ -4999,7 +4999,7 @@ index 000000000..bdb499481
 +                if (!slain)
 +                    player->GetSession()->SendNotification("Jammal'an the Prophet still lives.");
 +                else
-+                    player->GetSession()->SendNotification("The rite needs both Jang'thraze and Sang'thraze.");
++                    player->GetSession()->SendNotification("The rite needs Jang'thraze, Sang'thraze and Gahz'rilla's Heart.");
 +            }
 +            return false;
 +        }
