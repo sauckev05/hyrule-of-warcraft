@@ -241,7 +241,7 @@ def main():
     out.append(insert('creature_loot_template', loot))
 
     # quests
-    quests, starts, ends = [], [], []
+    quests, starts, ends, go_ends = [], [], [], []
     by_id = {q['id']: q for q in Q}
     prev = {}
     chain = sorted(by_id)
@@ -287,10 +287,17 @@ def main():
         row['RewRepValue1'] = value
         quests.append(row)
         starts.append(dict(id=q['giver'], quest=qid))
-        ends.append(dict(id=q['ender'], quest=qid))
+        if q.get('ender_go'):
+            go_ends.append(dict(id=q['ender_go'], quest=qid))
+        else:
+            ends.append(dict(id=q['ender'], quest=qid))
     out.append(insert('quest_template', quests))
     out.append(insert('creature_questrelation', starts))
     out.append(insert('creature_involvedrelation', ends))
+    # quests a gameobject ends (The Hero of Time, at the Wrecked Raft)
+    out.append('DELETE FROM `gameobject_involvedrelation` WHERE `quest` IN (%s);\n' % quest_list)
+    if go_ends:
+        out.append(insert('gameobject_involvedrelation', go_ends))
 
     # Linken's Sword of Mastery (11902) itself: see build_mastery.py (006_mastery.sql)
     # It's Dangerous to Go Alone: only the sword's hilt (no boomerang, no Spirit of Aquementas); the
@@ -357,9 +364,11 @@ def main():
     out.append('UPDATE `gameobject_template` SET `faction` = 35 WHERE `entry` = 178404;\n')
     # Ironfoe (the anvil answers only to it in hand): 30% from Emperor Dagran Thaurissan instead of 1%
     out.append('UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;\n')
-    # Linken's story now begins with Navi: The Hero of Time leads into It's a Secret to Everybody
-    out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3908;\n')
-    out.append('UPDATE `quest_template` SET `NextQuestInChain` = 3908 WHERE `entry` = 90503;\n')
+    # Linken's story now begins with Navi: The Hero of Time ends at the Wrecked Raft, whose It's a
+    # Secret to Everybody (3844, then the pack's 3845) leads to Linken and on to 3908 as it always did
+    out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3844;\n')
+    out.append('UPDATE `quest_template` SET `PrevQuestId` = 3845 WHERE `entry` = 3908;\n')
+    out.append('UPDATE `quest_template` SET `NextQuestInChain` = 3844 WHERE `entry` = 90503;\n')
 
     # Lady Prestor gives and takes quests
     out.append('UPDATE `creature_template` SET `NpcFlags` = `NpcFlags` | 3 WHERE `Entry` = %d;\n' % KATRANA)

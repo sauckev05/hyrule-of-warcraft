@@ -882,18 +882,22 @@ quest(id=90502, level=18, min=18, kind='', zone=0, giver=190601, ender=190601,
              "whole heart! Take something nice from my stash. Heroes need gear!",
       kills=[], items=[(190602, 4)], rep=(0, 0), next=0)
 
-quest(id=90503, level=47, min=47, kind='', zone=490, giver=190601, ender=8737,
+# The Hero of Time ends at the Wrecked Raft in Un'Goro (gameobject 161505), where the crater's own
+# Linken chain begins: It's a Secret to Everybody (3844, 3845) leads to Linken (build_content.py).
+WRECKED_RAFT = 161505
+quest(id=90503, level=47, min=47, kind='', zone=490, giver=190601, ender=0, ender_go=WRECKED_RAFT, next=3844,
       title='The Hero of Time',
       details="Hey! LISTEN! I felt it! Something far, far south, in a crater full of dinosaurs and steam - a "
-              "heartbeat I know!$B$BIt's him. It's Linken! He's been lost in Un'Goro Crater all this time!$B$B"
-              "Please, please, please take me to Marshal's Refuge. If he's forgotten me... well. I'll just have to "
-              "remind him. Very loudly.",
-      objectives="Find Linken in Un'Goro Crater.",
+              "heartbeat I know!$B$BIt's Linken! He's somewhere in Un'Goro Crater, I just know it! But the trail "
+              "starts with something of his... it's pulling at me from the water. A little pond, south of "
+              "Marshal's Refuge, with a broken raft on the shore.$B$BPlease, please, please take me there. Whatever "
+              "washed up with that raft, it's his. I can feel it!",
+      objectives="Find the Wrecked Raft at the pond south of Marshal's Refuge in Un'Goro Crater.",
       request=None,
-      reward="*Linken blinks at the little wisp at your side.*$B$B...Navi? I... I know that voice. I don't know "
-             "how I know it. I washed up here with no memory and an old sword I can't remember using.$B$BThere "
-             "is a gnome in Winterspring, Donova Snowden, who studies the strange fruit of this crater. She says "
-             "an elixir made from it could show me who I was. Will you help me find my way back, friend?",
+      reward="*Navi darts down to the broken planks and circles them, slower and slower.*$B$BThis is it. This "
+             "is his raft. He came here on THIS? Oh, Linken...$B$BHe can't be far. Look around the pond - if he "
+             "lost anything when he washed ashore, it'll still be here. Then we find him. And then I yell at him. "
+             "Lovingly.",
       kills=[], items=[], rep=(0, 0))
 
 # Navi's errands along the way: one for every few levels, offered only once you are that level.
