@@ -359,6 +359,11 @@ def main():
     # The Portal to Inner Maraudon (the Scepter of Celebras's) carried the Orc player faction, so an
     # Alliance hero's client took it for hostile and would not use it: friendly to all.
     out.append('UPDATE `gameobject_template` SET `faction` = 35 WHERE `entry` = 178404;\n')
+    # And every other side's quest object the same way: the Horde's wanted posters and boards, quest
+    # chests and things to click (faction 83, the Alliance's 84, and the cities' own) are friendly to
+    # all, so a hero of either side can read and use them (Zelda.CrossFaction takes the other side's quests)
+    out.append('UPDATE `gameobject_template` SET `faction` = 35 WHERE `type` IN (2, 3, 10) AND `faction` IN '
+               '(12, 29, 55, 68, 79, 80, 83, 84, 101, 102, 104, 126, 1732, 1735);\n')
     # Ironfoe (the anvil answers only to it in hand): 30% from Emperor Dagran Thaurissan instead of 1%
     out.append('UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;\n')
     # extra swings have no timer of their own: Hand of Justice (15600) could not proc again for 3 sec,

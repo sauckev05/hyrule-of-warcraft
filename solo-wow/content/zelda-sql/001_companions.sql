@@ -486,6 +486,8 @@ UPDATE `gameobject_template` SET `data0` = 1 WHERE `type` = 18;
 
 UPDATE `gameobject_template` SET `faction` = 35 WHERE `entry` = 178404;
 
+UPDATE `gameobject_template` SET `faction` = 35 WHERE `type` IN (2, 3, 10) AND `faction` IN (12, 29, 55, 68, 79, 80, 83, 84, 101, 102, 104, 126, 1732, 1735);
+
 UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9019 AND `item` = 11684;
 
 UPDATE `spell_proc_event` SET `Cooldown` = 0 WHERE `entry` = 15600;
