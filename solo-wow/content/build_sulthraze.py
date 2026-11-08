@@ -87,7 +87,8 @@ QUESTS = [
         "Zan'thraze the Hexblade to claim Sang'thraze the Deflector.",
         "The summit, $N. Where the ritual fires burn.",
         "*Zan'thraze's grip loosens, and Sang'thraze slides free, humming.*",
-        kills=[(HEXBLADE, 1)], items=[], reward_item=SANG_THRAZE, start_item=HEX_IDOL),
+        # the idol is asked for, so turning the quest in takes it from the bags
+        kills=[(HEXBLADE, 1)], items=[(HEX_IDOL, 1)], reward_item=SANG_THRAZE, start_item=HEX_IDOL),
     quest_row(
         QUEST_RITE, 54, 48, 81, ZONE_SUNKEN_TEMPLE, "The Rite of Sul'thraze",
         "*Sang'thraze trembles in your hand, pulled toward something far to the south.*$B$BJang'thraze and "

@@ -1879,10 +1879,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..be4b858f4
+index 000000000..0ac02c544
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5797 @@
+@@ -0,0 +1,5810 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3243,6 +3243,7 @@ index 000000000..be4b858f4
 +static void ZeldaSoloBattleground(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaForgeTrial(Player* player, ZeldaState& state);
 +static void ZeldaSulthraze(Player* player, ZeldaState& state, uint32 diff);
++static void ZeldaSpentIdol(Player* player);
 +static void ZeldaTalentStrikes(Player* player, ZeldaState& state);
 +static void ZeldaDoomLordWatch(Player* player);
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
@@ -3267,6 +3268,7 @@ index 000000000..be4b858f4
 +        ZeldaGifts(player);
 +        ZeldaTakeBack(player);
 +        ZeldaResetOnce(player);
++        ZeldaSpentIdol(player);
 +    }
 +
 +    // the Gurubashi Arena challenge
@@ -4984,6 +4986,17 @@ index 000000000..be4b858f4
 +        }
 +        return true;
 +    }
++}
++
++// Antu'sul's Hex Idol is spent when The Deflector's Echo is turned in (the quest asks for it,
++// build_sulthraze.py); one kept from before that, by a hero who finished the quest, goes at login
++static void ZeldaSpentIdol(Player* player)
++{
++    uint32 const ITEM_HEX_IDOL = 190540;
++    if (!player->GetQuestRewardStatus(QUEST_DEFLECTORS_ECHO))
++        return;
++    if (uint32 const count = player->GetItemCount(ITEM_HEX_IDOL, true))
++        player->DestroyItemCount(ITEM_HEX_IDOL, count, true, false, true);
 +}
 +
 +static void ZeldaSulthraze(Player* player, ZeldaState& state, uint32 diff)
