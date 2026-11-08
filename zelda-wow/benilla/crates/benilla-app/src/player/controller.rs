@@ -364,7 +364,7 @@ pub(super) fn control(
         // server's `SMSG_FORCE_MOVE_ROOT` can trail the flag, and a stun under a lowered guard
         // has been seen to let the hero walk).
         let may_translate = mover.may_translate(player.modes.rooted || stunned);
-        let axes = input::move_axes(
+        let mut axes = input::move_axes(
             binds,
             &buttons,
             &mut player,
@@ -373,6 +373,24 @@ pub(super) fn control(
             may_translate,
             may_turn,
         );
+        // Zelda of Warcraft: the forward roll runs straight on along the ground, whatever the keys
+        // say: forward on its own facing, no strafe and no turn, until it is done.
+        let dash_now = time.elapsed_secs();
+        let zelda_dash = player.zelda_dash.filter(|d| dash_now < d.until && may_translate && !player.swimming);
+        if player.zelda_dash.is_some() && zelda_dash.is_none() {
+            player.zelda_dash = None;
+        }
+        if let Some(d) = zelda_dash {
+            player.face_yaw = d.yaw;
+            axes.fwd = 1;
+            axes.side = 0;
+            axes.turning = false;
+            axes.translating = true;
+            axes.strafe_left = false;
+            axes.strafe_right = false;
+            axes.turn_left = false;
+            axes.turn_right = false;
+        }
         let input::MoveAxes {
             fwd: fwd_axis,
             side: side_axis,
@@ -481,7 +499,7 @@ pub(super) fn control(
         // `GetCurrentSpeed` (`0x7c4c90`), shared with the remote extrapolator: the walk arm comes
         // before the backward min, so walking backwards is walk speed. It takes this frame's gait
         // intent, since the wire word is built after the mover.
-        let speed = crate::net::current_speed(
+        let speed = zelda_dash.map(|d| d.speed).unwrap_or_else(|| crate::net::current_speed(
             &speeds,
             if net_backward {
                 move_flags::BACKWARD
@@ -492,11 +510,11 @@ pub(super) fn control(
             } else {
                 0
             },
-        );
+        ));
         // `Jump` (`0x513bd0`) inlines `0x5144e0` and `0x514560`, which is `may_translate` term for
         // term: health, root and stand state 7. Hover's refusal is the movement handler's
         // (`0x7c623a`), which keeps the mounted flourish reachable while hovering.
-        let mut want_jump = binds.fired(crate::bindings::Input::Jump) && may_translate;
+        let mut want_jump = binds.fired(crate::bindings::Input::Jump) && may_translate && zelda_dash.is_none();
 
         // Swim or walk, latched with hysteresis at the `0x6030c0` boundary against flicker.
         let surface_y = swim::surface_over_feet(world, player.pos);

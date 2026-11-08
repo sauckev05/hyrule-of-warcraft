@@ -281,6 +281,14 @@ pub(crate) fn incapacitated_flags(flags: u32, translate_gated: bool, turn_gated:
     out
 }
 
+/// The forward roll's dash: straight along `yaw` at `speed` (yd/s) until `until` (elapsed secs).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) struct ZeldaDash {
+    pub(super) yaw: f32,
+    pub(super) speed: f32,
+    pub(super) until: f32,
+}
+
 /// Our avatar: until `active` the camera free-flies, then we drive the body the server placed.
 /// `PartialEq` serves the test that the session end resets the whole of it to `Player::default()`.
 #[derive(Resource, Default, PartialEq)]
@@ -304,6 +312,9 @@ pub(crate) struct Player {
     /// [`super::follow::steer_follow`] and [`super::approach::steer_approach`] just before the
     /// controller reads it.
     pub(super) auto_forward: bool,
+    /// Zelda of Warcraft: the forward roll in progress, a dash along the ground the controller runs
+    /// in place of the keys ([`super::zelda_roll`]).
+    pub(super) zelda_dash: Option<ZeldaDash>,
     /// Free-fly (`F`): the camera moves on its own and the avatar/server position is frozen.
     pub(crate) detached: bool,
     /// `SMSG_CLIENT_CONTROL_UPDATE` with `allowMove = 0` named the unit we drive: us, while someone

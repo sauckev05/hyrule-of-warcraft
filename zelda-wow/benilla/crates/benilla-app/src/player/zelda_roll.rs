@@ -5,11 +5,12 @@
 //! for the forward roll and the backflip instead, at the rate that fits the arc.
 //!
 //! The ZeldaControls addon calls `ZeldaRollAnim(kind)` as it asks the server for the dodge
-//! (`.zroll f|l|r`, `.zflip`). The server answers with a knockback (the side rolls and the
-//! backflip), a ground spline like a charge's (the forward roll, which follows the ground), or not
-//! at all (on cooldown, in the air, stunned), so the request only arms the tumble: it starts when
-//! the push or the ride does within [`ARM_SECS`], and turns once over the arc's time in the air, which is the
-//! same window the server makes every blow a dodge for (`ZeldaDodge`, ZeldaCommands.cpp).
+//! (`.zroll f|l|r`, `.zflip`). The side rolls and the backflip are the server's knockbacks, or
+//! nothing (on cooldown, in the air, stunned), so those requests only arm the tumble: it starts
+//! when the push does within [`ARM_SECS`]. The forward roll is the client's own dash along the
+//! ground, like a run at roll speed (the controller runs [`super::state::ZeldaDash`]), so it
+//! starts at once. Each roll tumbles over the same window the server makes every blow a dodge
+//! for (`ZeldaDodge`, ZeldaCommands.cpp).
 
 use std::f32::consts::TAU;
 
@@ -36,6 +37,11 @@ const ROLL_SOUNDS: [&str; 4] = [
     "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackB.wav",
     "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackA.wav",
 ];
+/// The forward roll's reach along the ground (yd), over its [`ROLL_SECS`].
+const FORWARD_ROLL_YARDS: f32 = 14.0;
+/// The rolls' shared cooldown, a little over the server's 0.9 s (`DODGE_COOLDOWN_MS`), so a roll the
+/// client runs is one the server grants the dodge for.
+const DODGE_COOLDOWN_SECS: f32 = 0.95;
 /// The body turns about this share of its head height above the feet, near the middle.
 const PIVOT_SHARE: f32 = 0.5;
 
@@ -55,6 +61,8 @@ pub(super) struct ZeldaRollState {
     /// What the turn last wrote onto the body, and the upright pose it turned: a frame `control`
     /// skipped still holds the written pose, which must not be turned again.
     written: Option<(Transform, Transform)>,
+    /// When the last roll started (elapsed secs), for the forward roll's own cooldown.
+    last_start: f32,
 }
 
 fn trace(msg: impl FnOnce() -> String) {
@@ -115,7 +123,7 @@ fn ease(p: f32) -> f32 {
 #[allow(clippy::type_complexity)]
 fn tumble(
     time: Res<Time>,
-    player: Res<Player>,
+    mut player: ResMut<Player>,
     mut knocks: MessageReader<crate::net::KnockBackMessage>,
     mut request: ResMut<ZeldaRollRequest>,
     mut state: ResMut<ZeldaRollState>,
@@ -124,17 +132,39 @@ fn tumble(
     body: Query<Option<&benilla_assets::ModelAnimations>, (With<Embodied>, Without<FlyCam>)>,
 ) {
     let now = time.elapsed_secs();
+    let mut forward_now = false;
     if let Some(kind) = request.pending.take() {
         trace(|| format!("asked kind={kind} rolling={}", state.rolling.is_some()));
-        if state.rolling.is_none() {
+        if kind == 1 {
+            // the forward roll is ours to run: on the ground, off cooldown, a dash along it (the
+            // server only makes every blow a dodge for its time, `ZeldaDodge`)
+            let ready = state.rolling.is_none()
+                && now - state.last_start >= DODGE_COOLDOWN_SECS
+                && player.airborne_since.is_none()
+                && !player.swimming
+                && !player.server_riding;
+            if ready {
+                let lasts = ROLL_SECS[0];
+                player.zelda_dash = Some(super::state::ZeldaDash {
+                    yaw: player.face_yaw,
+                    speed: FORWARD_ROLL_YARDS / lasts,
+                    until: now + lasts,
+                });
+                state.armed = Some((kind, now));
+                forward_now = true;
+            } else {
+                trace(|| format!("refused kind=1: rolling={} since_last={:.3} airborne={}",
+                                 state.rolling.is_some(), now - state.last_start, player.airborne_since.is_some()));
+            }
+        } else if state.rolling.is_none() {
             state.armed = Some((kind, now));
         }
     }
     // the server's push for the asked roll: the turn starts with it
     let pushed = knocks.read().count() > 0;
     if let Some((kind, asked)) = state.armed {
-        // the forward roll is a ground spline instead (`ZeldaDodge`): it starts as the ride does
-        let started = if pushed || player.server_riding {
+        // the forward roll starts at once, with its dash
+        let started = if forward_now || pushed {
             Some(now)
         } else {
             player.airborne_since.filter(|&since| since >= asked - 0.05)
@@ -155,9 +185,10 @@ fn tumble(
                     let clip_secs = if kind == 4 { lasts * BACKFLIP_CLIP_SHARE } else { lasts };
                     swings.0.push((step, clip_secs));
                 }
-                trace(|| format!("start kind={kind} pushed={pushed} ride={} lasts={lasts:.3} own_clip={has_clip} body={}",
-                                 player.server_riding, body.single().is_ok()));
+                trace(|| format!("start kind={kind} pushed={pushed} dash={} lasts={lasts:.3} own_clip={has_clip} body={}",
+                                 player.zelda_dash.is_some(), body.single().is_ok()));
                 state.rolling = Some((kind, since, lasts, has_clip));
+                state.last_start = since;
                 state.armed = None;
             }
             None if now - asked > ARM_SECS => {
