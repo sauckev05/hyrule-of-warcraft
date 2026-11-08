@@ -1894,7 +1894,7 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..70737a55c
+index 000000000..99c0e214d
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6109 @@
@@ -2675,7 +2675,7 @@ index 000000000..70737a55c
 +    // item), so the same aura from an equipped trinket is never taken with it
 +    void RemoveSocketAura(Player* player, uint32 spellId)
 +    {
-+        SpellAuraHolderBounds bounds = player->GetSpellAuraHolderBounds(spellId);
++        Unit::SpellAuraHolderBounds bounds = player->GetSpellAuraHolderBounds(spellId);
 +        for (auto itr = bounds.first; itr != bounds.second;)
 +        {
 +            if (!itr->second->GetCastItemGuid())
