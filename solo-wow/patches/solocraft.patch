@@ -1879,10 +1879,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..afce2301f
+index 000000000..bae9e2fb4
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5829 @@
+@@ -0,0 +1,5834 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4253,7 +4253,9 @@ index 000000000..afce2301f
 +// login outside that dungeon. Zul'Farrak, for Sul'thraze's new drops (build_sulthraze.py).
 +static void ZeldaResetOnce(Player* player)
 +{
-+    static std::string const resets = sConfig.GetStringDefault("Zelda.ResetOnce", "Kale:209");
++    // "Name:map" once, or "Name:map:tag" once more for each new tag (Zul'Farrak again, for Gahz'rilla's
++    // gong after an earlier build had him waiting on the shore)
++    static std::string const resets = sConfig.GetStringDefault("Zelda.ResetOnce", "Kale:209 Kale:209:gong");
 +    std::istringstream in(resets);
 +    std::string word;
 +    while (in >> word)
@@ -4261,10 +4263,13 @@ index 000000000..afce2301f
 +        size_t const colon = word.find(':');
 +        if (colon == std::string::npos || word.substr(0, colon) != player->GetName())
 +            continue;
-+        uint32 const mapId = uint32(std::strtoul(word.c_str() + colon + 1, nullptr, 10));
++        char* tagAt = nullptr;
++        uint32 const mapId = uint32(std::strtoul(word.c_str() + colon + 1, &tagAt, 10));
 +        if (!mapId || player->GetMapId() == mapId)
 +            continue;
-+        std::string const key = "reset:" + std::to_string(mapId);
++        std::string key = "reset:" + std::to_string(mapId);
++        if (tagAt && *tagAt == ':' && tagAt[1])
++            key += tagAt;
 +        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
 +                                     player->GetGUIDLow(), key.c_str()))
 +            continue;
