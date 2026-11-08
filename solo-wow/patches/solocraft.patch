@@ -1879,10 +1879,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..461cfbacb
+index 000000000..5d07f2f84
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,5810 @@
+@@ -0,0 +1,5824 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -6222,6 +6222,20 @@ index 000000000..461cfbacb
 +    return true;
 +}
 +
++bool ZeldaQuietProc(uint32 spellId)
++{
++    switch (spellId)
++    {
++        case 40026:     // Berserker's Fury
++        case 40028:     // Bleeding Edge
++        case 40029:     // Dual Wield Specialization's Enrage (its roar is an emote of its own)
++        case 40030:     // Shield Fury
++            return true;
++        default:
++            return false;
++    }
++}
++
 +static void ZeldaDodge(Player* player, float angleOffset, float horizontal, float vertical, uint32 rollMs)
 +{
 +    // rolls, side rolls and the backflip push off the ground: none starts in the air (mid-jump,
@@ -7695,10 +7709,10 @@ index 000000000..461cfbacb
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..bef123b81
+index 000000000..91f184adb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,317 @@
+@@ -0,0 +1,320 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -7722,6 +7736,9 @@ index 000000000..bef123b81
 +// Zelda of Warcraft: damage a player takes after dodge-roll invulnerability and shield blocking.
 +// a hero in the middle of a dodge roll: every blow and spell aimed at her is dodged
 +bool ZeldaRolling(Unit const* victim);
++// a proc's spell, whose SMSG_SPELL_GO Benilla plays without the casting pose (the core's own: the
++// talents' and Berserker Stance's buffs); Spell::SendSpellGo marks aura and weapon procs itself
++bool ZeldaQuietProc(uint32 spellId);
 +// the warrior talents (ZeldaCommands.cpp, "talents"): a swing that must crit, a spell that always crits,
 +// a shield block, and an enemy's hit on the hero
 +bool ZeldaForcedMeleeCrit(Unit const* attacker);
@@ -9485,7 +9502,7 @@ index 591908ab5..5cb585b23 100644
      if (!noSpillover)
      {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..7c3f53475 100644
+index bf5c5c578..92bb97a51 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -9588,7 +9605,20 @@ index bf5c5c578..7c3f53475 100644
      InitializeDamageMultipliers();
  
      OnCast();
-@@ -4450,6 +4481,9 @@ void Spell::TakeReagents()
+@@ -3957,6 +3988,12 @@ void Spell::SendSpellGo()
+     if (m_CastItem)
+         castFlags |= CAST_FLAG_UNKNOWN7;
+ 
++    // Zelda of Warcraft: a proc - an aura's (talents, trinkets, sets), a weapon's on hit, or the
++    // core's own - is marked with an unused flag, and Benilla plays its visual without the casting
++    // pose (the hero swings on; nothing was cast)
++    if (m_triggeredByAuraSpell || (m_IsTriggeredSpell && m_CastItem) || ZeldaQuietProc(m_spellInfo->Id))
++        castFlags |= CAST_FLAG_UNKNOWN4;
++
+     WorldPacket data(SMSG_SPELL_GO, 53);                    // guess size
+ 
+     if (m_CastItem)
+@@ -4450,6 +4487,9 @@ void Spell::TakeReagents()
      {
          if (m_spellInfo->Reagent[x] <= 0)
              continue;
@@ -9598,7 +9628,7 @@ index bf5c5c578..7c3f53475 100644
  
          uint32 itemid = m_spellInfo->Reagent[x];
          uint32 itemcount = m_spellInfo->ReagentCount[x];
-@@ -5553,9 +5587,15 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5553,9 +5593,15 @@ SpellCastResult Spell::CheckCast(bool strict)
                          return SPELL_FAILED_TRY_AGAIN;
  
                      lockId = go->GetGOInfo()->GetLockId();
@@ -9615,7 +9645,7 @@ index bf5c5c578..7c3f53475 100644
                      // check if its in use only when cast is finished (called from spell::cast() with strict = false)
                      if (!strict && go->IsInUse())
                          return SPELL_FAILED_CHEST_IN_USE;
-@@ -5998,6 +6038,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5998,6 +6044,10 @@ SpellCastResult Spell::CheckCast(bool strict)
          }
      }
  
@@ -9626,7 +9656,7 @@ index bf5c5c578..7c3f53475 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6202,7 +6246,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
+@@ -6202,7 +6252,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
      {
          if (m_spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT) && caster->GetTypeId() == TYPEID_PLAYER)
              if (Item* ranged = static_cast<Player*>(caster)->GetWeaponForAttack(RANGED_ATTACK))
@@ -9635,7 +9665,7 @@ index bf5c5c578..7c3f53475 100644
  
          if (Player* modOwner = caster->GetSpellModOwner())
              modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_RANGE, maxRange);
-@@ -6499,6 +6543,12 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6549,12 @@ SpellCastResult Spell::CheckItems()
                      }
  
                      Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
@@ -9648,7 +9678,7 @@ index bf5c5c578..7c3f53475 100644
                      if (target->GetPower(power) == target->GetMaxPower(power))
                      {
                          failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
-@@ -6565,6 +6615,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6565,6 +6621,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;

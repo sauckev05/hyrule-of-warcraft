@@ -110,6 +110,7 @@ fn cast_event(entity: Entity, spell_id: u32, kind: CastEventKind) -> CastEvent {
         spell_id,
         kind,
         seq: 1,
+        quiet: false,
     }
 }
 
@@ -910,6 +911,7 @@ fn a_targetless_dest_go_spawns_a_ground_missile_whose_arrival_sounds_at_the_poin
         spell_id: GROUND,
         kind: CastEventKind::GroundImpact { pos: at },
         seq: 2,
+        quiet: false,
     });
     app.update();
     let sounds: Vec<_> = app

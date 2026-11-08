@@ -353,6 +353,7 @@ fn arrival_handoff(
         spell_id: missile.spell_id,
         kind,
         seq: play_seq.next(),
+        quiet: false,
     };
     match missile.aim {
         Aim::Unit {

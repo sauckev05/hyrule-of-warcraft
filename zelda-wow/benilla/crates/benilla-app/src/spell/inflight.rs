@@ -360,6 +360,7 @@ impl SelfCancel<'_, '_> {
                                 spell_id,
                                 kind: CastEventKind::Fail,
                                 seq: play_seq.next(),
+                                quiet: false,
                             });
                         }
                     }

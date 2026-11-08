@@ -351,6 +351,9 @@ pub(crate) struct CastEvent {
     pub(crate) kind: CastEventKind,
     /// `PlaySeq` stamp, carried to the kit's `EmoteAnim`.
     pub(crate) seq: u64,
+    /// Zelda of Warcraft: a GO of a proc (a weapon's, a trinket's, a talent's, a set's): its cast kit
+    /// plays its effects and sound but not its anim, so the hero does not look as if casting.
+    pub(crate) quiet: bool,
 }
 
 /// Which cast edge fired.

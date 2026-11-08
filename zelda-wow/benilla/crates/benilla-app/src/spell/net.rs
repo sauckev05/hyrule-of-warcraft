@@ -667,6 +667,7 @@ fn cast_result(
                 spell_id,
                 kind: CastEventKind::Fail,
                 seq,
+                quiet: false,
             });
         }
     }
@@ -782,6 +783,7 @@ fn spell_start(
             spell_id,
             kind: CastEventKind::Start,
             seq,
+            quiet: false,
         });
     }
 }
@@ -1061,6 +1063,8 @@ fn spell_go(
             spell_id,
             kind: CastEventKind::Go,
             seq,
+            // a proc (`CAST_FLAG_ZELDA_PROC`, Spell.cpp): its kit plays without the cast anim
+            quiet: cast_flags & 0x0008 != 0,
         });
         // Targets not streamed to us drop out. The miss code picks the victim's dodge or block
         // clip on the missile's arrival.
@@ -1131,6 +1135,7 @@ fn spell_failed_other(
             spell_id,
             kind: CastEventKind::Fail,
             seq,
+            quiet: false,
         });
     }
 }

@@ -740,6 +740,12 @@ pub(super) fn route_cast_visuals(
                     } else {
                         commands.entity(ev.entity).try_remove::<super::RangedHold>();
                     }
+                    // Zelda of Warcraft: a proc's GO shows its effect without the casting pose
+                    let kit = if ev.quiet {
+                        VisualKit { anim_id: None, ..kit }
+                    } else {
+                        kit
+                    };
                     play_kit(
                         ev.entity,
                         ev.spell_id,
