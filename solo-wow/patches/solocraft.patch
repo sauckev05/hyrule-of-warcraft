@@ -1879,7 +1879,7 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..0cb45d2b3
+index 000000000..3e8631440
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,5793 @@
@@ -3725,8 +3725,8 @@ index 000000000..0cb45d2b3
 +//    UnitAuraProcHandler.cpp)
 +//  - Two-Handed Weapon Specialization: 2% a point (the talent's aura); with a two-hander, an enemy
 +//    attack that hits the hero has 5% a point to provoke a counterattack that always crits
-+//  - Dual Wield Specialization: dual wielding, being critically hit enrages the hero (40029): a stack
-+//    a point, each swing uses one and always hits critically; 12 sec
++//  - Dual Wield Specialization: dual wielding, being critically hit enrages the hero (40029): two
++//    stacks a point, each swing uses one and always hits critically; 12 sec
 +//  - One-Handed Weapon Specialization: with a shield, each block builds Shield Fury (40030); the
 +//    fifth unleashes Shield Cleave (40031) on every enemy around, a sure crit for 2x a point a swing
 +namespace
@@ -3814,7 +3814,7 @@ index 000000000..0cb45d2b3
 +            hero->RemoveAurasDueToSpell(SPELL_DW_ENRAGE);
 +            hero->CastSpell(hero, SPELL_DW_ENRAGE, TRIGGERED_OLD_TRIGGERED);
 +            if (SpellAuraHolder* enrage = hero->GetSpellAuraHolder(SPELL_DW_ENRAGE))
-+                enrage->SetStackAmount(rank, hero);
++                enrage->SetStackAmount(rank * 2, hero);
 +            hero->HandleEmoteCommand(EMOTE_ONESHOT_BATTLEROAR);
 +        }
 +    // Two-Handed Weapon Specialization: the blow may provoke a counterattack (on the next update)

@@ -167,10 +167,10 @@ SPELLS = [
     (BLEEDING_EDGE_BLEED, REND_TOP_RANK, 'Bleeding Edge', 'Bleeding.',
      dict(DurationIndex=DURATION_10_SEC, EffectAmplitude1=2000, Stances=0, ManaCost=0, PowerType=0,
           SpellFamilyName=0, SpellFamilyFlags=0, tooltip='Bleeding.')),
-    # Dual Wield Specialization's Enrage, a stack a talent point: each swing uses one, always a hit and a
-    # critical strike (12 sec)
+    # Dual Wield Specialization's Enrage, two stacks a talent point: each swing uses one, always a hit
+    # and a critical strike (12 sec)
     (DUAL_WIELD_ENRAGE, ENRAGE_RANK1, 'Enrage', 'Your next swings always hit and strike critically.',
-     dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0, StackAmount=5, ProcCharges=0,
+     dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0, StackAmount=10, ProcCharges=0,
           ProcFlags=0, SpellFamilyName=0, SpellFamilyFlags=0,
           tooltip='Your next swings always hit and strike critically.')),
     # One-Handed Weapon Specialization's blocks counted, up to 5 (30 sec)
@@ -223,10 +223,8 @@ for n, sid in enumerate(TWO_HANDED_SPEC, start=1):
                               'provoke your counterattack, which always strikes critically.' % (5 * n))
 for n, sid in enumerate(WARRIOR_DUAL_WIELD, start=1):
     DESCRIPTION_EDITS[sid] = ('Increases your chance to hit by %d%% while dual wielding. While dual wielding, a '
-                              'critical strike against you sends you into an Enrage: your next %s always %s and '
-                              'strike%s critically. Lasts 12 sec.'
-                              % (2 * n, 'swing' if n == 1 else '%d swings' % n, 'hits' if n == 1 else 'hit',
-                                 's' if n == 1 else ''))
+                              'critical strike against you sends you into an Enrage: your next %d swings always '
+                              'hit and strike critically. Lasts 12 sec.' % (2 * n, 2 * n))
 for n, sid in enumerate(ONE_HANDED_SPEC, start=1):
     DESCRIPTION_EDITS[sid] = ('Increases the damage you deal with one-handed melee weapons by $s1%%. With a shield '
                               'equipped, every 5th block unleashes a cleave on all enemies around you, always a '
