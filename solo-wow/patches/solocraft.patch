@@ -1879,7 +1879,7 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..0ac02c544
+index 000000000..461cfbacb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,5810 @@
@@ -2508,7 +2508,6 @@ index 000000000..0ac02c544
 +    std::unordered_map<uint32, uint32> s_setOfItem;
 +    std::vector<SetBonusRow> s_setBonuses;
 +
-+    thread_local bool t_bonusSwing = false;     // an extra swing from a set never chains another
 +    thread_local bool t_forceCrit = false;      // a talent's sure critical swing (counterattack)
 +
 +    float SetBonusOf(Unit const* unit, uint32 type)
@@ -3892,7 +3891,7 @@ index 000000000..0ac02c544
 +
 +void ZeldaAfterMeleeHit(Unit* attacker, Unit* victim, bool hit, uint8 attType)
 +{
-+    if (!hit || !attacker || !attacker->IsPlayer() || !victim || t_bonusSwing)
++    if (!hit || !attacker || !attacker->IsPlayer() || !victim)
 +        return;
 +    Player* player = static_cast<Player*>(attacker);
 +
@@ -3958,13 +3957,14 @@ index 000000000..0ac02c544
 +        }
 +    }
 +
-+    // and sometimes the blade swings again before the enemy can answer
++    // and sometimes the blade swings again before the enemy can answer: an extra attack like every
++    // other source's (Sword Specialization, a weapon, a trinket), rolled apart from them, stacking
++    // with them, and only on a normal swing - an extra swing never procs another
 +    float const extra = SetBonusOf(player, SET_BONUS_EXTRA_SWING);
-+    if (extra > 0.0f && victim->IsAlive() && roll_chance_f(extra))
++    if (extra > 0.0f && victim->IsAlive() && !player->ExtraAttacksExecuting() && roll_chance_f(extra))
 +    {
-+        t_bonusSwing = true;
-+        player->AttackerStateUpdate(victim, BASE_ATTACK, true);
-+        t_bonusSwing = false;
++        player->m_extraAttacks = std::min<uint32>(player->m_extraAttacks + 1, 5);
++        player->m_extraAttackGuid = victim->GetObjectGuid();
 +    }
 +}
 +
@@ -9111,6 +9111,19 @@ index 00986af9e..267e100bf 100644
          if (GetDeathState() == CORPSE)
              speed *= sWorld.getConfig(((Player*)this)->InBattleGround() ? CONFIG_FLOAT_GHOST_RUN_SPEED_BG : CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD);
      }
+diff --git a/src/game/Entities/Unit.h b/src/game/Entities/Unit.h
+index c5a03c1c3..7c1197b19 100644
+--- a/src/game/Entities/Unit.h
++++ b/src/game/Entities/Unit.h
+@@ -1213,6 +1213,8 @@ class Unit : public WorldObject
+         uint32 m_extraAttacks;
+         ObjectGuid m_extraAttackGuid;
+         void DoExtraAttacks(Unit* victim);
++        // Zelda of Warcraft: whether this swing is an extra one (no extra swing procs another)
++        bool ExtraAttacksExecuting() const { return m_extraAttacksExecuting; }
+ 
+         bool IsAttackedBy(Unit* attacker) const
+         {
 diff --git a/src/game/Globals/ObjectMgr.cpp b/src/game/Globals/ObjectMgr.cpp
 index a67044614..5084c7488 100644
 --- a/src/game/Globals/ObjectMgr.cpp
