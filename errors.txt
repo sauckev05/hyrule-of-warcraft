@@ -1,0 +1,27 @@
+
+> build.log:940:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(778,9): error C2065: 'SpellAuraHolderBounds': undeclared identifier [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:941:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:942:  
+> build.log:943:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(778,31): error C2146: syntax error: missing ';' before identifier 'bounds' [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:944:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:945:  
+> build.log:946:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(778,31): error C2065: 'bounds': undeclared identifier [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:947:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:948:  
+> build.log:949:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(779,25): error C2065: 'bounds': undeclared identifier [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:950:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:951:  
+> build.log:952:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(779,39): error C3536: 'itr': cannot be used before it is initialized [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:953:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:954:  
+> build.log:955:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(779,46): error C2065: 'bounds': undeclared identifier [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:956:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:957:  
+> build.log:958:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(784,17): error C2065: 'bounds': undeclared identifier [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:959:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:960:  
+> build.log:961:D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\src\game\Chat\ZeldaCommands.cpp(785,23): error C2065: 'bounds': undeclared identifier [D:\a\hyrule-of-warcraft\hyrule-of-warcraft\cmangos\bin\builddir\src\game\game.vcxproj]
+  build.log:962:  (compiling source file '../../../../src/game/Chat/ZeldaCommands.cpp')
+  build.log:963:  
+
+
