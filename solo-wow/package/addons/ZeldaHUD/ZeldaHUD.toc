@@ -16,3 +16,4 @@ actionbar.lua
 mailfix.lua
 targetbar.lua
 castbar.lua
+navisock.lua
