@@ -8396,7 +8396,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..5e80e041f 100644
+index 4d8e9160a..9dd09578e 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -8508,7 +8508,7 @@ index 4d8e9160a..5e80e041f 100644
 +        // not allow proc extra attack spell at extra attack. Zelda of Warcraft: every source's extra
 +        // swing stacks - one already granted on this swing (Sword Specialization, a set, a trinket)
 +        // no longer stops the weapon's own; only the extra swings themselves never proc more
-+        if (m_extraAttacksExecuting && IsSpellHaveEffect(spellInfo, SPELL_EFFECT_ADD_EXTRA_ATTACKS))
++        if (ExtraAttacksExecuting() && IsSpellHaveEffect(spellInfo, SPELL_EFFECT_ADD_EXTRA_ATTACKS))
 +            continue;
  
          float chance = (float)spellInfo->procChance;
@@ -8520,7 +8520,7 @@ index 4d8e9160a..5e80e041f 100644
 -            // not allow proc extra attack spell at extra attack
 -            if (m_extraAttacks && IsSpellHaveEffect(spellInfo, SPELL_EFFECT_ADD_EXTRA_ATTACKS))
 +            // not allow proc extra attack spell at extra attack (Zelda: stacks with the others, above)
-+            if (m_extraAttacksExecuting && IsSpellHaveEffect(spellInfo, SPELL_EFFECT_ADD_EXTRA_ATTACKS))
++            if (ExtraAttacksExecuting() && IsSpellHaveEffect(spellInfo, SPELL_EFFECT_ADD_EXTRA_ATTACKS))
                  continue;
  
              // some weapon enchantments have proc flags which need to be checked
