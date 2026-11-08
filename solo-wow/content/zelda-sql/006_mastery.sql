@@ -108,6 +108,8 @@ UPDATE `spell_template` SET `ProcCharges` = 10 WHERE `Id` = 14201;
 UPDATE `spell_template` SET `ProcCharges` = 10 WHERE `Id` = 14202;
 UPDATE `spell_template` SET `ProcCharges` = 10 WHERE `Id` = 14203;
 UPDATE `spell_template` SET `ProcCharges` = 10 WHERE `Id` = 14204;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectMiscValue1` = 0 WHERE `Id` = 16493;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectMiscValue1` = 0 WHERE `Id` = 16494;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 1 WHERE `Id` = 23584;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 3 WHERE `Id` = 23585;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 5 WHERE `Id` = 23586;

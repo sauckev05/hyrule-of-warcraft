@@ -267,6 +267,19 @@ SPELL_EDITS = {
 }
 for _sid in ENRAGE_BUFFS:
     SPELL_EDITS[_sid] = dict(ProcCharges=10)
+
+# Impale: every attack's critical strike bonus, not only an ability's - swings, charged and ranged attacks,
+# spells (the core, ZeldaCritBonusScale), so its spell modifier becomes a dummy aura that keeps the $s1;
+# Axe Specialization adds 5% a point to the bonus of an attack made with an axe
+IMPALE = (16493, 16494)
+AXE_SPEC = (12700, 12781, 12783, 12784, 12785)
+for _sid in IMPALE:
+    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectMiscValue1=0)
+    DESCRIPTION_EDITS[_sid] = ('Increases the critical strike damage bonus of all your attacks by $s1%: your '
+                               'swings, charged attacks, ranged attacks, abilities and spells.')
+for _n, _sid in enumerate(AXE_SPEC, start=1):
+    DESCRIPTION_EDITS[_sid] = ('Increases your chance to get a critical strike with Axes by $s1%%, and the '
+                               'critical strike damage bonus of your attacks with Axes by %d%%.' % (5 * _n))
 for _n, _sid in enumerate(DUAL_WIELD_SPEC):
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=2 * (_n % 5 + 1) - 1)   # SPELL_AURA_DUMMY, 2% a rank
 
