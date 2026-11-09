@@ -224,6 +224,14 @@ SPELLS += [
      dict(Effect1=3, EffectApplyAuraName1=0, EffectImplicitTargetA1=1, CastingTimeIndex=1)),
 ]
 
+# Dragon's Call's Emerald Dragon Whelps spit for 30% of the stock Acid Spit (19 to 26 instead of 64 to
+# 86; build_content.py points their EventAI at it - the Nightmare Wyrmkin keep the stock spit)
+WHELP_ACID_SPIT, ACID_SPIT = 40035, 9591
+SPELLS += [
+    (WHELP_ACID_SPIT, ACID_SPIT, 'Acid Spit', 'Spits acid at an enemy for $s1 Nature damage.',
+     dict(EffectBasePoints1=18, EffectDieSides1=8)),
+]
+
 # stock items changed in place: {item entry: {item_template column: value}}
 ITEM_EDITS = {
     DIAMOND_FLASK: dict(spellid_1=DIAMOND_FLASK_WORN, spelltrigger_1=1, spellcharges_1=0, spellppmRate_1=0,

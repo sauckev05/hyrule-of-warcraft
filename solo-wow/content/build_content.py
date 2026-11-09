@@ -377,6 +377,11 @@ def main():
                '`maxcount`, `condition_id`, `comments`) VALUES (5709, 10847, 100, 0, 1, 1, 0, \'Zelda: Dragon\\\'s Call\');\n')
     out.append('UPDATE `spell_template` SET `Category` = 0, `CategoryRecoveryTime` = 0, `RecoveryTime` = 0 WHERE `Id` = 13049;\n')
     out.append('UPDATE `item_template` SET `spellppmRate_1` = 5 WHERE `entry` = 10847;\n')
+    # ... and it is unique (one held at a time); its whelps hit and spit for 30% of what they did (melee
+    # 1.54281 x 0.3; their Acid Spit is build_mastery.py's 40035)
+    out.append('UPDATE `item_template` SET `MaxCount` = 1 WHERE `entry` = 10847;\n')
+    out.append('UPDATE `creature_template` SET `DamageMultiplier` = 0.462843 WHERE `Entry` = 8776;\n')
+    out.append('UPDATE `creature_ai_scripts` SET `action1_param1` = 40035 WHERE `id` = 877601;\n')
     # Linken's story now begins with Navi: The Hero of Time ends at the Wrecked Raft, whose It's a
     # Secret to Everybody (3844, then the pack's 3845) leads to Linken and on to 3908 as it always did
     out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3844;\n')

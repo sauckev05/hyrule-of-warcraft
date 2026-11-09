@@ -499,6 +499,12 @@ UPDATE `spell_template` SET `Category` = 0, `CategoryRecoveryTime` = 0, `Recover
 
 UPDATE `item_template` SET `spellppmRate_1` = 5 WHERE `entry` = 10847;
 
+UPDATE `item_template` SET `MaxCount` = 1 WHERE `entry` = 10847;
+
+UPDATE `creature_template` SET `DamageMultiplier` = 0.462843 WHERE `Entry` = 8776;
+
+UPDATE `creature_ai_scripts` SET `action1_param1` = 40035 WHERE `id` = 877601;
+
 UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3844;
 
 UPDATE `quest_template` SET `PrevQuestId` = 3845 WHERE `entry` = 3908;
