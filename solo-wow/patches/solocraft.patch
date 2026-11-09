@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..062508f1a
+index 000000000..cc486964b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6161 @@
+@@ -0,0 +1,6184 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -6164,14 +6164,37 @@ index 000000000..062508f1a
 +        return true;
 +    }
 +    // a parried heavy blow is turned aside, not stopped: half of it still lands, but the hero keeps
-+    // their feet (no knockdown) and the enemy is thrown off balance
-+    bool const parried = melee && snapshot.parry && inFront;
++    // their feet (no knockdown) and the enemy is thrown off balance; a charged bolt is deflected the
++    // same way, half of it getting through
++    bool const parried = snapshot.parry && inFront;
 +    if (parried)
 +    {
-+        Stagger(hero, caster, 1500);
 +        GuardRage(hero);
-+        session->SendAreaTriggerMessage("|cffffcc66Parried! Half the blow gets through - %s is thrown off balance!|r", caster->GetName());
++        if (melee)
++        {
++            Stagger(hero, caster, 1500);
++            session->SendAreaTriggerMessage("|cffffcc66Parried! Half the blow gets through - %s is thrown off balance!|r", caster->GetName());
++        }
++        else
++            session->SendAreaTriggerMessage("|cffffcc66Deflected! Half the bolt gets through!|r");
 +    }
++
++    // a hero who cannot act - stunned, hexed or polymorphed, feared, charmed, asleep - is shaken free by
++    // the blow that lands, and not knocked down again, so heavy blows never lock him down
++    bool freed = false;
++    for (AuraType const type : { SPELL_AURA_MOD_STUN, SPELL_AURA_MOD_CONFUSE, SPELL_AURA_MOD_FEAR,
++                                 SPELL_AURA_MOD_CHARM, SPELL_AURA_MOD_POSSESS, SPELL_AURA_TRANSFORM })
++    {
++        if (!hero->HasAuraType(type))
++            continue;
++        if (type == SPELL_AURA_TRANSFORM && !hero->HasAuraType(SPELL_AURA_MOD_CONFUSE) &&
++            !hero->hasUnitState(UNIT_STAT_CONFUSED))
++            continue;                               // a harmless shapeshift (a costume) stays
++        hero->RemoveSpellsCausingAura(type);
++        freed = true;
++    }
++    if (freed)
++        session->SendAreaTriggerMessage("|cff66ff66The blow shakes you free!|r");
 +
 +    Threat const threat = caster->GetTypeId() == TYPEID_UNIT ? ThreatOf(static_cast<Creature*>(caster)) : Threat::Normal;
 +    uint32 damage = std::max<uint32>(1, uint32(hero->GetMaxHealth() * HeavyShare(threat) * (parried ? 0.5f : 1.0f)));
@@ -6184,7 +6207,7 @@ index 000000000..062508f1a
 +    info.damage = damage > absorb ? damage - absorb : 0;
 +    Unit::SendSpellNonMeleeDamageLog(&info);
 +    Unit::DealSpellDamage(caster, &info, true, false);
-+    if (melee && !parried && hero->IsAlive())
++    if (melee && !parried && !freed && hero->IsAlive())
 +        caster->CastSpell(hero, HEAVY_KNOCKDOWN, TRIGGERED_OLD_TRIGGERED);
 +    return true;
 +}
