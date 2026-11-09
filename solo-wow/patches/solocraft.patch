@@ -288,7 +288,7 @@ index 91c212e50..118ca42a3 100644
              m_uiSummonPatientTimer -= uiDiff;
 diff --git a/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 new file mode 100644
-index 000000000..8b013515f
+index 000000000..41139774f
 --- /dev/null
 +++ b/src/game/AI/ScriptDevAI/scripts/world/zelda_companions.cpp
 @@ -0,0 +1,1378 @@
@@ -1433,9 +1433,9 @@ index 000000000..8b013515f
 +    if (creature->isQuestGiver())
 +        player->PrepareQuestMenu(creature->GetObjectGuid());
 +    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Who are you, little light?", GOSSIP_SENDER_MAIN, ACTION_ABOUT);
++    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, "Navi, teach me how to play. (Gameplay guide)", GOSSIP_SENDER_MAIN, ACTION_GUIDE);
 +    player->ADD_GOSSIP_ITEM_EXTENDED(GOSSIP_ICON_INTERACT_1, "Navi, reset all the dungeons and raids.", GOSSIP_SENDER_MAIN,
 +                                     ACTION_RESET_INSTANCES, "Every dungeon and raid will start over, its enemies back. Are you sure?", 0, false);
-+    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_TRAINER, "Navi, teach me how to play. (Gameplay guide)", GOSSIP_SENDER_MAIN, ACTION_GUIDE);
 +    if (player->HasItemCount(NAVI_LIGHT_ITEM, 1))
 +        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_INTERACT_1, "Navi, hold a trinket in your light.", GOSSIP_SENDER_MAIN, ACTION_NAVI_SOCKETS);
 +    player->SEND_GOSSIP_MENU(NAVI_TEXT_GREETING, creature->GetObjectGuid());
