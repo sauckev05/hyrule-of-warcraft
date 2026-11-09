@@ -942,14 +942,24 @@ pub(super) fn drive_animations(
                         .filter(|c| c.anim_id == h.anim_id)
                         .nth(variation)
                         .unwrap_or(h);
-                    (c, bevy::animation::RepeatAnimation::Never)
+                    // the dodge roll's clip is one turn of the tumble: it turns whole twice
+                    let repeat = if id == super::zelda_swing::ROLL_CLIP {
+                        bevy::animation::RepeatAnimation::Count(super::zelda_swing::ROLL_SPINS)
+                    } else {
+                        bevy::animation::RepeatAnimation::Never
+                    };
+                    (c, repeat)
                 }),
                 None => find_resolved(anims, id, catalog).map(|h| roll_oneshot(anims, h, &mut rng)),
             };
             // A combo swing runs at the rate that ends it in its seconds.
             let rate = match (forced, picked) {
-                (Some((_, seconds)), Some((c, _))) if seconds > 0.0 => {
-                    (c.duration / seconds).clamp(0.25, 4.0)
+                (Some((_, seconds)), Some((c, repeat))) if seconds > 0.0 => {
+                    let turns = match repeat {
+                        bevy::animation::RepeatAnimation::Count(n) => n.max(1) as f32,
+                        _ => 1.0,
+                    };
+                    (c.duration * turns / seconds).clamp(0.25, 4.0)
                 }
                 _ => 1.0,
             };

@@ -45,6 +45,9 @@ pub(crate) struct ZeldaGuard {
 /// patch-Z); a model without them tumbles by turning its whole body instead (player::zelda_roll).
 pub(crate) const ROLL_CLIP: u16 = 153;
 pub(crate) const BACKFLIP_CLIP: u16 = 154;
+/// The dodge roll's clip is one whole turn of the tumble (333 ms); it plays this many times over
+/// the roll, each one complete, sped up to fit (two in the forward roll's 0.65 s: about its own pace).
+pub(crate) const ROLL_SPINS: u32 = 2;
 
 /// Where in the ranged Load clip the full draw holds (kind 3): near its end, short of the frame
 /// that would finish the one-shot.
