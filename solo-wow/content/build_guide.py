@@ -53,8 +53,9 @@ PAGES = [
     "charge attack is Shield Slam: it hits as hard as your shield's armor, then stuns enemies in front and "
     "silences their spells for 2 seconds.$B$B"
     "Berserker Stance - a two-handed weapon (picked from your bags too). Your charge attack is Leaping "
-    "Strike: twice your attack power, through all armor, on every enemy in front. Each one that lands gives "
-    "Berserker's Fury, up to 10 stacks of 10% more attack power and spell power.$B$B"
+    "Strike: your attack power, through all armor, on every enemy in front. Each one that lands gives "
+    "Berserker's Fury, up to 10 stacks of 10% more attack power and spell power, and each stack heals you "
+    "for 1% of your maximum health on every critical strike you land.$B$B"
     "All one-handed weapons swing every 2.70 seconds and all two-handers every 4.00, so pick by damage!",
 
     # 4: levels and experience

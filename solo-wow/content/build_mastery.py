@@ -111,8 +111,8 @@ SPELLS = [
      dict(EffectBasePoints1=74, EffectDieSides1=76, EffectBaseDice1=1)),
     (40007, 25914, 'Light of Linken', '', dict(EffectBasePoints1=74, EffectDieSides1=76, EffectBaseDice1=1)),
     # Berserker Stance's charged attack (ZeldaCommands.cpp, ZeldaLeapingStrike): a plain melee-class
-    # physical strike whose damage the server sets (twice the attack power); it crits like melee
-    (40008, 2816, 'Leaping Strike', 'Leaps forward, striking every enemy in front of you for twice your attack power.', {}),
+    # physical strike whose damage the server sets (the attack power); it crits like melee
+    (40008, 2816, 'Leaping Strike', 'Leaps forward, striking every enemy in front of you for your attack power.', {}),
     # Navi's revive (ZeldaCommands.cpp, ZeldaNaviResurrection): a soulstone-style self resurrection that
     # brings you back with 10% of your health and mana, in a priest's resurrection light
     (40009, 3026, "Navi's Light", "Navi's light brings you back to life with 10% of your health and mana.",
@@ -149,12 +149,14 @@ SPELLS = [
     # spell power, which the core adds itself (ZeldaBerserkerFurySpellPower)
     (BERSERKER_FURY, DEATH_WISH, "Berserker's Fury",
      'Each Leaping Strike that lands increases your attack power and spell power by 10% for $d, '
-     'stacking up to 10 times.',
+     'stacking up to 10 times. Each stack also heals you for 1% of your maximum health on every '
+     'critical strike you land.',
      dict(Attributes=0, AttributesEx=0, RecoveryTime=0, ManaCost=0, PowerType=0, DurationIndex=DURATION_10_SEC,
           StackAmount=10, EffectApplyAuraName1=166, EffectApplyAuraName2=167, EffectApplyAuraName3=4,
           EffectBasePoints1=9, EffectBasePoints2=9, EffectBasePoints3=9, EffectMiscValue1=0, EffectMiscValue2=0,
           EffectMiscValue3=0, InterruptFlags=0, SpellFamilyName=0, SpellFamilyFlags=0,
-          tooltip='Attack power and spell power increased by $s1% per stack.')),
+          tooltip='Attack power and spell power increased by $s1% per stack. Your critical strikes heal 1% '
+                  'of your maximum health per stack.')),
     (PLACE_MIRROR_PLATE, PLACE_UNFIRED_BLADE, 'Place Mirror Plate', 'Sets the Tarnished Mirror Plate on the ground.',
      dict(EffectMiscValue1=191182)),
     # The Rite of Sul'thraze (build_sulthraze.py): ten seconds at the Altar of Jammal'an, whose end
