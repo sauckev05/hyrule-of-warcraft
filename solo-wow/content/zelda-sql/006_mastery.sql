@@ -111,7 +111,7 @@ UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 9,
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 19, `EffectMiscValue1` = 0 WHERE `Id` = 12658;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 29, `EffectMiscValue1` = 0 WHERE `Id` = 12659;
 UPDATE `spell_template` SET `RangeIndex` = 4 WHERE `Id` = 15712;
-UPDATE `spell_template` SET `ProcChance` = 25, `EffectBasePoints1` = 209, `EffectDieSides1` = 1, `EffectApplyAuraName2` = 79, `EffectBasePoints2` = -16, `EffectMiscValue2` = 127, `EffectBasePoints3` = 199 WHERE `Id` = 11658;
+UPDATE `spell_template` SET `ProcChance` = 25, `EffectBasePoints1` = 209, `EffectDieSides1` = 1, `EffectApplyAuraName2` = 79, `EffectBasePoints2` = -16, `EffectMiscValue2` = 127, `EffectBasePoints3` = 99 WHERE `Id` = 11658;
 UPDATE `spell_template` SET `ProcCharges` = 10 WHERE `Id` = 12880;
 UPDATE `spell_template` SET `ProcCharges` = 10 WHERE `Id` = 14201;
 UPDATE `spell_template` SET `ProcCharges` = 10 WHERE `Id` = 14202;

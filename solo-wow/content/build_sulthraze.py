@@ -14,7 +14,7 @@ Writes zelda-sql/022_sulthraze.sql, which the server applies to the world databa
     then, with both blades, use the Altar of Jammal'an where he stood. Ten seconds of ritual call
     the Atal'ai; when they fall, the blades are one - Sul'thraze the Lasher.
   - The two blades no longer combine by themselves (Jang'thraze's Call of Sul'thraze is gone).
-  - Sul'thraze's spell (build_mastery.py, SPELL_EDITS 11658): 25% on a hit, 210 Shadow and 1000 more over
+  - Sul'thraze's spell (build_mastery.py, SPELL_EDITS 11658): 25% on a hit, 210 Shadow and 500 more over
     15 sec (each with 45% of the wielder's spell power, as every item spell: ZeldaItemSpellCoefficient),
     and the target deals 15% less damage.
 """

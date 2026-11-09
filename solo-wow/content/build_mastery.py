@@ -260,8 +260,7 @@ for n, sid in enumerate(ONE_HANDED_SPEC, start=1):
                               'equipped, every 5th block unleashes a cleave on all enemies around you, always a '
                               'critical strike, for %d times the damage of a normal swing.' % (2 * n))
 DESCRIPTION_EDITS[11658] = ("Strikes an enemy with the rage of Sul'thraze, dealing $s1 Shadow damage and an "
-                            "additional $o3 damage over $d, both increased by 45% of your spell power. The target "
-                            "deals 15% less damage for $d.")
+                            "additional $o3 damage over $d. The target deals 15% less damage for $d.")
 # Dual Wield Specialization (warrior and rogue): 2% melee hit a point while two weapons are held, not
 # off-hand damage (ZeldaDualWieldHit); a dummy aura whose $s1 is the percent
 DUAL_WIELD_SPEC = (23584, 23585, 23586, 23587, 23588, 13715, 13848, 13849, 13851, 13852)
@@ -289,10 +288,10 @@ SPELL_EDITS = {
     # to the same 30 yards (no 8-yard minimum)
     15712: dict(RangeIndex=4),
     # Sul'thraze the Lasher (build_sulthraze.py): 25% on a hit; the target deals 15% less damage instead of
-    # losing 15 Strength; 200 Shadow every 3 sec for 15 sec (1000) instead of 125 in all
+    # losing 15 Strength; 100 Shadow every 3 sec for 15 sec (500) instead of 125 in all
     # and 210 Shadow on the hit itself, no range (45% of the spell power, as every item spell: the core)
     11658: dict(ProcChance=25, EffectBasePoints1=209, EffectDieSides1=1, EffectApplyAuraName2=79,
-                EffectBasePoints2=-16, EffectMiscValue2=127, EffectBasePoints3=199),
+                EffectBasePoints2=-16, EffectMiscValue2=127, EffectBasePoints3=99),
 }
 for _sid in ENRAGE_BUFFS:
     SPELL_EDITS[_sid] = dict(ProcCharges=10)
