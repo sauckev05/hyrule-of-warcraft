@@ -1959,7 +1959,7 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..cc486964b
+index 000000000..ed28d2d9b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6184 @@
@@ -4401,7 +4401,7 @@ index 000000000..cc486964b
 +// when they are full, by mail from Navi; marker 'gift:<item>' per character.
 +static void ZeldaGifts(Player* player)
 +{
-+    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975 Kale:191140");
++    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975 Kale:191140 Kale:20608");
 +    std::istringstream in(gifts);
 +    std::string word;
 +    while (in >> word)
