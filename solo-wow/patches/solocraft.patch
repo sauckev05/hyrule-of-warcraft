@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..20e443498
+index 000000000..353e18099
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6306 @@
+@@ -0,0 +1,6330 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2041,6 +2041,7 @@ index 000000000..20e443498
 +        uint32 comboCount = 0;
 +        uint32 slashReadyAt = 0;                        // the sword swing playing now ends here
 +        uint32 spinReadyAt = 0;
++        uint32 extraSpinAt = 0;                         // dual wielding: the free extra spin goes here
 +        uint32 dodgeReadyAt = 0;
 +        uint32 invulnerableUntil = 0;
 +        uint32 boomerangReadyAt = 0;
@@ -3433,12 +3434,22 @@ index 000000000..20e443498
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
 +static void ZeldaFrostBreath(Unit* azuregos);
 +
++static void ZeldaSpinStrikes(Player* player, bool extra);
++
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
 +    if (!player)
 +        return;
 +
 +    ZeldaState& state = StateFor(player);
++
++    // dual wielding, a spin can call a second, free one (ZeldaSpinStrikes): it follows the first
++    if (state.extraSpinAt && WorldTimer::getMSTime() >= state.extraSpinAt)
++    {
++        state.extraSpinAt = 0;
++        if (player->IsInWorld() && CanAct(player) && player->hasOffhandWeaponForAttack())
++            ZeldaSpinStrikes(player, true);
++    }
 +
 +    // once per login: the faster run speed, and friends on the other side
 +    if (state.speedAppliedFor != player && player->IsInWorld())
@@ -6444,10 +6455,10 @@ index 000000000..20e443498
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, reach.slashRange + 8.0f, enemies);
 +    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
-+    // Shield Slam adds the block value itself, so the strike as a whole is 70% of the shield's armor
++    // Shield Slam adds the block value itself, so the strike as a whole is 75% of the shield's armor
 +    // (Toughness raises the shield's armor, and so the slam)
 +    (void)shield;
-+    const float SLAM_ARMOR_SHARE = 0.7f;
++    const float SLAM_ARMOR_SHARE = 0.75f;
 +    int32 const damage = std::max<int32>(1, int32(ZeldaShieldArmor(player) * SLAM_ARMOR_SHARE) -
 +                                             int32(player->GetShieldBlockValue()));
 +    uint32 hit = 0;
@@ -6505,14 +6516,14 @@ index 000000000..20e443498
 +        if (!unit->IsAlive() || unit->GetHealth() < before)
 +            landed = true;
 +    }
-+    // Berserker's Fury: one stack for each Leaping Strike that lands, however many it hits - +10%
-+    // attack power and spell power a stack, up to 10, for 10 seconds (a new stack renews them all),
++    // Berserker's Fury: one stack for each Leaping Strike that lands, however many it hits - +5%
++    // attack power and spell power a stack, up to 10, for 20 seconds (a new stack renews them all),
 +    // and each critical strike heals 1% of maximum health a stack (ZeldaCritHeal)
 +    if (landed)
 +        player->CastSpell(player, BERSERKER_FURY_SPELL, TRIGGERED_OLD_TRIGGERED);
 +}
 +
-+// Berserker's Fury's share of spell power, in percent (its third, dummy effect, 10 a stack)
++// Berserker's Fury's share of spell power, in percent (its third, dummy effect, 5 a stack)
 +int32 ZeldaBerserkerFuryPercent(Unit const* unit)
 +{
 +    int32 pct = 0;
@@ -6591,6 +6602,15 @@ index 000000000..20e443498
 +        }
 +    }
 +
++    ZeldaSpinStrikes(player, false);
++    return true;
++}
++
++// the Spin Attack's strikes on every enemy around the hero. Dual wielding, a spin has a 50% chance
++// (Zelda.DualWieldExtraSpin) to call a second one, free of rage, that follows it; that one calls no other
++static void ZeldaSpinStrikes(Player* player, bool extra)
++{
++    const uint32 EXTRA_SPIN_DELAY_MS = 700;     // about one turn of the Whirlwind
 +    StyleStats stats = StatsFor(StyleOf(player));
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, stats.spinRange + 8.0f, enemies);
@@ -6622,7 +6642,11 @@ index 000000000..20e443498
 +    }
 +    t_spinNoRage = false;
 +    t_meleeMultiplier = 1.0f;
-+    return true;
++    static int32 const extraChance = sConfig.GetIntDefault("Zelda.DualWieldExtraSpin", 50);
++    if (extra)
++        player->GetSession()->SendAreaTriggerMessage("|cff66ccffExtra Spin!|r");
++    else if (dualWield && roll_chance_i(extraChance))
++        StateFor(player).extraSpinAt = WorldTimer::getMSTime() + EXTRA_SPIN_DELAY_MS;
 +}
 +
 +void ZeldaNaviSocketsOpen(Player* player)

@@ -56,7 +56,8 @@ SMITE_IMPACT_VISUAL = 7892          # SpellVisual, after the stock 7891
 # the light as if by a priest instead of playing a cast while lying dead
 RESURRECTION_VISUAL, REVIVED_VISUAL = 41, 7893
 # SpellVisuals of our own: {new id: the stock visual it is, without its precast and cast kits}
-IMPACT_ONLY_VISUALS = {SMITE_IMPACT_VISUAL: HOLY_SMITE_VISUAL, REVIVED_VISUAL: RESURRECTION_VISUAL}
+IMPACT_ONLY_VISUALS = {SMITE_IMPACT_VISUAL: HOLY_SMITE_VISUAL, REVIVED_VISUAL: RESURRECTION_VISUAL,
+                       7894: 4599}         # Berserker's Fury (FURY_VISUAL: DEATH_WISH_VISUAL)
 # Reforged in the Black Anvil (story.py): using the anvil starts a 30-second blacksmithing cast - Copper
 # Bracers' hammering at the anvil (SpellVisual 395), without its hammer, anvil, bars or bracers - and
 # its end completes the quest (ZeldaCommands.cpp, ZeldaGameObjectUse / ZeldaSpellFinished)
@@ -86,6 +87,10 @@ CALL_OF_SULTHRAZE = 11654         # Jang'thraze's own combining spell
 CAST_10_SECONDS = 7
 DEATH_WISH = 12328
 DURATION_10_SEC = 1                 # SpellDuration.dbc
+# Berserker's Fury lasts 20 sec (SpellDuration 18), and its look is Death Wish's (SpellVisual 4599) without
+# the cast kit: no casting pose when a stack is gained, only the glow while it lasts
+FURY_DURATION = 18
+DEATH_WISH_VISUAL, FURY_VISUAL = 4599, 7894
 ARENA_WARD = 23506                  # the Arena Grand Master's Aura of Protection
 PLACE_UNFIRED_BLADE = 22905         # Quel'Serrar's
 BLOCK_VALUE_30, BLOCK_CHANCE_5, DEFENSE_10 = 23562, 21482, 13390
@@ -144,16 +149,17 @@ SPELLS = [
     (MIRROR_REFLECTION, 9335, 'Mirror Reflection',
      'While your guard is raised, harmful spells cast at you are turned back upon their caster.',
      dict(EffectApplyAuraName1=4, EffectBasePoints1=0, EffectMiscValue1=0)),
-    # Berserker Stance's charged attack, each time its Leaping Strike lands (ZeldaLeapingStrike): +10%
-    # attack power (melee and ranged) a stack, up to 10 stacks, 10 sec; the third, dummy effect is the
+    # Berserker Stance's charged attack, each time its Leaping Strike lands (ZeldaLeapingStrike): +5%
+    # attack power (melee and ranged) a stack, up to 10 stacks, 20 sec; the third, dummy effect is the
     # spell power, which the core adds itself (ZeldaBerserkerFurySpellPower)
     (BERSERKER_FURY, DEATH_WISH, "Berserker's Fury",
-     'Each Leaping Strike that lands increases your attack power and spell power by 10% for $d, '
+     'Each Leaping Strike that lands increases your attack power and spell power by 5% for $d, '
      'stacking up to 10 times. Each stack also heals you for 1% of your maximum health on every '
      'critical strike you land.',
-     dict(Attributes=0, AttributesEx=0, RecoveryTime=0, ManaCost=0, PowerType=0, DurationIndex=DURATION_10_SEC,
+     dict(Attributes=0, AttributesEx=0, RecoveryTime=0, ManaCost=0, PowerType=0, DurationIndex=FURY_DURATION,
+          SpellVisual=FURY_VISUAL,
           StackAmount=10, EffectApplyAuraName1=166, EffectApplyAuraName2=167, EffectApplyAuraName3=4,
-          EffectBasePoints1=9, EffectBasePoints2=9, EffectBasePoints3=9, EffectMiscValue1=0, EffectMiscValue2=0,
+          EffectBasePoints1=4, EffectBasePoints2=4, EffectBasePoints3=4, EffectMiscValue1=0, EffectMiscValue2=0,
           EffectMiscValue3=0, InterruptFlags=0, SpellFamilyName=0, SpellFamilyFlags=0,
           tooltip='Attack power and spell power increased by $s1% per stack. Your critical strikes heal 1% '
                   'of your maximum health per stack.')),
@@ -320,7 +326,7 @@ for _n, _sid in enumerate(DUAL_WIELD_SPEC):
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=2 * (_n % 5 + 1) - 1)   # SPELL_AURA_DUMMY, 2% a rank
 
 # Toughness: the shield's armor 5% higher per point, not all armor - and the shield slam (Defensive
-# Stance's charged attack, its damage 70% of the shield's armor) with it; Defiance: an enemy that hurts you takes
+# Stance's charged attack, its damage 75% of the shield's armor) with it; Defiance: an enemy that hurts you takes
 # 3% per point of it back, like Thorns, instead of more threat (ZeldaCommands.cpp, ZeldaShieldArmor,
 # ZeldaDamageTaken); both dummy auras whose $s1 is the percent
 TOUGHNESS = (12299, 12761, 12762, 12763, 12764)

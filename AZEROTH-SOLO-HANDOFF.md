@@ -78,7 +78,7 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   (Zelda.EnemyMeleeDamageRate, now 4); see the 2026-10-24 notes for elites and dungeons.
 - The red swing trail (a Heroic Strike SPELL_GO) is skipped for combo swings: its cast animation
   replaced the client-played combo swing.
-- Charged attack by stance: Defensive Stance + shield = Shield Slam (spell 23922, damage = 70% of the shield
+- Charged attack by stance: Defensive Stance + shield = Shield Slam (spell 23922, damage = 75% of the shield
   armor) on enemies in front + 2 s stun (Charge Stun 7922, duration overridden); Berserker Stance =
   Leaping Strike (custom spell 40008 in 006_mastery/patch-Z, melee class, damage 2x attack power) on
   one enemy in front, the client playing Special2H (ZeldaSwingAnim step 4); otherwise Spin Attack.
