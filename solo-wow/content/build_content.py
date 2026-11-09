@@ -369,6 +369,14 @@ def main():
     # extra swings have no timer of their own: Hand of Justice (15600) could not proc again for 3 sec,
     # the only extra-attack proc that had one (every source stacks, ZeldaAfterMeleeHit)
     out.append('UPDATE `spell_proc_event` SET `Cooldown` = 0 WHERE `entry` = 15600;\n')
+    # Dragon's Call: always from the Shade of Eranikus (Sunken Temple), and its whelps come often (5 a
+    # minute instead of the weapon-speed chance) with no minute's cooldown between them - up to five at
+    # once (the core: Player::CastItemCombatSpell)
+    out.append('DELETE FROM `creature_loot_template` WHERE `entry` = 5709 AND `item` = 10847;\n'
+               'INSERT INTO `creature_loot_template` (`entry`, `item`, `ChanceOrQuestChance`, `groupid`, `mincountOrRef`, '
+               '`maxcount`, `condition_id`, `comments`) VALUES (5709, 10847, 100, 0, 1, 1, 0, \'Zelda: Dragon\\\'s Call\');\n')
+    out.append('UPDATE `spell_template` SET `Category` = 0, `CategoryRecoveryTime` = 0, `RecoveryTime` = 0 WHERE `Id` = 13049;\n')
+    out.append('UPDATE `item_template` SET `spellppmRate_1` = 5 WHERE `entry` = 10847;\n')
     # Linken's story now begins with Navi: The Hero of Time ends at the Wrecked Raft, whose It's a
     # Secret to Everybody (3844, then the pack's 3845) leads to Linken and on to 3908 as it always did
     out.append('UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3844;\n')

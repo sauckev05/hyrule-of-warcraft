@@ -492,6 +492,13 @@ UPDATE `creature_loot_template` SET `ChanceOrQuestChance` = 30 WHERE `entry` = 9
 
 UPDATE `spell_proc_event` SET `Cooldown` = 0 WHERE `entry` = 15600;
 
+DELETE FROM `creature_loot_template` WHERE `entry` = 5709 AND `item` = 10847;
+INSERT INTO `creature_loot_template` (`entry`, `item`, `ChanceOrQuestChance`, `groupid`, `mincountOrRef`, `maxcount`, `condition_id`, `comments`) VALUES (5709, 10847, 100, 0, 1, 1, 0, 'Zelda: Dragon\'s Call');
+
+UPDATE `spell_template` SET `Category` = 0, `CategoryRecoveryTime` = 0, `RecoveryTime` = 0 WHERE `Id` = 13049;
+
+UPDATE `item_template` SET `spellppmRate_1` = 5 WHERE `entry` = 10847;
+
 UPDATE `quest_template` SET `PrevQuestId` = 90503 WHERE `entry` = 3844;
 
 UPDATE `quest_template` SET `PrevQuestId` = 3845 WHERE `entry` = 3908;

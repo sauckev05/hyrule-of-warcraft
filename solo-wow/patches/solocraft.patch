@@ -8822,7 +8822,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..86b3a0b23 100644
+index 4d8e9160a..327acae67 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -8950,7 +8950,28 @@ index 4d8e9160a..86b3a0b23 100644
  
          float chance = (float)spellInfo->procChance;
  
-@@ -7431,8 +7465,8 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+@@ -7407,6 +7441,20 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+             chance = GetWeaponProcChance();
+         }
+ 
++        // Zelda of Warcraft: Dragon's Call's Emerald Dragon Whelps, no cooldown between them, up to five at once
++        if (spellInfo->Id == 13049)
++        {
++            uint32 whelps = 0;
++            CheckAllControlledUnits([&whelps](Unit const* unit)
++            {
++                if (unit->GetEntry() == 8776 && unit->IsAlive())
++                    ++whelps;
++                return false;
++            }, CONTROLLED_GUARDIANS);
++            if (whelps >= 5)
++                continue;
++        }
++
+         if (roll_chance_f(chance))
+             CastSpell(Target, spellInfo->Id, TRIGGERED_OLD_TRIGGERED, item);
+     }
+@@ -7431,8 +7479,8 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
                  continue;
              }
  
@@ -8961,7 +8982,7 @@ index 4d8e9160a..86b3a0b23 100644
                  continue;
  
              // some weapon enchantments have proc flags which need to be checked
-@@ -9515,6 +9549,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
+@@ -9515,6 +9563,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
  
              uint32 type = pProto->InventoryType;
  
@@ -8973,7 +8994,7 @@ index 4d8e9160a..86b3a0b23 100644
              if (eslot == EQUIPMENT_SLOT_OFFHAND)
              {
                  if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
-@@ -11003,6 +11042,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
+@@ -11003,6 +11056,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
  {
      MANGOS_ASSERT(pItem != nullptr);
  
@@ -8983,7 +9004,7 @@ index 4d8e9160a..86b3a0b23 100644
      uint32 slot = m_currentBuybackSlot;
      // if current back slot non-empty search oldest or free
      if (m_items[slot])
-@@ -12352,6 +12394,10 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
+@@ -12352,6 +12408,10 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
              return false;
      }
  
@@ -8994,7 +9015,7 @@ index 4d8e9160a..86b3a0b23 100644
      uint32 repFacId = qInfo->GetRepObjectiveFaction();
      return !(repFacId && GetReputationMgr().GetReputation(repFacId) < qInfo->GetRepObjectiveValue());
  }
-@@ -12408,6 +12454,10 @@ bool Player::CanRewardQuest(Quest const* pQuest, bool msg) const
+@@ -12408,6 +12468,10 @@ bool Player::CanRewardQuest(Quest const* pQuest, bool msg) const
      if (pQuest->GetRewOrReqMoney() < 0 && GetMoney() < uint32(-pQuest->GetRewOrReqMoney()))
          return false;
  
@@ -9005,7 +9026,7 @@ index 4d8e9160a..86b3a0b23 100644
      return true;
  }
  
-@@ -12617,6 +12667,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12617,6 +12681,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
          if (pQuest->ReqItemId[i])
              DestroyItemCount(pQuest->ReqItemId[i], pQuest->ReqItemCount[i], true);
      }
@@ -9013,7 +9034,7 @@ index 4d8e9160a..86b3a0b23 100644
  
      RemoveTimedQuest(quest_id);
  
-@@ -12659,6 +12710,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12659,6 +12724,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
  
      // Used for client inform but rewarded only in case not max level
      uint32 xp = uint32(pQuest->XPValue(this) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
@@ -9026,7 +9047,7 @@ index 4d8e9160a..86b3a0b23 100644
  
      if (GetLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          GiveXP(xp, nullptr);
-@@ -13458,6 +13515,14 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
+@@ -13458,6 +13529,14 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
          if (!qInfo || !qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER))
              continue;
  
@@ -9041,7 +9062,7 @@ index 4d8e9160a..86b3a0b23 100644
          for (int j = 0; j < QUEST_ITEM_OBJECTIVES_COUNT; ++j)
          {
              uint32 reqitem = qInfo->ReqItemId[j];
-@@ -13492,6 +13557,13 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
+@@ -13492,6 +13571,13 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
          uint32 questid = GetQuestSlotQuestId(i);
          if (!questid)
              continue;
@@ -9055,7 +9076,7 @@ index 4d8e9160a..86b3a0b23 100644
          Quest const* qInfo = sObjectMgr.GetQuestTemplate(questid);
          if (!qInfo)
              continue;
-@@ -18082,9 +18154,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18168,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -9070,7 +9091,7 @@ index 4d8e9160a..86b3a0b23 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -18152,6 +18227,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
+@@ -18152,6 +18241,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
  
      DEBUG_LOG("SendTransferAbortedByLockStatus: Called for %s on map %u, LockAreaStatus %u, miscRequirement %u)", GetGuidStr().c_str(), mapEntry->MapID, lockStatus, miscRequirement);
  
@@ -9098,7 +9119,7 @@ index 4d8e9160a..86b3a0b23 100644
      if (!at->status_failed_text.empty())
      {
          switch (lockStatus)
-@@ -19665,6 +19761,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19775,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -9126,7 +9147,7 @@ index 4d8e9160a..86b3a0b23 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20149,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20163,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -9135,7 +9156,7 @@ index 4d8e9160a..86b3a0b23 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20338,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20352,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -9146,7 +9167,7 @@ index 4d8e9160a..86b3a0b23 100644
      bool haveToSendEvent = false;
      bool wasPermanent = false;
      uint32 oldItemId = 0;
-@@ -20436,10 +20557,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
+@@ -20436,10 +20571,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
      if (IsGameMaster())
          return true;
  
