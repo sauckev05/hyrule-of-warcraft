@@ -131,11 +131,11 @@ UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 9,
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 14, `EffectMiscValue1` = 0 WHERE `Id` = 12762;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 19, `EffectMiscValue1` = 0 WHERE `Id` = 12763;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 24, `EffectMiscValue1` = 0 WHERE `Id` = 12764;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 2, `EffectMiscValue1` = 0 WHERE `Id` = 12303;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 5, `EffectMiscValue1` = 0 WHERE `Id` = 12788;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 8, `EffectMiscValue1` = 0 WHERE `Id` = 12789;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 11, `EffectMiscValue1` = 0 WHERE `Id` = 12791;
-UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 14, `EffectMiscValue1` = 0 WHERE `Id` = 12792;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 2, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12303;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 5, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12788;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 8, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12789;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 11, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12791;
+UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 14, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12792;
 UPDATE `spell_template` SET `SpellName` = 'Bleeding Edge' WHERE `Id` = 12286;
 UPDATE `spell_template` SET `SpellName` = 'Bleeding Edge' WHERE `Id` = 12658;
 UPDATE `spell_template` SET `SpellName` = 'Bleeding Edge' WHERE `Id` = 12659;

@@ -313,7 +313,8 @@ for _n, _sid in enumerate(TOUGHNESS):
     DESCRIPTION_EDITS[_sid] = ('Increases the armor of your shield by $s1%, and the damage of your shield slam '
                                'with it.')
 for _n, _sid in enumerate(DEFIANCE):
-    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=3 * (_n + 1) - 1, EffectMiscValue1=0)
+    # in every stance: the stock talent's aura held only in Defensive Stance (Stances 0x20000)
+    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=3 * (_n + 1) - 1, EffectMiscValue1=0, Stances=0)
     DESCRIPTION_EDITS[_sid] = 'Enemies that damage you take $s1% of that damage back.'
 
 # helmet looks whose hair stayed visible: {ItemDisplayInfo id: (male, female HelmetGeosetVisData)}
