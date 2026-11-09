@@ -50,7 +50,7 @@ PAGES = [
     "Battle Stance - any weapon. Your charge attack is the Spin Attack, which hits everyone around you. With "
     "two weapons it hits twice as many times.$B$B"
     "Defensive Stance - a one-handed weapon and a shield (taking the stance picks them from your bags). Your "
-    "charge attack is Shield Slam: it hits as hard as your shield's armor, then stuns enemies in front and "
+    "charge attack is Shield Slam: it hits for half your shield's armor, then stuns enemies in front and "
     "silences their spells for 2 seconds.$B$B"
     "Berserker Stance - a two-handed weapon (picked from your bags too). Your charge attack is Leaping "
     "Strike: your attack power, through all armor, on every enemy in front. Each one that lands gives "
