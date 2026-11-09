@@ -214,6 +214,14 @@ SPELLS += [
           EffectAmplitude2=0, DurationIndex=DURATION_FOREVER, Attributes=0x1d0, SpellVisual=0)),
 ]
 
+# Crystal Surge: the Altar of Jammal'an's crystal flares (red lightning) when Sul'thraze is made whole,
+# then is gone (the core, ZeldaCrystalFlare); cast by an unseen World Trigger on itself
+CRYSTAL_SURGE, SPAWN_RED_LIGHTNING = 40034, 24240
+SPELLS += [
+    (CRYSTAL_SURGE, SPAWN_RED_LIGHTNING, 'Crystal Surge', 'The crystal flares and is spent.',
+     dict(Effect1=3, EffectApplyAuraName1=0, EffectImplicitTargetA1=1, CastingTimeIndex=1)),
+]
+
 # stock items changed in place: {item entry: {item_template column: value}}
 ITEM_EDITS = {
     DIAMOND_FLASK: dict(spellid_1=DIAMOND_FLASK_WORN, spelltrigger_1=1, spellcharges_1=0, spellppmRate_1=0,

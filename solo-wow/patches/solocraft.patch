@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..ea9a1dda8
+index 000000000..76452fd16
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6207 @@
+@@ -0,0 +1,6281 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2086,6 +2086,9 @@ index 000000000..ea9a1dda8
 +        std::vector<ObjectGuid> riteGuardians;
 +        bool riteTrial = false;
 +        uint32 riteInstance = 0;
++        ObjectGuid riteAltar;                           // the crystal the rite was begun at
++        bool riteToldFull = false;                      // "make room" said once for this rite
++        uint32 altarVanishAt = 0;                       // the crystal, flared, goes at this time (ms)
 +        std::unordered_map<uint64, uint32> bgMight;     // Warsong Gulch: the flags each soldier is stronger by
 +        uint32 bgMightTold[2] = { 0, 0 };               // the captures already announced, per side
 +        uint32 bgGuardDeadAt[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -3424,6 +3427,7 @@ index 000000000..ea9a1dda8
 +static void ZeldaForgeTrial(Player* player, ZeldaState& state);
 +static void ZeldaSulthraze(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaSpentIdol(Player* player);
++static void ZeldaSpentBlades(Player* player);
 +static void ZeldaTalentStrikes(Player* player, ZeldaState& state);
 +static void ZeldaDoomLordWatch(Player* player);
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
@@ -3449,6 +3453,7 @@ index 000000000..ea9a1dda8
 +        ZeldaTakeBack(player);
 +        ZeldaResetOnce(player);
 +        ZeldaSpentIdol(player);
++        ZeldaSpentBlades(player);
 +    }
 +
 +    // the Gurubashi Arena challenge
@@ -5208,13 +5213,19 @@ index 000000000..ea9a1dda8
 +    bool RewardHere(Player* player, uint32 questId, bool& told)
 +    {
 +        Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
-+        if (!quest || player->GetQuestStatus(questId) != QUEST_STATUS_COMPLETE)
++        // a rewarded quest still reads as complete: never reward it twice
++        if (!quest || player->GetQuestRewardStatus(questId) || player->GetQuestStatus(questId) != QUEST_STATUS_COMPLETE)
 +            return false;
 +        for (uint32 i = 0; i < quest->GetRewItemsCount(); ++i)
 +        {
 +            ItemPosCountVec dest;
-+            if (quest->RewItemId[i] &&
-+                player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewItemId[i], quest->RewItemCount[i]) != EQUIP_ERR_OK)
++            InventoryResult const result = quest->RewItemId[i]
++                ? player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewItemId[i], quest->RewItemCount[i])
++                : EQUIP_ERR_OK;
++            // a unique reward the hero already holds: the quest is done all the same, without a second
++            if (result == EQUIP_ERR_CANT_CARRY_MORE_OF_THIS)
++                continue;
++            if (result != EQUIP_ERR_OK)
 +            {
 +                if (!told)
 +                {
@@ -5232,6 +5243,12 @@ index 000000000..ea9a1dda8
 +    // for Sul'thraze - told to the hero when not
 +    bool RiteReady(Player* player, bool tell)
 +    {
++        if (player->GetQuestRewardStatus(QUEST_RITE_OF_SULTHRAZE))
++        {
++            if (tell)
++                player->GetSession()->SendNotification("The crystal is spent - Sul'thraze is already whole.");
++            return false;
++        }
 +        QuestStatus const status = player->GetQuestStatus(QUEST_RITE_OF_SULTHRAZE);
 +        if (status != QUEST_STATUS_COMPLETE && status != QUEST_STATUS_INCOMPLETE)
 +        {
@@ -5256,6 +5273,41 @@ index 000000000..ea9a1dda8
 +    }
 +}
 +
++// Crystal Surge (40034, red lightning) struck on the crystal by an unseen trigger
++static void ZeldaCrystalSurge(Player* player, GameObject* altar)
++{
++    if (Creature* trigger = player->SummonCreature(15384, altar->GetPositionX(), altar->GetPositionY(), altar->GetPositionZ() + 1.0f,
++                                                   0.0f, TEMPSPAWN_TIMED_DESPAWN, 4000))
++        trigger->CastSpell(trigger, 40034, TRIGGERED_OLD_TRIGGERED);
++}
++
++// the Altar of Jammal'an's crystal flares hard and goes a moment later, for as long as the instance
++// lasts: the rite is done
++static void ZeldaCrystalFlare(Player* player, GameObject* altar)
++{
++    if (!player || !altar || !altar->IsSpawned())
++        return;
++    ZeldaState& state = StateFor(player);
++    if (state.altarVanishAt)
++        return;                                         // already flaring
++    ZeldaCrystalSurge(player, altar);
++    altar->SendGameObjectCustomAnim(altar->GetObjectGuid());
++    state.riteAltar = altar->GetObjectGuid();
++    state.altarVanishAt = (WorldTimer::getMSTime() + 1500) | 1;
++}
++
++// the blades and the heart left over once Sul'thraze is whole (the rite asks for them; any kept from
++// before, or found again, are spent)
++static void ZeldaSpentBlades(Player* player)
++{
++    if (!player->GetQuestRewardStatus(QUEST_RITE_OF_SULTHRAZE))
++        return;
++    uint32 const spent[3] = { ITEM_JANG_THRAZE, ITEM_SANG_THRAZE, 190541 };
++    for (uint32 const item : spent)
++        if (uint32 const count = player->GetItemCount(item, true))
++            player->DestroyItemCount(item, count, true, false, true);
++}
++
 +// Antu'sul's Hex Idol is spent when The Deflector's Echo is turned in (the quest asks for it,
 +// build_sulthraze.py); one kept from before that, by a hero who finished the quest, goes at login
 +static void ZeldaSpentIdol(Player* player)
@@ -5271,6 +5323,18 @@ index 000000000..ea9a1dda8
 +{
 +    if (!player->IsInWorld() || player->IsBeingTeleported())
 +        return;
++
++    // the flared crystal goes, not to return in this instance
++    if (state.altarVanishAt && int32(WorldTimer::getMSTime() - state.altarVanishAt) >= 0)
++    {
++        state.altarVanishAt = 0;
++        if (GameObject* altar = player->GetMap()->GetGameObject(state.riteAltar))
++        {
++            ZeldaCrystalSurge(player, altar);           // the last, brightest flash as it goes
++            altar->SetRespawnDelay(7 * DAY);
++            altar->SetLootState(GO_JUST_DEACTIVATED);
++        }
++    }
 +
 +    // The Rite of Sul'thraze: the Atal'ai it called
 +    if (state.riteTrial)
@@ -5295,15 +5359,19 @@ index 000000000..ea9a1dda8
 +            if (Creature* c = player->GetMap()->GetAnyTypeCreature(guid))
 +                if (c->IsAlive())
 +                    return;
-+        bool told = false;
-+        if (RewardHere(player, QUEST_RITE_OF_SULTHRAZE, told))
++        if (RewardHere(player, QUEST_RITE_OF_SULTHRAZE, state.riteToldFull))
 +        {
 +            despawn();
++            state.riteToldFull = false;
++            ZeldaSpentBlades(player);
 +            player->HandleEmoteCommand(EMOTE_ONESHOT_CHEER);
 +            player->GetSession()->SendAreaTriggerMessage("|cffa335eeThe blades draw together - Sul'thraze the Lasher is whole!|r");
++            if (GameObject* altar = player->GetMap()->GetGameObject(state.riteAltar))
++                ZeldaCrystalFlare(player, altar);
 +        }
-+        else if (player->GetQuestStatus(QUEST_RITE_OF_SULTHRAZE) != QUEST_STATUS_COMPLETE)
-+            despawn();          // a blade left the bags: nothing to make whole
++        else if (player->GetQuestRewardStatus(QUEST_RITE_OF_SULTHRAZE) ||
++                 player->GetQuestStatus(QUEST_RITE_OF_SULTHRAZE) != QUEST_STATUS_COMPLETE)
++            despawn();          // already whole, or a blade left the bags: nothing to make whole
 +        return;
 +    }
 +
@@ -5315,7 +5383,7 @@ index 000000000..ea9a1dda8
 +
 +    QuestStatus const echo = player->GetQuestStatus(QUEST_DEFLECTORS_ECHO);
 +    // the Hexblade slain: the quest ends there, Sang'thraze in hand
-+    if (echo == QUEST_STATUS_COMPLETE)
++    if (echo == QUEST_STATUS_COMPLETE && !player->GetQuestRewardStatus(QUEST_DEFLECTORS_ECHO))
 +    {
 +        if (RewardHere(player, QUEST_DEFLECTORS_ECHO, state.echoBagsTold))
 +            player->GetSession()->SendAreaTriggerMessage("|cff1eff00Sang'thraze the Deflector is yours. It trembles toward the south...|r");
@@ -5355,6 +5423,12 @@ index 000000000..ea9a1dda8
 +    // the Altar of Jammal'an: ten seconds of rite, then the Atal'ai it calls (ZeldaSpellFinished)
 +    if (player && go && go->GetEntry() == GO_ALTAR_OF_JAMMALAN)
 +    {
++        if (player->GetQuestRewardStatus(QUEST_RITE_OF_SULTHRAZE))
++        {
++            ZeldaCrystalFlare(player, go);
++            return true;
++        }
++        StateFor(player).riteAltar = go->GetObjectGuid();
 +        if (StateFor(player).riteTrial || player->IsNonMeleeSpellCasted(false) || !RiteReady(player, true))
 +            return true;
 +        if (SpellEntry const* rite = sSpellTemplate.LookupEntry<SpellEntry>(SPELL_RITE_OF_SULTHRAZE))
