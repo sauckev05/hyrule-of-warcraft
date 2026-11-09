@@ -1894,10 +1894,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..99c0e214d
+index 000000000..6d6298925
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6109 @@
+@@ -0,0 +1,6135 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2036,6 +2036,7 @@ index 000000000..99c0e214d
 +        uint32 naviSock[2] = { 0, 0 };
 +        uint32 naviSockApplied[2] = { 0, 0 };
 +        uint32 naviSockReadyAt[2] = { 0, 0 };
++        uint32 diamondFlaskReadyAt = 0;                 // the worn Diamond Flask pours again after this
 +        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
 +        uint32 naviHealReadyAt = 0;                     // and heal again after this (ms)
 +        // running: after Zelda.SprintAfterSeconds of running without stopping the hero sprints
@@ -3944,6 +3945,31 @@ index 000000000..99c0e214d
 +{
 +    if (!hero || !attacker || attacker == hero || !hero->IsAlive() || attacker->IsPlayer())
 +        return;
++    // Diamond Flask, worn (or held in Navi's Light): a critical strike against the hero pours it - 75
++    // Strength, and 10% of his health healed every 5 sec, for 20 sec; once every 20 sec
++    if (crit)
++    {
++        uint32 const DIAMOND_FLASK = 20130, DIAMOND_FLASK_BUFF = 40032, DIAMOND_FLASK_COOLDOWN_MS = 20000;
++        ZeldaState& state = StateFor(hero);
++        Item* flask = nullptr;
++        for (uint8 slot : { uint8(EQUIPMENT_SLOT_TRINKET1), uint8(EQUIPMENT_SLOT_TRINKET2) })
++        {
++            Item* worn = hero->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
++            if (worn && worn->GetEntry() == DIAMOND_FLASK)
++                flask = worn;
++            else if (worn && worn->GetEntry() == NAVI_TRINKET && !flask &&
++                     (state.naviSockApplied[0] == DIAMOND_FLASK || state.naviSockApplied[1] == DIAMOND_FLASK))
++                flask = worn;
++        }
++        uint32 const now = WorldTimer::getMSTime();
++        if (flask && (!state.diamondFlaskReadyAt || int32(now - state.diamondFlaskReadyAt) >= 0))
++        {
++            int32 const heal = std::max<int32>(1, int32(hero->GetMaxHealth() / 10));
++            hero->RemoveAurasDueToSpell(DIAMOND_FLASK_BUFF);
++            hero->CastCustomSpell(hero, DIAMOND_FLASK_BUFF, nullptr, &heal, nullptr, TRIGGERED_OLD_TRIGGERED, flask);
++            state.diamondFlaskReadyAt = (now + DIAMOND_FLASK_COOLDOWN_MS) | 1;
++        }
++    }
 +    // Dual Wield Specialization: a critical strike against the dual-wielding hero enrages him
 +    if (crit && DualWielding(hero))
 +        if (uint32 const rank = ZeldaTalentRank(hero, TALENT_DUAL_WIELD))

@@ -197,8 +197,27 @@ SPELLS = [
     for rank in range(1, 6)
 ]
 
+# Diamond Flask: no longer drunk, worn - a critical strike against the hero pours it (the core,
+# ZeldaHitTaken): 75 Strength and 10% of his health healed every 5 sec for 20 sec, once every 20 sec
+DIAMOND_FLASK, DIAMOND_FLASK_DRINK = 20130, 24427
+DIAMOND_FLASK_BUFF, DIAMOND_FLASK_WORN = 40032, 40033
+DURATION_20_SEC, DURATION_FOREVER = 18, 21
+SPELLS += [
+    (DIAMOND_FLASK_BUFF, DIAMOND_FLASK_DRINK, 'Diamond Flask',
+     'Increases Strength by $s1 and heals 10% of your maximum health every $t2 sec for $d.',
+     dict(DurationIndex=DURATION_20_SEC,
+          tooltip='Strength increased by $s1. Heals 10% of your maximum health every $t2 seconds.')),
+    (DIAMOND_FLASK_WORN, DIAMOND_FLASK_DRINK, 'Diamond Flask',
+     'When struck by a critical strike, increases your Strength by 75 and heals you for 10% of your maximum '
+     'health every 5 sec for 20 sec. This effect can occur once every 20 sec.',
+     dict(EffectApplyAuraName1=4, EffectBasePoints1=0, Effect2=0, EffectApplyAuraName2=0, EffectBasePoints2=0,
+          EffectAmplitude2=0, DurationIndex=DURATION_FOREVER, Attributes=0x1d0, SpellVisual=0)),
+]
+
 # stock items changed in place: {item entry: {item_template column: value}}
 ITEM_EDITS = {
+    DIAMOND_FLASK: dict(spellid_1=DIAMOND_FLASK_WORN, spelltrigger_1=1, spellcharges_1=0, spellppmRate_1=0,
+                        spellcooldown_1=-1, spellcategory_1=0, spellcategorycooldown_1=-1),
     # Vanquisher's Sword: 65-120 at 2.70 speed, its attack power kept, Vanquisher's Mercy added, and the
     # Shortsword of Vengeance's chance on hit, as a 50 Holy damage smite (VANQUISHER_SMITE)
     10823: dict(dmg_min1=65, dmg_max1=120, delay=2700, spellid_2=40018, spelltrigger_2=1, spellcharges_2=0,
