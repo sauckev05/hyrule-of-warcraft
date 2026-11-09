@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..ed28d2d9b
+index 000000000..4fb463b3f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6184 @@
+@@ -0,0 +1,6191 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4212,6 +4212,13 @@ index 000000000..ed28d2d9b
 +{
 +    if (!killer || !victim || !killer->IsAlive())
 +        return;
++    // every enemy the hero kills gives back 5% of his health (Zelda.KillHealPercent): a rule of the
++    // game, not an ability or a buff, so it simply happens; armor sets' heal on kill adds to it below
++    static float const killHeal = std::max(0.0f, sConfig.GetFloatDefault("Zelda.KillHealPercent", 5.0f));
++    CreatureInfo const* victimInfo = victim->GetCreatureInfo();
++    if (killHeal > 0.0f && victimInfo && victimInfo->CreatureType != CREATURE_TYPE_CRITTER &&
++        killer->GetHealth() < killer->GetMaxHealth())
++        killer->ModifyHealth(int32(std::max<uint32>(1, uint32(killer->GetMaxHealth() * killHeal / 100.0f))));
 +    float const pct = SetBonusOf(killer, SET_BONUS_HEAL_ON_KILL);
 +    if (pct <= 0.0f || killer->GetHealth() >= killer->GetMaxHealth())
 +        return;
