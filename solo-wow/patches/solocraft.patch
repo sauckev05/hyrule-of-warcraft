@@ -86,6 +86,71 @@ index 20bcff241..a6c8243df 100644
      }
      return true;
  }
+diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h
+index 341794277..4242ff5f2 100644
+--- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h
++++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h
+@@ -130,6 +130,7 @@ class instance_sunken_temple : public ScriptedInstance
+         void Update(const uint32 diff) override;
+ 
+         bool ProcessStatueEvent(uint32 uiEventId);
++        uint8 GetStatueCounter() const { return m_uiStatueCounter; }     // Zelda: Navi's hints
+ 
+         const char* Save() const override { return m_strInstData.c_str(); }
+         void Load(const char* chrIn) override;
+diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp
+index ff8f715ad..c942ddbb4 100644
+--- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp
+@@ -34,6 +34,7 @@ EndContentData */
+ 
+ 
+ #include "sunken_temple.h"
++#include "Chat/Chat.h"
+ 
+ enum
+ {
+@@ -152,6 +153,29 @@ UnitAI* GetAI_npc_malfurion(Creature* pCreature)
+ ## event_antalarion_statues
+ ######*/
+ 
++// Zelda of Warcraft: Navi's hints for the statue puzzle. The statues wake in the order of
++// m_aAtalaiStatueEvents, which stand south, north, southwest, southeast, northwest and northeast of the
++// ring (148830-148835 around -467.6, 94.9); after each statue she names the next one.
++static char const* const s_atalaiStatueWhere[MAX_STATUES] =
++{
++    "the SOUTH statue", "the NORTH statue", "the SOUTHWEST statue",
++    "the SOUTHEAST statue", "the NORTHWEST statue", "the NORTHEAST statue",
++};
++
++static void ZeldaStatueHint(Player* player, uint8 counter, bool right)
++{
++    char text[256];
++    if (counter >= MAX_STATUES)
++        snprintf(text, sizeof(text), "Navi: That's all six! Hey... the whole temple is shaking. Something big is waking up!");
++    else if (right)
++        snprintf(text, sizeof(text), "Navi: Yes! It's glowing! Next, %s. (The top of your minimap is north.)", s_atalaiStatueWhere[counter]);
++    else
++        snprintf(text, sizeof(text), "Navi: Not that one! They wake in order - try %s. (The top of your minimap is north.)",
++                 s_atalaiStatueWhere[counter]);
++    player->GetSession()->SendAreaTriggerMessage("|cff66ccff%s|r", text);
++    ChatHandler(player).PSendSysMessage("|cff66ccff%s|r", text);
++}
++
+ bool ProcessEventId_event_antalarion_statue_activation(uint32 uiEventId, Object* pSource, Object* pTarget, bool /*bIsStart*/)
+ {
+     if (pSource->GetTypeId() == TYPEID_PLAYER && pTarget->GetTypeId() == TYPEID_GAMEOBJECT)
+@@ -163,7 +187,9 @@ bool ProcessEventId_event_antalarion_statue_activation(uint32 uiEventId, Object*
+                 return true;
+ 
+             // Send the event id to process
+-            if (pInstance->ProcessStatueEvent(uiEventId))
++            bool const right = pInstance->ProcessStatueEvent(uiEventId);
++            ZeldaStatueHint((Player*)pSource, pInstance->GetStatueCounter(), right);
++            if (right)
+             {
+                 // Activate the green light if the correct statue is activated
+                 if (GameObject* pLight = GetClosestGameObjectWithEntry((GameObject*)pTarget, GO_ATALAI_LIGHT, INTERACTION_DISTANCE))
 diff --git a/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.cpp b/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.cpp
 index fd9b32e77..8991a8384 100644
 --- a/src/game/AI/ScriptDevAI/scripts/kalimdor/wailing_caverns/wailing_caverns.cpp
@@ -1894,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..6d6298925
+index 000000000..8c470374c
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6135 @@
+@@ -0,0 +1,6148 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2037,6 +2102,7 @@ index 000000000..6d6298925
 +        uint32 naviSockApplied[2] = { 0, 0 };
 +        uint32 naviSockReadyAt[2] = { 0, 0 };
 +        uint32 diamondFlaskReadyAt = 0;                 // the worn Diamond Flask pours again after this
++        uint32 statueHintInstance = 0;                  // the Sunken Temple run Navi explained the statues in
 +        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
 +        uint32 naviHealReadyAt = 0;                     // and heal again after this (ms)
 +        // running: after Zelda.SprintAfterSeconds of running without stopping the hero sprints
@@ -3549,6 +3615,18 @@ index 000000000..6d6298925
 +    {
 +        UpdateSetBonuses(player, state);
 +        ApplyNaviSockets(player, state);
++        // the Sunken Temple's ring of Atal'ai statues: Navi explains the puzzle the first time the hero
++        // comes up to it in a run (each statue then names the next: sunken_templeScripts.cpp)
++        if (player->GetMapId() == 109 && state.statueHintInstance != player->GetInstanceId() &&
++            player->GetDistance(-467.6f, 94.9f, -148.7f) < 40.0f)
++        {
++            state.statueHintInstance = player->GetInstanceId();
++            char const* hint = "Navi: Hey! Listen! These six Atal'ai statues only wake in the right order. If none "
++                               "are glowing yet, start with the SOUTH statue - I'll tell you the next one each time. "
++                               "(The top of your minimap is north.)";
++            player->GetSession()->SendAreaTriggerMessage("|cff66ccff%s|r", hint);
++            ChatHandler(player).PSendSysMessage("|cff66ccff%s|r", hint);
++        }
 +    }
 +
 +    if (!player->IsAlive() || player->IsTaxiFlying() || player->IsBeingTeleported() || !player->IsInWorld())
