@@ -99,7 +99,7 @@ index 341794277..4242ff5f2 100644
          const char* Save() const override { return m_strInstData.c_str(); }
          void Load(const char* chrIn) override;
 diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp
-index ff8f715ad..c942ddbb4 100644
+index ff8f715ad..f3db2b501 100644
 --- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp
 +++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_templeScripts.cpp
 @@ -34,6 +34,7 @@ EndContentData */
@@ -133,8 +133,8 @@ index ff8f715ad..c942ddbb4 100644
 +    else
 +        snprintf(text, sizeof(text), "Navi: Not that one! They wake in order - try %s. (The top of your minimap is north.)",
 +                 s_atalaiStatueWhere[counter]);
++    // once, in the middle of the screen (the HUD shows system lines there too, so not also in chat)
 +    player->GetSession()->SendAreaTriggerMessage("|cff66ccff%s|r", text);
-+    ChatHandler(player).PSendSysMessage("|cff66ccff%s|r", text);
 +}
 +
  bool ProcessEventId_event_antalarion_statue_activation(uint32 uiEventId, Object* pSource, Object* pTarget, bool /*bIsStart*/)
@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..1b248dc8b
+index 000000000..ea9a1dda8
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6208 @@
+@@ -0,0 +1,6207 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3625,7 +3625,6 @@ index 000000000..1b248dc8b
 +                               "are glowing yet, start with the SOUTH statue - I'll tell you the next one each time. "
 +                               "(The top of your minimap is north.)";
 +            player->GetSession()->SendAreaTriggerMessage("|cff66ccff%s|r", hint);
-+            ChatHandler(player).PSendSysMessage("|cff66ccff%s|r", hint);
 +        }
 +    }
 +
