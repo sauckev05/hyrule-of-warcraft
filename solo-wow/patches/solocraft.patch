@@ -1959,7 +1959,7 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..0948f5472
+index 000000000..20e443498
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6306 @@
@@ -6444,10 +6444,10 @@ index 000000000..0948f5472
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, reach.slashRange + 8.0f, enemies);
 +    Unit* selected = ObjectAccessor::GetUnit(*player, player->GetSelectionGuid());
-+    // Shield Slam adds the block value itself, so the strike as a whole is half the shield's armor
++    // Shield Slam adds the block value itself, so the strike as a whole is 70% of the shield's armor
 +    // (Toughness raises the shield's armor, and so the slam)
 +    (void)shield;
-+    const float SLAM_ARMOR_SHARE = 0.5f;
++    const float SLAM_ARMOR_SHARE = 0.7f;
 +    int32 const damage = std::max<int32>(1, int32(ZeldaShieldArmor(player) * SLAM_ARMOR_SHARE) -
 +                                             int32(player->GetShieldBlockValue()));
 +    uint32 hit = 0;
