@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..4fb463b3f
+index 000000000..1b248dc8b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6191 @@
+@@ -0,0 +1,6208 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4408,7 +4408,9 @@ index 000000000..4fb463b3f
 +// when they are full, by mail from Navi; marker 'gift:<item>' per character.
 +static void ZeldaGifts(Player* player)
 +{
-+    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975 Kale:191140 Kale:20608");
++    // "Name:item" once, or "Name:item:tag" once more for each new tag; the gift is marked given only
++    // once it is in the bags or the mail, and each step goes to the server log
++    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975 Kale:191140 Kale:20608:again");
 +    std::istringstream in(gifts);
 +    std::string word;
 +    while (in >> word)
@@ -4416,22 +4418,31 @@ index 000000000..4fb463b3f
 +        size_t const colon = word.find(':');
 +        if (colon == std::string::npos || word.substr(0, colon) != player->GetName())
 +            continue;
-+        uint32 const itemId = uint32(std::strtoul(word.c_str() + colon + 1, nullptr, 10));
++        char* tagAt = nullptr;
++        uint32 const itemId = uint32(std::strtoul(word.c_str() + colon + 1, &tagAt, 10));
 +        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
 +        if (!proto)
++        {
++            sLog.outError("Zelda gift: no item %u for %s", itemId, player->GetName());
 +            continue;
-+        std::string const key = "gift:" + std::to_string(itemId);
++        }
++        std::string key = "gift:" + std::to_string(itemId);
++        if (tagAt && *tagAt == ':' && tagAt[1])
++            key += tagAt;
 +        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
 +                                     player->GetGUIDLow(), key.c_str()))
 +            continue;
-+        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
-+                                   player->GetGUIDLow(), key.c_str());
++        bool given = false;
 +        ItemPosCountVec dest;
-+        if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, 1) == EQUIP_ERR_OK)
++        InventoryResult const canStore = player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, 1);
++        if (canStore == EQUIP_ERR_OK)
 +        {
 +            if (Item* item = player->StoreNewItem(dest, itemId, true, Item::GenerateItemRandomPropertyId(itemId)))
++            {
 +                player->SendNewItem(item, 1, true, false);
-+            ChatHandler(player).PSendSysMessage("|cff33ff99Your %s is back in your bags.|r", proto->Name1);
++                ChatHandler(player).PSendSysMessage("|cff33ff99Your %s is in your bags.|r", proto->Name1);
++                given = true;
++            }
 +        }
 +        else if (Item* item = Item::CreateItem(itemId, 1, player))
 +        {
@@ -4441,7 +4452,13 @@ index 000000000..4fb463b3f
 +            MailDraft(proto->Name1, "Hey! Listen! You dropped this - your bags were full, so here it is.")
 +                .AddItem(item).SendMailTo(player, MailSender(MAIL_CREATURE, uint32(190601)), MAIL_CHECK_MASK_COPIED);
 +            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: your %s was sent to your mailbox.|r", proto->Name1);
++            given = true;
 +        }
++        sLog.outString("Zelda gift: %s item %u (%s): store result %u, %s", player->GetName(), itemId, key.c_str(),
++                       uint32(canStore), given ? "given" : "NOT given");
++        if (given)
++            CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
++                                       player->GetGUIDLow(), key.c_str());
 +    }
 +}
 +
