@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..f197a136b
+index 000000000..062508f1a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6160 @@
+@@ -0,0 +1,6161 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -6110,16 +6110,17 @@ index 000000000..f197a136b
 +    }
 +}
 +
-+float ZeldaCrushingBonus(Unit const* attacker, Unit const* victim)
++uint32 ZeldaCrushingDamage(Unit const* attacker, Unit const* victim)
 +{
-+    // against a hero a crushing blow hits 20% harder (Zelda.CrushingBonus), a boss's 30%
-+    // (Zelda.BossCrushingBonus), instead of 50% - on top of the enemies' stronger basic attacks
-+    static float const bonus = std::max(0.0f, sConfig.GetFloatDefault("Zelda.CrushingBonus", 0.20f));
-+    static float const bossBonus = std::max(0.0f, sConfig.GetFloatDefault("Zelda.BossCrushingBonus", 0.30f));
++    // against a hero a crushing blow lands for a share of his maximum health, as a heavy blow does:
++    // 20% (Zelda.CrushingHealthShare), a boss's 30% (Zelda.BossCrushingHealthShare)
++    static float const share = std::max(0.0f, sConfig.GetFloatDefault("Zelda.CrushingHealthShare", 0.20f));
++    static float const bossShare = std::max(0.0f, sConfig.GetFloatDefault("Zelda.BossCrushingHealthShare", 0.30f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled() ||
-+        (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled()))
-+        return 0.5f;
-+    return ThreatOf(static_cast<Creature const*>(attacker)) == Threat::Boss ? bossBonus : bonus;
++        victim->GetTypeId() != TYPEID_PLAYER)
++        return 0;
++    float const part = ThreatOf(static_cast<Creature const*>(attacker)) == Threat::Boss ? bossShare : share;
++    return std::max<uint32>(1, uint32(victim->GetMaxHealth() * part));
 +}
 +
 +bool ZeldaHeavyBlowLands(Unit* caster, Unit* target, uint32 spellId)
@@ -8125,7 +8126,7 @@ index 000000000..f197a136b
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..feef48f9f
+index 000000000..f4e863339
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
 @@ -0,0 +1,327 @@
@@ -8277,8 +8278,8 @@ index 000000000..feef48f9f
 +// Zelda of Warcraft: factor on an enemy creature's normal melee or ranged attack on a hero or
 +// the hero's side (Zelda.EnemyMeleeDamageRate, 3); 1 otherwise.
 +float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim);
-+// a crushing blow's extra damage, as a share of the blow: 0.5 as ever, against a hero 0.2 (a boss's 0.3)
-+float ZeldaCrushingBonus(Unit const* attacker, Unit const* victim);
++// a crushing blow's damage against a hero: 20% of his maximum health, a boss's 30% (0: not a hero's)
++uint32 ZeldaCrushingDamage(Unit const* attacker, Unit const* victim);
 +// Zelda of Warcraft: extra SMSG_ATTACKERSTATEUPDATE hit-info bits for the swing being sent now
 +// (HITINFO_NOACTION while the client plays the sword combo's animation itself).
 +uint32 ZeldaSwingHitInfoFlags();
@@ -9276,7 +9277,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..e3b7505b4 100644
+index 00986af9e..afae8c052 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -9364,23 +9365,34 @@ index 00986af9e..e3b7505b4 100644
  
              if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
              {
-@@ -2096,11 +2127,12 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
+@@ -2096,7 +2127,25 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
              calcDamageInfo->TargetState = VICTIMSTATE_NORMAL;
              calcDamageInfo->procEx |= PROC_EX_NORMAL_HIT;
  
 -            // 150% of normal damage
--            calcDamageInfo->totalDamage += calcDamageInfo->totalDamage / 2;
-+            // 150% of normal damage (Zelda of Warcraft: 120%, a boss's 130%, against a hero)
-+            float const crush = ZeldaCrushingBonus(this, calcDamageInfo->target);
-+            calcDamageInfo->totalDamage += uint32(calcDamageInfo->totalDamage * crush);
++            // 150% of normal damage (Zelda of Warcraft: against a hero, a share of his maximum health instead -
++            // 20%, a boss's 30% - spread over the blow's damage lines as they were)
++            if (uint32 const crush = ZeldaCrushingDamage(this, calcDamageInfo->target))
++            {
++                uint32 const before = calcDamageInfo->totalDamage;
++                uint32 const lines = m_weaponDamageInfo.weapon[calcDamageInfo->attackType].lines;
++                uint32 given = 0;
++                for (uint8 i = 0; i < lines; i++)
++                {
++                    uint32 const share = before ? uint32(uint64(crush) * calcDamageInfo->subDamage[i].damage / before)
++                                                : (i == 0 ? crush : 0);
++                    calcDamageInfo->subDamage[i].damage = share;
++                    given += share;
++                }
++                if (lines && given < crush)
++                    calcDamageInfo->subDamage[0].damage += crush - given;
++                calcDamageInfo->totalDamage = crush;
++                break;
++            }
+             calcDamageInfo->totalDamage += calcDamageInfo->totalDamage / 2;
  
              for (uint8 i = 0; i < m_weaponDamageInfo.weapon[calcDamageInfo->attackType].lines; i++)
--                calcDamageInfo->subDamage[i].damage += calcDamageInfo->subDamage[i].damage / 2;
-+                calcDamageInfo->subDamage[i].damage += uint32(calcDamageInfo->subDamage[i].damage * crush);
- 
-             break;
-         }
-@@ -2656,10 +2688,35 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
+@@ -2656,10 +2705,35 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
          meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
      }
  
@@ -9416,7 +9428,7 @@ index 00986af9e..e3b7505b4 100644
      uint32 totalAbsorb = 0;
      uint32 totalResist = 0;
  
-@@ -2711,6 +2768,19 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
+@@ -2711,6 +2785,19 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
      if (pVictim->GetCombatManager().IsInEvadeMode())
          return MELEE_HIT_EVADE;
  
@@ -9436,7 +9448,7 @@ index 00986af9e..e3b7505b4 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateEffectiveMissChance(pVictim, attType));
      if (pVictim->GetTypeId() == TYPEID_PLAYER && !pVictim->IsStandState() && CanCrit(attType))
-@@ -2829,6 +2899,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
+@@ -2829,6 +2916,13 @@ void Unit::SendMeleeAttackStop(const Unit& victim) const
  
  SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spellInfo, uint32* heartbeatResistChance/* = nullptr*/)
  {
@@ -9450,7 +9462,7 @@ index 00986af9e..e3b7505b4 100644
      Die<UnitCombatDieSide, UNIT_COMBAT_DIE_HIT, NUM_UNIT_COMBAT_DIE_SIDES> die;
      die.set(UNIT_COMBAT_DIE_MISS, CalculateSpellMissChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
      die.set(UNIT_COMBAT_DIE_RESIST, CalculateSpellResistChance(pVictim, SPELL_SCHOOL_MASK_NORMAL, spellInfo));
-@@ -2924,6 +3001,21 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2924,6 +3018,21 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
  
          return SPELL_MISS_NONE;
      }
@@ -9472,7 +9484,7 @@ index 00986af9e..e3b7505b4 100644
      // !!!UNHACKME: Self-resists suppression hack for channeled spells until spellInfo execution is modernized with effectmasks: Drain Soul, Blizzard, RoF
      if (pVictim == caster && IsChanneledSpell(spellInfo))
      {
-@@ -2942,7 +3034,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
+@@ -2942,7 +3051,8 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
      // Reflect (when available)
      if (reflectable)
      {
@@ -9482,7 +9494,7 @@ index 00986af9e..e3b7505b4 100644
          if (roll_chance_combat(chance))
              return SPELL_MISS_REFLECT;
      }
-@@ -3603,7 +3696,16 @@ uint32 Unit::CalculateCritAmount(const Unit *victim, uint32 amount, const SpellE
+@@ -3603,7 +3713,16 @@ uint32 Unit::CalculateCritAmount(const Unit *victim, uint32 amount, const SpellE
          return 0;
      const SpellSchoolMask schoolMask = GetSpellSchoolMask(entry);
      const uint32 creatureTypeMask = (victim ? victim->GetCreatureTypeMask() : 0);
@@ -9500,7 +9512,7 @@ index 00986af9e..e3b7505b4 100644
      const SpellDmgClass dmgClass = SpellDmgClass(entry->DmgClass);
      const float ignoreReduction = 0.0f;
      const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction, heal) : 1.0f);
-@@ -3628,7 +3730,12 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3747,12 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -9514,7 +9526,7 @@ index 00986af9e..e3b7505b4 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3750,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3767,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -9523,7 +9535,7 @@ index 00986af9e..e3b7505b4 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5083,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5100,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -9535,7 +9547,7 @@ index 00986af9e..e3b7505b4 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6209,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6226,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -9544,7 +9556,7 @@ index 00986af9e..e3b7505b4 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7002,6 +7114,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
+@@ -7002,6 +7131,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
              total += int32(ap_bonus * (GetTotalAttackPowerValue(IsSpellRequiresRangedAP(spellProto) ? RANGED_ATTACK : BASE_ATTACK) + ap_benefit));
          }
      }
@@ -9560,7 +9572,7 @@ index 00986af9e..e3b7505b4 100644
  
      if (benefit)
      {
-@@ -7050,7 +7171,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7188,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -9569,7 +9581,7 @@ index 00986af9e..e3b7505b4 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7288,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7305,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -9583,7 +9595,7 @@ index 00986af9e..e3b7505b4 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7437,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7454,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -9597,7 +9609,7 @@ index 00986af9e..e3b7505b4 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8230,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8247,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -9611,7 +9623,7 @@ index 00986af9e..e3b7505b4 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8546,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8563,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
