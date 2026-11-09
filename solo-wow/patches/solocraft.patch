@@ -8505,7 +8505,7 @@ index 06567441e..40ccbe604 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb08..5596bb2f9 100644
+index a10fdbb08..d2490f9e4 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -8583,7 +8583,7 @@ index a10fdbb08..5596bb2f9 100644
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1290,42 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1290,56 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -8614,7 +8614,21 @@ index a10fdbb08..5596bb2f9 100644
 +
 +    MapEntry const* mapEntry = sMapStore.LookupEntry(creature->GetMapId());
 +    if (!mapEntry || !mapEntry->IsDungeon())
-+        return 1.0f;
++    {
++        // Zelda of Warcraft: out in the world the enemies are weaker than any dungeon's - their health
++        // (SoloCraft.WorldHealth, 0.5) and damage (SoloCraft.WorldDamage, 0.45) below the ten-player
++        // dungeons' (0.61 and 0.52), so a world elite stays below a dungeon elite and a world enemy
++        // below a dungeon one; world bosses, and anyone friendly or a player's own, keep theirs
++        static float const worldHealth = std::max(0.01f, sConfig.GetFloatDefault("SoloCraft.WorldHealth", 0.5f));
++        static float const worldDamage = std::max(0.01f, sConfig.GetFloatDefault("SoloCraft.WorldDamage", 0.45f));
++        CreatureInfo const* info = creature->GetCreatureInfo();
++        if (!info || info->Rank == CREATURE_ELITE_WORLDBOSS || creature->GetOwnerGuid().IsPlayer())
++            return 1.0f;
++        FactionTemplateEntry const* faction = sFactionTemplateStore.LookupEntry(info->Faction);
++        if (!faction || !(faction->IsHostileToPlayers() || faction->IsNeutralToAll()))
++            return 1.0f;
++        return health ? worldHealth : worldDamage;
++    }
 +
 +    InstanceTemplate const* temp = ObjectMgr::GetInstanceTemplate(creature->GetMapId());
 +    uint32 maxPlayers = (temp && temp->maxPlayers) ? temp->maxPlayers : (mapEntry->IsRaid() ? 40 : 5);
@@ -8626,7 +8640,7 @@ index a10fdbb08..5596bb2f9 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1369,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1383,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -8635,7 +8649,7 @@ index a10fdbb08..5596bb2f9 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1478,8 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1492,8 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -8645,7 +8659,7 @@ index a10fdbb08..5596bb2f9 100644
      if (health < 1)
          health = 1;
  
-@@ -1875,6 +1940,9 @@ void Creature::SetDeathState(DeathState s)
+@@ -1875,6 +1954,9 @@ void Creature::SetDeathState(DeathState s)
          else if (m_respawnOverrideOnce)
              m_respawnOverriden = false;
  
@@ -8655,7 +8669,7 @@ index a10fdbb08..5596bb2f9 100644
          if (m_settings.HasFlag(CreatureStaticFlags3::FOREVER_CORPSE_DURATION))
              m_corpseExpirationTime = GetMap()->GetCurrentClockTime() + std::chrono::hours(24*7);
          else
-@@ -2125,6 +2193,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -2125,6 +2207,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
