@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..3cfd4a6c5
+index 000000000..d4e826bcd
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6292 @@
+@@ -0,0 +1,6296 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3626,10 +3626,14 @@ index 000000000..3cfd4a6c5
 +            player->GetDistance(-467.6f, 94.9f, -148.7f) < 40.0f)
 +        {
 +            state.statueHintInstance = player->GetInstanceId();
++            // not once the statues are solved (Atal'alarion woken or slain: the run's saved TYPE_ATALARION, 0)
++            InstanceData const* data = player->GetInstanceData();
++            bool const solved = data && data->GetData(0) != 0;      // NOT_STARTED
 +            char const* hint = "Navi: Hey! Listen! These six Atal'ai statues only wake in the right order. If none "
 +                               "are glowing yet, start with the SOUTH statue - I'll tell you the next one each time. "
 +                               "(The top of your minimap is north.)";
-+            player->GetSession()->SendAreaTriggerMessage("|cff66ccff%s|r", hint);
++            if (!solved)
++                player->GetSession()->SendAreaTriggerMessage("|cff66ccff%s|r", hint);
 +        }
 +    }
 +
