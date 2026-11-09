@@ -334,6 +334,17 @@ for _n, _sid in enumerate(DEFIANCE):
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=3 * (_n + 1) - 1, EffectMiscValue1=0, Stances=0)
     DESCRIPTION_EDITS[_sid] = 'Enemies that damage you take $s1% of that damage back.'
 
+# Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
+# instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc
+BLOOD_CRAZE = (16487, 16489, 16492)
+for _n, _sid in enumerate(BLOOD_CRAZE, start=1):
+    SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectTriggerSpell1=0, ProcFlags=0, ProcChance=0)
+    DESCRIPTION_EDITS[_sid] = ('Every critical strike you land on an enemy heals you for %d%% of your total '
+                               'Health.' % _n)
+
+# Triage (the Triage Bandage, First Aid's Triage quest): 3.5 sec to apply instead of 7 (SpellCastTimes 22)
+SPELL_EDITS[20804] = dict(CastingTimeIndex=22)
+
 # helmet looks whose hair stayed visible: {ItemDisplayInfo id: (male, female HelmetGeosetVisData)}
 HELM_HIDES_HAIR = {
     4415: (248, 306),       # Helm_Plate_A_01Crusader: the Helm of the Scarlet Crusade (sets.py)

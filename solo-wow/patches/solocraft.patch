@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..d4e826bcd
+index 000000000..3918e1e23
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6296 @@
+@@ -0,0 +1,6304 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4143,6 +4143,14 @@ index 000000000..d4e826bcd
 +        uint32 const stacks = std::max<uint32>(1, fury->GetStackAmount());
 +        uint32 const amount = std::max<uint32>(1, attacker->GetMaxHealth() * stacks / 100);
 +        if (SpellEntry const* info = sSpellTemplate.LookupEntry<SpellEntry>(BERSERKER_FURY))
++            attacker->DealHeal(attacker, amount, info);
++    }
++    // Blood Craze: 1% of maximum health a talent point on every critical strike the hero lands (3% at
++    // 3/3); its ranks are dummy auras now (build_mastery.py), no longer healing after being crit
++    if (uint32 const rank = ZeldaTalentRank(attacker, { 16487, 16489, 16492 }))
++    {
++        uint32 const amount = std::max<uint32>(1, attacker->GetMaxHealth() * rank / 100);
++        if (SpellEntry const* info = sSpellTemplate.LookupEntry<SpellEntry>(16488))
 +            attacker->DealHeal(attacker, amount, info);
 +    }
 +}
