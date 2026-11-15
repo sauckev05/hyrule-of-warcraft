@@ -1959,10 +1959,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..353e18099
+index 000000000..88dfe45af
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6330 @@
+@@ -0,0 +1,6306 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2041,7 +2041,6 @@ index 000000000..353e18099
 +        uint32 comboCount = 0;
 +        uint32 slashReadyAt = 0;                        // the sword swing playing now ends here
 +        uint32 spinReadyAt = 0;
-+        uint32 extraSpinAt = 0;                         // dual wielding: the free extra spin goes here
 +        uint32 dodgeReadyAt = 0;
 +        uint32 invulnerableUntil = 0;
 +        uint32 boomerangReadyAt = 0;
@@ -3434,22 +3433,12 @@ index 000000000..353e18099
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
 +static void ZeldaFrostBreath(Unit* azuregos);
 +
-+static void ZeldaSpinStrikes(Player* player, bool extra);
-+
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
 +    if (!player)
 +        return;
 +
 +    ZeldaState& state = StateFor(player);
-+
-+    // dual wielding, a spin can call a second, free one (ZeldaSpinStrikes): it follows the first
-+    if (state.extraSpinAt && WorldTimer::getMSTime() >= state.extraSpinAt)
-+    {
-+        state.extraSpinAt = 0;
-+        if (player->IsInWorld() && CanAct(player) && player->hasOffhandWeaponForAttack())
-+            ZeldaSpinStrikes(player, true);
-+    }
 +
 +    // once per login: the faster run speed, and friends on the other side
 +    if (state.speedAppliedFor != player && player->IsInWorld())
@@ -6602,15 +6591,6 @@ index 000000000..353e18099
 +        }
 +    }
 +
-+    ZeldaSpinStrikes(player, false);
-+    return true;
-+}
-+
-+// the Spin Attack's strikes on every enemy around the hero. Dual wielding, a spin has a 50% chance
-+// (Zelda.DualWieldExtraSpin) to call a second one, free of rage, that follows it; that one calls no other
-+static void ZeldaSpinStrikes(Player* player, bool extra)
-+{
-+    const uint32 EXTRA_SPIN_DELAY_MS = 700;     // about one turn of the Whirlwind
 +    StyleStats stats = StatsFor(StyleOf(player));
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, stats.spinRange + 8.0f, enemies);
@@ -6642,11 +6622,7 @@ index 000000000..353e18099
 +    }
 +    t_spinNoRage = false;
 +    t_meleeMultiplier = 1.0f;
-+    static int32 const extraChance = sConfig.GetIntDefault("Zelda.DualWieldExtraSpin", 50);
-+    if (extra)
-+        player->GetSession()->SendAreaTriggerMessage("|cff66ccffExtra Spin!|r");
-+    else if (dualWield && roll_chance_i(extraChance))
-+        StateFor(player).extraSpinAt = WorldTimer::getMSTime() + EXTRA_SPIN_DELAY_MS;
++    return true;
 +}
 +
 +void ZeldaNaviSocketsOpen(Player* player)

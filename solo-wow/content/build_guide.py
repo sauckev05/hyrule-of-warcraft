@@ -48,7 +48,7 @@ PAGES = [
     # 3: stances and weapons
     "Warriors fight in three stances. Q and E switch between them.$B$B"
     "Battle Stance - any weapon. Your charge attack is the Spin Attack, which hits everyone around you. With "
-    "two weapons it hits twice as many times, and half the time a second, free spin follows.$B$B"
+    "two weapons it hits twice as many times.$B$B"
     "Defensive Stance - a one-handed weapon and a shield (taking the stance picks them from your bags). Your "
     "charge attack is Shield Slam: it hits for 75% of your shield's armor, then stuns enemies in front and "
     "silences their spells for 2 seconds.$B$B"
