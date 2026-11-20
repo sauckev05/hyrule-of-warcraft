@@ -1938,10 +1938,31 @@ index 00fde0a85..5b61f24b1 100644
          bool HandleWhispersCommand(char* args);
          bool HandleWhisperRestrictionCommand(char* args);
 diff --git a/src/game/Chat/ChatHandler.cpp b/src/game/Chat/ChatHandler.cpp
-index b94694c8b..1d159be87 100644
+index b94694c8b..f94526838 100644
 --- a/src/game/Chat/ChatHandler.cpp
 +++ b/src/game/Chat/ChatHandler.cpp
-@@ -644,6 +644,15 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
+@@ -154,7 +154,19 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
+                 lang = ModLangAuras.front()->GetModifier()->m_miscvalue;
+         }
+ 
+-        if (type != CHAT_MSG_AFK && type != CHAT_MSG_DND)
++        // Zelda of Warcraft: every move key is a ".z" command said aloud (ZeldaControls); they are
++        // never chat spam, so a fast-tapped bow or sword can't mute the hero (and leave him rooted)
++        bool zeldaMove = false;
++        if (type == CHAT_MSG_SAY)
++        {
++            size_t const pos = recv_data.rpos();
++            std::string peek;
++            recv_data >> peek;
++            recv_data.rpos(pos);
++            zeldaMove = peek.size() > 2 && peek[0] == '.' && (peek[1] == 'z' || peek[1] == 'Z');
++        }
++
++        if (type != CHAT_MSG_AFK && type != CHAT_MSG_DND && !zeldaMove)
+         {
+             if (!_player->CanSpeak())
+             {
+@@ -644,6 +656,15 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
              std::string msg;
              recv_data >> msg;
  
@@ -1959,10 +1980,10 @@ index b94694c8b..1d159be87 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..4d714b30a
+index 000000000..9bdc3bc5b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6320 @@
+@@ -0,0 +1,6336 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2189,6 +2210,7 @@ index 000000000..4d714b30a
 +    // Zelda of Warcraft client): the hits go out with HITINFO_NOACTION, so the server's own swing
 +    // animation does not cut the combo's.
 +    thread_local bool t_noSwingAnim = false;
++    thread_local bool t_mountedShot = false;      // the bow fired from the saddle (ZeldaMountedShot)
 +
 +    // The sword combo: right slash, left slash, then a special strike. Each swing locks the sword
 +    // until its animation is done; how long that is follows the weapon's speed. The ZeldaControls
@@ -6839,6 +6861,7 @@ index 000000000..4d714b30a
 +bool ChatHandler::HandleZeldaRollCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    DismountToFight(player);            // a roll from the saddle: the hero jumps down and rolls
 +    if (!CanAct(player) || player->IsInWater())
 +        return true;
 +
@@ -6866,6 +6889,7 @@ index 000000000..4d714b30a
 +bool ChatHandler::HandleZeldaFlipCommand(char* /*args*/)
 +{
 +    Player* player = m_session->GetPlayer();
++    DismountToFight(player);
 +    if (!CanAct(player) || player->IsInWater())
 +        return true;
 +    ZeldaDodge(player, M_PI_F, 12.0f, 7.0f, 726);    // about 9 yards back, 0.73 s in the air
@@ -7009,6 +7033,8 @@ index 000000000..4d714b30a
 +        else if (a == "off" || a == "0")
 +            on = false;
 +    }
++    if (on)
++        DismountToFight(player);        // raising the guard from the saddle: the hero jumps down first
 +    if (on && !CanAct(player))
 +        on = false;
 +    // with a shield the hero blocks; with only a weapon the hero holds it up to parry every melee
@@ -7084,6 +7110,7 @@ index 000000000..4d714b30a
 +bool ChatHandler::HandleZeldaBoomerangCommand(char* /*args*/)
 +{
 +    Player* player = m_session->GetPlayer();
++    DismountToFight(player);            // thrown from the ground: the hero jumps down first
 +    if (!CanAct(player))
 +        return true;
 +
@@ -7540,7 +7567,9 @@ index 000000000..4d714b30a
 +    bool const draw = args && (*args == 'd' || *args == 'D');
 +    if (!draw)
 +        ZeldaBowRelease(player, StateFor(player));   // first, so no early return leaves the hero rooted
-+    if (!CanAct(player))
++    // the bow fires from the saddle too (only a flight path's ride stops it)
++    if (!player->IsAlive() || player->IsTaxiFlying() || player->hasUnitState(UNIT_STAT_CAN_NOT_REACT) ||
++        player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PACIFIED))
 +        return true;
 +
 +    Item* ranged = player->GetWeaponForAttack(RANGED_ATTACK, true, true);
@@ -7600,9 +7629,17 @@ index 000000000..4d714b30a
 +        state.chargedShotUntil = now + 4000;    // the arrow's flight
 +    }
 +    player->SetFacingToObject(target);
-+    // Arrows come from your ammo pouch, like Link's quiver: no ammo, no shot.
++    // Arrows come from your ammo pouch, like Link's quiver: no ammo, no shot. Mounted, the shot
++    // passes the spell's "not while mounted" check (ZeldaMountedShot)
++    t_mountedShot = player->IsMounted();
 +    player->CastSpell(target, spellId, TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
++    t_mountedShot = false;
 +    return true;
++}
++
++bool ZeldaMountedShot()
++{
++    return t_mountedShot;
 +}
 +
 +namespace
@@ -8285,10 +8322,10 @@ index 000000000..4d714b30a
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..4c9b76ab3
+index 000000000..23f9ce60a
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,328 @@
+@@ -0,0 +1,329 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -8349,6 +8386,7 @@ index 000000000..4c9b76ab3
 +// held (instead of off-hand damage); the extra hit chance of `unit`
 +float ZeldaDualWieldHit(Unit const* unit);
 +float ZeldaDualWieldCritTaken(Unit const* unit);
++bool ZeldaMountedShot();
 +// Zelda of Warcraft: Vanquisher's Mercy (40018, the Vanquisher's Sword's equip effect): every melee
 +// critical strike heals its $s1% (5%) of the hero's maximum health
 +void ZeldaCritHeal(Unit* attacker, bool melee = true);
@@ -9011,7 +9049,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..327acae67 100644
+index 4d8e9160a..acdd70834 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -9265,7 +9303,26 @@ index 4d8e9160a..327acae67 100644
          Quest const* qInfo = sObjectMgr.GetQuestTemplate(questid);
          if (!qInfo)
              continue;
-@@ -18082,9 +18168,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -17105,11 +17191,15 @@ bool Player::ActivateTaxiPathTo(std::vector<uint32> const& nodes, Creature* npc
+     // taximaster case
+     if (npc)
+     {
+-        // not let cheating with start flight mounted
++        // not let cheating with start flight mounted - Zelda of Warcraft: the hero simply gets off
+         if (GetMountID())
+         {
+-            GetSession()->SendActivateTaxiReply(ERR_TAXIPLAYERALREADYMOUNTED);
+-            return false;
++            RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
++            if (GetMountID())
++            {
++                GetSession()->SendActivateTaxiReply(ERR_TAXIPLAYERALREADYMOUNTED);
++                return false;
++            }
+         }
+ 
+         if (IsInDisallowedMountForm())
+@@ -18082,9 +18172,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -9280,7 +9337,7 @@ index 4d8e9160a..327acae67 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -18152,6 +18241,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
+@@ -18152,6 +18245,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
  
      DEBUG_LOG("SendTransferAbortedByLockStatus: Called for %s on map %u, LockAreaStatus %u, miscRequirement %u)", GetGuidStr().c_str(), mapEntry->MapID, lockStatus, miscRequirement);
  
@@ -9308,7 +9365,7 @@ index 4d8e9160a..327acae67 100644
      if (!at->status_failed_text.empty())
      {
          switch (lockStatus)
-@@ -19665,6 +19775,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19779,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -9336,7 +9393,7 @@ index 4d8e9160a..327acae67 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20163,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20167,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -9345,7 +9402,7 @@ index 4d8e9160a..327acae67 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20352,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20356,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -9356,7 +9413,7 @@ index 4d8e9160a..327acae67 100644
      bool haveToSendEvent = false;
      bool wasPermanent = false;
      uint32 oldItemId = 0;
-@@ -20436,10 +20571,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
+@@ -20436,10 +20575,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
      if (IsGameMaster())
          return true;
  
@@ -10224,7 +10281,7 @@ index 591908ab5..5cb585b23 100644
      if (!noSpillover)
      {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..4e412270f 100644
+index bf5c5c578..c5a6ce744 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -10352,7 +10409,17 @@ index bf5c5c578..4e412270f 100644
  
          uint32 itemid = m_spellInfo->Reagent[x];
          uint32 itemcount = m_spellInfo->ReagentCount[x];
-@@ -5553,9 +5595,15 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5107,7 +5149,8 @@ SpellCastResult Spell::CheckCast(bool strict)
+     }
+ 
+     // not let players cast spells at mount (and let do it to creatures)
+-    if (m_trueCaster->IsPlayer() && m_caster->GetMountID() && !m_IsTriggeredSpell &&
++    // (Zelda of Warcraft: the bow key fires from the saddle, ZeldaMountedShot)
++    if (m_trueCaster->IsPlayer() && m_caster->GetMountID() && !m_IsTriggeredSpell && !ZeldaMountedShot() &&
+             !IsPassiveSpell(m_spellInfo) && !m_spellInfo->HasAttribute(SPELL_ATTR_ALLOW_WHILE_MOUNTED))
+     {
+         if (m_caster->IsTaxiFlying())
+@@ -5553,9 +5596,15 @@ SpellCastResult Spell::CheckCast(bool strict)
                          return SPELL_FAILED_TRY_AGAIN;
  
                      lockId = go->GetGOInfo()->GetLockId();
@@ -10369,7 +10436,7 @@ index bf5c5c578..4e412270f 100644
                      // check if its in use only when cast is finished (called from spell::cast() with strict = false)
                      if (!strict && go->IsInUse())
                          return SPELL_FAILED_CHEST_IN_USE;
-@@ -5998,6 +6046,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5998,6 +6047,10 @@ SpellCastResult Spell::CheckCast(bool strict)
          }
      }
  
@@ -10380,7 +10447,7 @@ index bf5c5c578..4e412270f 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6202,7 +6254,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
+@@ -6202,7 +6255,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
      {
          if (m_spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT) && caster->GetTypeId() == TYPEID_PLAYER)
              if (Item* ranged = static_cast<Player*>(caster)->GetWeaponForAttack(RANGED_ATTACK))
@@ -10389,7 +10456,7 @@ index bf5c5c578..4e412270f 100644
  
          if (Player* modOwner = caster->GetSpellModOwner())
              modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_RANGE, maxRange);
-@@ -6499,6 +6551,12 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6552,12 @@ SpellCastResult Spell::CheckItems()
                      }
  
                      Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
@@ -10402,7 +10469,7 @@ index bf5c5c578..4e412270f 100644
                      if (target->GetPower(power) == target->GetMaxPower(power))
                      {
                          failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
-@@ -6565,6 +6623,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6565,6 +6624,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;

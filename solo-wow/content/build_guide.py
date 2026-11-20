@@ -22,7 +22,8 @@ PAGES = [
     # 1: controls
     "Your keys, $N! The number pad's 1-9 do the same thing.$B$B"
     "1 - Sword. Tap to swing (three swings make a combo). Hold, then let go, for your stance's charge attack.$B"
-    "2 - Bow, gun or crossbow. Hold to charge a Charged Shot.$B"
+    "2 - Bow, gun or crossbow. Tap to shoot while you keep moving, even on a mount. Hold to stop and charge "
+    "a Charged Shot.$B"
     "3 - Shield. Hold to raise it. Without a shield you hold your weapon up to parry.$B"
     "4 - Boomerang.$B"
     "5 - Roll forward. Shift+Q and Shift+E roll to the sides, Shift+S is a backflip.$B"
@@ -101,7 +102,8 @@ PAGES = [
     "it back until you log out.$B$B"
     "You carry up to 10 of each potion, and potions have no cooldown. Mana potions turn into a shield that "
     "absorbs damage! Right-click one to put it on key 6.$B$B"
-    "Right-click a mount to put it on key 7. Swinging your sword while riding gets you off.$B$B"
+    "Right-click a mount to put it on key 7. You can shoot from the saddle, but swinging your sword, "
+    "rolling, raising your shield or throwing the boomerang gets you off - and so does taking a flight path.$B$B"
     "Loot is picked up for you automatically.",
 
     # 8: items and weapon types

@@ -26,6 +26,8 @@ local SPIN_HOLD = 0.8
 local BOW_HOLD = SPIN_HOLD * 2   -- a Charged Shot takes twice as long to charge as the sword
 local attackDownAt = nil
 local bowDownAt = nil          -- the bow key is held: a Charged Shot when it is let go after BOW_HOLD
+local BOW_DRAW_DELAY = 0.25    -- held this long, the hero stops and draws; a quicker tap shoots on the move
+local bowDrawing = false       -- ".zbow draw" went out: the hero stands rooted until the key is let go
 
 -- the roll the Zelda client tumbles the hero through when the server's push lands: 1 forward,
 -- 2 left, 3 right, 4 the backflip
@@ -121,12 +123,20 @@ spinBar:SetScript("OnUpdate", function()
 	end
 end)
 
--- shows the bar once the key has been held a moment
+-- shows the bar once the key has been held a moment; a bow held past BOW_DRAW_DELAY starts the draw
+-- (the hero stops and the bow comes up in slow motion, full draw as the bar fills)
 local spinWatch = CreateFrame("Frame", "ZeldaSpinWatch", UIParent)
 spinWatch:SetScript("OnUpdate", function()
 	local downAt = attackDownAt or bowDownAt
 	if downAt and not spinBar:IsVisible() and GetTime() - downAt >= SPIN_BAR_DELAY then
 		spinBar:Show()
+	end
+	if bowDownAt and not bowDrawing and not attackDownAt and GetTime() - bowDownAt >= BOW_DRAW_DELAY then
+		bowDrawing = true
+		ZeldaControls_Command(".zbow draw")
+		if ZeldaGuardAnim then
+			ZeldaGuardAnim(3, true, math.max(0.1, BOW_HOLD - (GetTime() - bowDownAt)))
+		end
 	end
 end)
 
@@ -228,17 +238,14 @@ function ZeldaControls_Attack(state)
 	end
 end
 
--- The bow key: a tap fires at once when it is let go; held until the bar is full (as long as the
--- sword's charge), it lets fly a Charged Shot with double damage that always strikes critically (".zbow 1").
+-- The bow key: a tap fires at once when it is let go, and the hero keeps walking or running; held
+-- past BOW_DRAW_DELAY the hero stops to draw (spinWatch), and held until the bar is full it lets fly a
+-- Charged Shot with double damage that always strikes critically (".zbow 1"). Works from the saddle too.
 function ZeldaControls_Bow(state)
 	if state == "down" then
 		if not attackDownAt then
 			bowDownAt = GetTime()
-			-- the bow comes to hand and is drawn in slow motion, full draw as the bar fills
-			ZeldaControls_Command(".zbow draw")
-			if ZeldaGuardAnim then
-				ZeldaGuardAnim(3, true, BOW_HOLD)
-			end
+			bowDrawing = false
 		end
 		return
 	end
@@ -247,9 +254,10 @@ function ZeldaControls_Bow(state)
 	end
 	local charged = GetTime() - bowDownAt >= BOW_HOLD
 	bowDownAt = nil
-	if ZeldaGuardAnim then
+	if bowDrawing and ZeldaGuardAnim then
 		ZeldaGuardAnim(3, false)
 	end
+	bowDrawing = false
 	if not attackDownAt then
 		spinBar:Hide()
 	end
