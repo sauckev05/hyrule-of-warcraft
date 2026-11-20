@@ -35,7 +35,8 @@ PAGES = [
     # 2: combat
     "Fighting! My favorite part. Well, watching it.$B$B"
     "Swing with 1. Your third swing in a row is a special strike. Hold 1 and let go when the bar turns green "
-    "for a charge attack - the Spin Attack costs 50 rage.$B$B"
+    "for your stance's charge attack. Every charge attack costs 50 rage (some armor sets make it cheaper), and "
+    "Shield Slam and Leaping Strike need 2.5 seconds of rest between uses.$B$B"
     "Rage comes from hitting and being hit. You need it for your charge attacks.$B$B"
     "Strong enemies - elites, rares and bosses - wind up a Heavy Blow or a Charged Bolt. Watch the orange bar "
     "over their health that says BLOCK! Raise your shield (3) to block it, and a blocked Heavy Blow leaves "
@@ -54,9 +55,9 @@ PAGES = [
     "silences their spells for 2 seconds.$B$B"
     "Berserker Stance - a two-handed weapon (picked from your bags too). Your charge attack is Leaping "
     "Strike: your attack power, through all armor, on every enemy in front. Each one that lands gives "
-    "Berserker's Fury, up to 10 stacks of 5% more attack power and spell power for 20 seconds, and each stack heals you "
-    "for 1% of your maximum health on every critical strike you land.$B$B"
-    "All one-handed weapons swing every 2.70 seconds and all two-handers every 4.00, so pick by damage!",
+    "Berserker's Fury, up to 10 stacks of 5% more attack power and spell power for 20 seconds.$B$B"
+    "All one-handed weapons swing every 2.70 seconds, all two-handers every 4.00 and all ranged weapons shoot "
+    "every 3.50, so pick by damage!",
 
     # 4: levels and experience
     "You grow stronger by gaining experience - the purple bar at the bottom.$B$B"
@@ -84,9 +85,12 @@ PAGES = [
     "From level 10 you get one talent point every level. Press 9 and turn to Talents to spend them.$B$B"
     "Each tree has rows. Put 5 points into a tree to open its next row. Read a talent's tooltip to see what "
     "every point does.$B$B"
-    "Some favorites: Toughness makes your shield stronger, and your Shield Slam with it. Bleeding Edge makes "
-    "enemies bleed. Deep Wounds bleeds them when you crit. The weapon specializations give counterattacks, "
-    "enrages and a Shield Cleave, depending on what you hold.$B$B"
+    "Some favorites: Toughness makes your shield stronger, and your Shield Slam with it. Shield "
+    "Specialization blocks more often and gives rage on every block. Bleeding Edge makes enemies bleed, Deep "
+    "Wounds bleeds them when you crit, and Blood Craze heals you on every crit.$B$B"
+    "The weapon specializations depend on what you hold: two-handers counterattack, one-handers with a shield "
+    "unleash a Shield Cleave every 5th block, and two weapons hit more often - but enemies crit you more, and "
+    "each crit against you sends you into a Wrath of sure critical strikes!$B$B"
     "Changed your mind? A class trainer can reset your talents for some gold.",
 
     # 7: inventory and equipping

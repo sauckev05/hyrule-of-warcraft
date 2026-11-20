@@ -39,7 +39,7 @@ SLOTS = {
 
 SETS = [
     dict(id=1, name='Kokiri Garb', level=20, subclass=3, material=5,
-         bonuses=[(2, 'crit', 1), (3, 'knockback', 3), (6, 'extra_swing', 3), (6, 'weapon_flat', 5)],
+         bonuses=[(2, 'crit', 1), (3, 'heal_on_kill', 3), (6, 'extra_swing', 3), (6, 'weapon_flat', 5)],
          pieces=[
              # (entry, slot, name, display, boss entry, boss name)
              (190701, 'head', 'Kokiri Coif', 30091, 4275, 'Archmage Arugal (Shadowfang Keep)'),
@@ -60,7 +60,7 @@ SETS = [
              (190716, 'feet', 'Zora Treads', 25760, 4829, "Aku'mai (Blackfathom Deeps)"),
          ]),
     dict(id=3, name='Battlegear of the Scarlet Crusade', level=40, subclass=4, material=6,
-         bonuses=[(2, 'crit', 2), (3, 'knockback', 5), (3, 'spin_rage', 10), (6, 'extra_swing', 5),
+         bonuses=[(2, 'crit', 2), (3, 'spin_rage', 10), (6, 'extra_swing', 5),
                   (6, 'crit_damage', 15), (6, 'weapon_flat', 5)],
          pieces=[
              (190721, 'head', 'Helm of the Scarlet Crusade', 4415, 4543, 'Bloodmage Thalnos (Scarlet Monastery Graveyard)'),
@@ -77,7 +77,7 @@ SETS = [
          ]),
     dict(id=4, name='Armor of the Hylian Knight', level=50, subclass=4, material=6,
          bonuses=[(2, 'weapon_flat', 5), (2, 'heal_on_kill', 5), (3, 'crit', 3), (3, 'spin_rage', 15),
-                  (6, 'extra_swing', 6), (6, 'knockback', 6), (6, 'crit_damage', 20)],
+                  (6, 'extra_swing', 6), (6, 'crit_damage', 20)],
          pieces=[
              (190731, 'head', "Hylian Knight's Helm", 27186, 7271, "Witch Doctor Zum'rah (Zul'Farrak)"),
              (190732, 'shoulder', "Hylian Knight's Pauldrons", 27378, 12201, 'Princess Theradras (Maraudon)'),

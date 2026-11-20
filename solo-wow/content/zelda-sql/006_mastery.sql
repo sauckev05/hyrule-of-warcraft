@@ -142,6 +142,11 @@ UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 5,
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 8, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12789;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 11, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12791;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectBasePoints1` = 14, `EffectMiscValue1` = 0, `Stances` = 0 WHERE `Id` = 12792;
+UPDATE `spell_template` SET `EffectBasePoints1` = 1, `EffectApplyAuraName2` = 4, `EffectTriggerSpell2` = 0, `EffectBasePoints2` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 12298;
+UPDATE `spell_template` SET `EffectBasePoints1` = 3, `EffectApplyAuraName2` = 4, `EffectTriggerSpell2` = 0, `EffectBasePoints2` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 12724;
+UPDATE `spell_template` SET `EffectBasePoints1` = 5, `EffectApplyAuraName2` = 4, `EffectTriggerSpell2` = 0, `EffectBasePoints2` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 12725;
+UPDATE `spell_template` SET `EffectBasePoints1` = 7, `EffectApplyAuraName2` = 4, `EffectTriggerSpell2` = 0, `EffectBasePoints2` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 12726;
+UPDATE `spell_template` SET `EffectBasePoints1` = 9, `EffectApplyAuraName2` = 4, `EffectTriggerSpell2` = 0, `EffectBasePoints2` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 12727;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectTriggerSpell1` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 16487;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectTriggerSpell1` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 16489;
 UPDATE `spell_template` SET `EffectApplyAuraName1` = 4, `EffectTriggerSpell1` = 0, `ProcFlags` = 0, `ProcChance` = 0 WHERE `Id` = 16492;

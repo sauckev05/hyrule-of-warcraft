@@ -1,5 +1,6 @@
--- Zelda of Warcraft: every melee weapon swings at one speed - one-handers (one-hand, main hand, off hand)
--- at 2.70, two-handers at 4.00 - with its damage per second unchanged, so a slower swing hits harder.
+-- Zelda of Warcraft: every weapon attacks at one speed - one-handers (one-hand, main hand, off hand)
+-- at 2.70, two-handers at 4.00, ranged weapons (bows, guns, crossbows, thrown, wands) at 3.50 - with
+-- its damage per second unchanged, so a slower attack hits harder.
 -- MySQL assigns left to right, so the damage columns read the old delay before it is replaced.
 -- Last in the file order, after every file that adds weapons; applied at each server start (a
 -- weapon already at its speed is left alone).
@@ -32,3 +33,18 @@ UPDATE `item_template` SET
     `dmg_max5` = ROUND(`dmg_max5` * 4000 / `delay`),
     `delay` = 4000
 WHERE `class` = 2 AND `InventoryType` IN (17) AND `delay` > 0 AND `delay` <> 4000;
+
+-- Ranged weapons (bows, guns, crossbows, thrown weapons, wands): 3.50 speed, the damage per second kept (each shot scaled by the new speed over the old)
+UPDATE `item_template` SET
+    `dmg_min1` = ROUND(`dmg_min1` * 3500 / `delay`),
+    `dmg_max1` = ROUND(`dmg_max1` * 3500 / `delay`),
+    `dmg_min2` = ROUND(`dmg_min2` * 3500 / `delay`),
+    `dmg_max2` = ROUND(`dmg_max2` * 3500 / `delay`),
+    `dmg_min3` = ROUND(`dmg_min3` * 3500 / `delay`),
+    `dmg_max3` = ROUND(`dmg_max3` * 3500 / `delay`),
+    `dmg_min4` = ROUND(`dmg_min4` * 3500 / `delay`),
+    `dmg_max4` = ROUND(`dmg_max4` * 3500 / `delay`),
+    `dmg_min5` = ROUND(`dmg_min5` * 3500 / `delay`),
+    `dmg_max5` = ROUND(`dmg_max5` * 3500 / `delay`),
+    `delay` = 3500
+WHERE `class` = 2 AND `InventoryType` IN (15,25,26) AND `delay` > 0 AND `delay` <> 3500;

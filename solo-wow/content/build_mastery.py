@@ -154,15 +154,13 @@ SPELLS = [
     # spell power, which the core adds itself (ZeldaBerserkerFurySpellPower)
     (BERSERKER_FURY, DEATH_WISH, "Berserker's Fury",
      'Each Leaping Strike that lands increases your attack power and spell power by 5% for $d, '
-     'stacking up to 10 times. Each stack also heals you for 1% of your maximum health on every '
-     'critical strike you land.',
+     'stacking up to 10 times.',
      dict(Attributes=0, AttributesEx=0, RecoveryTime=0, ManaCost=0, PowerType=0, DurationIndex=FURY_DURATION,
           SpellVisual=FURY_VISUAL,
           StackAmount=10, EffectApplyAuraName1=166, EffectApplyAuraName2=167, EffectApplyAuraName3=4,
           EffectBasePoints1=4, EffectBasePoints2=4, EffectBasePoints3=4, EffectMiscValue1=0, EffectMiscValue2=0,
           EffectMiscValue3=0, InterruptFlags=0, SpellFamilyName=0, SpellFamilyFlags=0,
-          tooltip='Attack power and spell power increased by $s1% per stack. Your critical strikes heal 1% '
-                  'of your maximum health per stack.')),
+          tooltip='Attack power and spell power increased by $s1% per stack.')),
     (PLACE_MIRROR_PLATE, PLACE_UNFIRED_BLADE, 'Place Mirror Plate', 'Sets the Tarnished Mirror Plate on the ground.',
      dict(EffectMiscValue1=191182)),
     # The Rite of Sul'thraze (build_sulthraze.py): ten seconds at the Altar of Jammal'an, whose end
@@ -266,13 +264,14 @@ for n, sid in enumerate(TWO_HANDED_SPEC, start=1):
                               'wield a two-handed weapon, an enemy attack that hits you has a %d%% chance to '
                               'provoke your counterattack, which always strikes critically.' % (5 * n))
 for n, sid in enumerate(WARRIOR_DUAL_WIELD, start=1):
-    DESCRIPTION_EDITS[sid] = ('Increases your chance to hit by %d%% while dual wielding. While dual wielding, a '
-                              'critical strike against you sends you into a Wrath: your next %d swings always '
-                              'hit and strike critically. Lasts 12 sec.' % (2 * n, 2 * n))
+    DESCRIPTION_EDITS[sid] = ('Increases your chance to hit by %d%% while dual wielding, but enemies are %d%% more '
+                              'likely to land a critical strike on you while dual wielding. A critical strike '
+                              'against you while dual wielding sends you into a Wrath: your next %d swings always '
+                              'hit and strike critically. Lasts 12 sec.' % (2 * n, 5 * n, 2 * n))
 for n, sid in enumerate(ONE_HANDED_SPEC, start=1):
     DESCRIPTION_EDITS[sid] = ('Increases the damage you deal with one-handed melee weapons by $s1%%. With a shield '
                               'equipped, every 5th block unleashes a cleave on all enemies around you, always a '
-                              'critical strike, for %d times the damage of a normal swing.' % (2 * n))
+                              'critical strike, for %d%% of the damage of a normal swing.' % (60 * n))
 DESCRIPTION_EDITS[11658] = ("Strikes an enemy with the rage of Sul'thraze, dealing $s1 Shadow damage and an "
                             "additional $o3 damage over $d. The target deals 15% less damage for $d.")
 # Dual Wield Specialization (warrior and rogue): 2% melee hit a point while two weapons are held, not
@@ -339,6 +338,15 @@ for _n, _sid in enumerate(DEFIANCE):
     # in every stance: the stock talent's aura held only in Defensive Stance (Stances 0x20000)
     SPELL_EDITS[_sid] = dict(EffectApplyAuraName1=4, EffectBasePoints1=3 * (_n + 1) - 1, EffectMiscValue1=0, Stances=0)
     DESCRIPTION_EDITS[_sid] = 'Enemies that damage you take $s1% of that damage back.'
+
+# Shield Specialization: 2% block chance a point instead of 1%, and 1 rage a point on every block (the
+# core, ZeldaShieldBlocked) instead of a 20%-a-point chance of 1 rage; its proc becomes a dummy effect
+SHIELD_SPEC = (12298, 12724, 12725, 12726, 12727)
+for _n, _sid in enumerate(SHIELD_SPEC, start=1):
+    SPELL_EDITS[_sid] = dict(EffectBasePoints1=2 * _n - 1, EffectApplyAuraName2=4, EffectTriggerSpell2=0,
+                             EffectBasePoints2=0, ProcFlags=0, ProcChance=0)
+    DESCRIPTION_EDITS[_sid] = ('Increases your chance to block attacks with a shield by $s1%% and generates %d '
+                               'rage when a block occurs.' % _n)
 
 # Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
 # instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc
