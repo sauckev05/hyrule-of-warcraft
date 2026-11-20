@@ -103,7 +103,8 @@ PAGES = [
     "You carry up to 10 of each potion, and potions have no cooldown. Mana potions turn into a shield that "
     "absorbs damage! Right-click one to put it on key 6.$B$B"
     "Right-click a mount to put it on key 7. You can shoot from the saddle, but swinging your sword, "
-    "rolling, raising your shield or throwing the boomerang gets you off - and so does taking a flight path.$B$B"
+    "rolling, raising your shield or throwing the boomerang gets you off - and so does talking to someone, "
+    "using or gathering something, or taking a flight path.$B$B"
     "Loot is picked up for you automatically.",
 
     # 8: items and weapon types

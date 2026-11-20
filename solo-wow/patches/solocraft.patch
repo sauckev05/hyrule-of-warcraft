@@ -9049,7 +9049,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..acdd70834 100644
+index 4d8e9160a..29c169ffe 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -9106,7 +9106,30 @@ index 4d8e9160a..acdd70834 100644
      {
          addvalue = OCTRegenHPPerSpirit() * HealthIncreaseRate;
          if (!IsInCombat())
-@@ -2679,6 +2694,15 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
+@@ -2449,6 +2464,10 @@ Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)
+     if (!unit->IsWithinDistInMap(this, INTERACTION_DISTANCE))
+         return nullptr;
+ 
++    // Zelda of Warcraft: talking to someone from the saddle, the hero gets off first
++    if (IsMounted())
++        RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
++
+     return unit;
+ }
+ 
+@@ -2471,7 +2490,11 @@ GameObject* Player::GetGameObjectIfCanInteractWith(ObjectGuid guid, uint32 gameo
+         {
+             float maxdist = go->GetInteractionDistance();
+             if (go->IsWithinDistInMap(this, maxdist) && go->IsSpawned())
++            {
++                if (IsMounted())            // Zelda of Warcraft: the hero gets off to use it
++                    RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+                 return go;
++            }
+ 
+             sLog.outError("GetGameObjectIfCanInteractWith: GameObject '%s' [GUID: %u] is too far away from player %s [GUID: %u] to be used by him (distance=%f, maximal %f is allowed)",
+                           go->GetGOInfo()->name,  go->GetGUIDLow(), GetName(), GetGUIDLow(), go->GetDistance(this), maxdist);
+@@ -2679,6 +2702,15 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
      if (level >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          return;
  
@@ -9122,7 +9145,7 @@ index 4d8e9160a..acdd70834 100644
      // XP resting bonus for kill
      uint32 rested_bonus_xp = victim ? GetXPRestBonus(xp) : 0;
  
-@@ -4895,7 +4919,7 @@ float Player::GetMeleeCritFromAgility() const
+@@ -4895,7 +4927,7 @@ float Player::GetMeleeCritFromAgility() const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -9131,7 +9154,7 @@ index 4d8e9160a..acdd70834 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -4939,7 +4963,7 @@ float Player::GetDodgeFromAgility(float amount) const
+@@ -4939,7 +4971,7 @@ float Player::GetDodgeFromAgility(float amount) const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -9140,7 +9163,7 @@ index 4d8e9160a..acdd70834 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -5154,6 +5178,10 @@ bool Player::UpdateFishingSkill()
+@@ -5154,6 +5186,10 @@ bool Player::UpdateFishingSkill()
      if (SkillValue >= GetSkillMax(SKILL_FISHING))
          return false;
  
@@ -9151,7 +9174,7 @@ index 4d8e9160a..acdd70834 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -7359,6 +7387,10 @@ void Player::UpdateEquipSpellsAtFormChange()
+@@ -7359,6 +7395,10 @@ void Player::UpdateEquipSpellsAtFormChange()
  
  void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool spellProc)
  {
@@ -9162,7 +9185,7 @@ index 4d8e9160a..acdd70834 100644
      Item* item = GetWeaponForAttack(attType, true, true);
      if (!item)
          return;
-@@ -7391,9 +7423,11 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+@@ -7391,9 +7431,11 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
          if (HasGCD(spellInfo) || !IsSpellReady(*spellInfo, proto))
              return;
  
@@ -9177,7 +9200,7 @@ index 4d8e9160a..acdd70834 100644
  
          float chance = (float)spellInfo->procChance;
  
-@@ -7407,6 +7441,20 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+@@ -7407,6 +7449,20 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
              chance = GetWeaponProcChance();
          }
  
@@ -9198,7 +9221,7 @@ index 4d8e9160a..acdd70834 100644
          if (roll_chance_f(chance))
              CastSpell(Target, spellInfo->Id, TRIGGERED_OLD_TRIGGERED, item);
      }
-@@ -7431,8 +7479,8 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+@@ -7431,8 +7487,8 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
                  continue;
              }
  
@@ -9209,7 +9232,7 @@ index 4d8e9160a..acdd70834 100644
                  continue;
  
              // some weapon enchantments have proc flags which need to be checked
-@@ -9515,6 +9563,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
+@@ -9515,6 +9571,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
  
              uint32 type = pProto->InventoryType;
  
@@ -9221,7 +9244,7 @@ index 4d8e9160a..acdd70834 100644
              if (eslot == EQUIPMENT_SLOT_OFFHAND)
              {
                  if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
-@@ -11003,6 +11056,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
+@@ -11003,6 +11064,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
  {
      MANGOS_ASSERT(pItem != nullptr);
  
@@ -9231,7 +9254,7 @@ index 4d8e9160a..acdd70834 100644
      uint32 slot = m_currentBuybackSlot;
      // if current back slot non-empty search oldest or free
      if (m_items[slot])
-@@ -12352,6 +12408,10 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
+@@ -12352,6 +12416,10 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
              return false;
      }
  
@@ -9242,7 +9265,7 @@ index 4d8e9160a..acdd70834 100644
      uint32 repFacId = qInfo->GetRepObjectiveFaction();
      return !(repFacId && GetReputationMgr().GetReputation(repFacId) < qInfo->GetRepObjectiveValue());
  }
-@@ -12408,6 +12468,10 @@ bool Player::CanRewardQuest(Quest const* pQuest, bool msg) const
+@@ -12408,6 +12476,10 @@ bool Player::CanRewardQuest(Quest const* pQuest, bool msg) const
      if (pQuest->GetRewOrReqMoney() < 0 && GetMoney() < uint32(-pQuest->GetRewOrReqMoney()))
          return false;
  
@@ -9253,7 +9276,7 @@ index 4d8e9160a..acdd70834 100644
      return true;
  }
  
-@@ -12617,6 +12681,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12617,6 +12689,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
          if (pQuest->ReqItemId[i])
              DestroyItemCount(pQuest->ReqItemId[i], pQuest->ReqItemCount[i], true);
      }
@@ -9261,7 +9284,7 @@ index 4d8e9160a..acdd70834 100644
  
      RemoveTimedQuest(quest_id);
  
-@@ -12659,6 +12724,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12659,6 +12732,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
  
      // Used for client inform but rewarded only in case not max level
      uint32 xp = uint32(pQuest->XPValue(this) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
@@ -9274,7 +9297,7 @@ index 4d8e9160a..acdd70834 100644
  
      if (GetLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          GiveXP(xp, nullptr);
-@@ -13458,6 +13529,14 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
+@@ -13458,6 +13537,14 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
          if (!qInfo || !qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER))
              continue;
  
@@ -9289,7 +9312,7 @@ index 4d8e9160a..acdd70834 100644
          for (int j = 0; j < QUEST_ITEM_OBJECTIVES_COUNT; ++j)
          {
              uint32 reqitem = qInfo->ReqItemId[j];
-@@ -13492,6 +13571,13 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
+@@ -13492,6 +13579,13 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
          uint32 questid = GetQuestSlotQuestId(i);
          if (!questid)
              continue;
@@ -9303,7 +9326,7 @@ index 4d8e9160a..acdd70834 100644
          Quest const* qInfo = sObjectMgr.GetQuestTemplate(questid);
          if (!qInfo)
              continue;
-@@ -17105,11 +17191,15 @@ bool Player::ActivateTaxiPathTo(std::vector<uint32> const& nodes, Creature* npc
+@@ -17105,11 +17199,15 @@ bool Player::ActivateTaxiPathTo(std::vector<uint32> const& nodes, Creature* npc
      // taximaster case
      if (npc)
      {
@@ -9322,7 +9345,7 @@ index 4d8e9160a..acdd70834 100644
          }
  
          if (IsInDisallowedMountForm())
-@@ -18082,9 +18172,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18180,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -9337,7 +9360,7 @@ index 4d8e9160a..acdd70834 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -18152,6 +18245,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
+@@ -18152,6 +18253,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
  
      DEBUG_LOG("SendTransferAbortedByLockStatus: Called for %s on map %u, LockAreaStatus %u, miscRequirement %u)", GetGuidStr().c_str(), mapEntry->MapID, lockStatus, miscRequirement);
  
@@ -9365,7 +9388,7 @@ index 4d8e9160a..acdd70834 100644
      if (!at->status_failed_text.empty())
      {
          switch (lockStatus)
-@@ -19665,6 +19779,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19787,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -9393,7 +9416,7 @@ index 4d8e9160a..acdd70834 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20167,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20175,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -9402,7 +9425,7 @@ index 4d8e9160a..acdd70834 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20356,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20364,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -9413,7 +9436,7 @@ index 4d8e9160a..acdd70834 100644
      bool haveToSendEvent = false;
      bool wasPermanent = false;
      uint32 oldItemId = 0;
-@@ -20436,10 +20575,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
+@@ -20436,10 +20583,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
      if (IsGameMaster())
          return true;
  
@@ -10281,7 +10304,7 @@ index 591908ab5..5cb585b23 100644
      if (!noSpillover)
      {
 diff --git a/src/game/Spells/Spell.cpp b/src/game/Spells/Spell.cpp
-index bf5c5c578..c5a6ce744 100644
+index bf5c5c578..7a6750733 100644
 --- a/src/game/Spells/Spell.cpp
 +++ b/src/game/Spells/Spell.cpp
 @@ -47,6 +47,7 @@
@@ -10409,17 +10432,21 @@ index bf5c5c578..c5a6ce744 100644
  
          uint32 itemid = m_spellInfo->Reagent[x];
          uint32 itemcount = m_spellInfo->ReagentCount[x];
-@@ -5107,7 +5149,8 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5107,7 +5149,12 @@ SpellCastResult Spell::CheckCast(bool strict)
      }
  
      // not let players cast spells at mount (and let do it to creatures)
 -    if (m_trueCaster->IsPlayer() && m_caster->GetMountID() && !m_IsTriggeredSpell &&
-+    // (Zelda of Warcraft: the bow key fires from the saddle, ZeldaMountedShot)
++    // (Zelda of Warcraft: the bow key fires from the saddle, ZeldaMountedShot; gathering or opening
++    // something - a herb, a vein, a locked chest - takes the hero off his mount instead of refusing)
++    if (m_trueCaster->IsPlayer() && m_caster->GetMountID() && !m_IsTriggeredSpell && !m_caster->IsTaxiFlying() &&
++            (IsSpellHaveEffect(m_spellInfo, SPELL_EFFECT_OPEN_LOCK) || IsSpellHaveEffect(m_spellInfo, SPELL_EFFECT_SKINNING)))
++        m_caster->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
 +    if (m_trueCaster->IsPlayer() && m_caster->GetMountID() && !m_IsTriggeredSpell && !ZeldaMountedShot() &&
              !IsPassiveSpell(m_spellInfo) && !m_spellInfo->HasAttribute(SPELL_ATTR_ALLOW_WHILE_MOUNTED))
      {
          if (m_caster->IsTaxiFlying())
-@@ -5553,9 +5596,15 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5553,9 +5600,15 @@ SpellCastResult Spell::CheckCast(bool strict)
                          return SPELL_FAILED_TRY_AGAIN;
  
                      lockId = go->GetGOInfo()->GetLockId();
@@ -10436,7 +10463,7 @@ index bf5c5c578..c5a6ce744 100644
                      // check if its in use only when cast is finished (called from spell::cast() with strict = false)
                      if (!strict && go->IsInUse())
                          return SPELL_FAILED_CHEST_IN_USE;
-@@ -5998,6 +6047,10 @@ SpellCastResult Spell::CheckCast(bool strict)
+@@ -5998,6 +6051,10 @@ SpellCastResult Spell::CheckCast(bool strict)
          }
      }
  
@@ -10447,7 +10474,7 @@ index bf5c5c578..c5a6ce744 100644
      // all ok
      return OnCheckCast(strict);
  }
-@@ -6202,7 +6255,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
+@@ -6202,7 +6259,7 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
      {
          if (m_spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT) && caster->GetTypeId() == TYPEID_PLAYER)
              if (Item* ranged = static_cast<Player*>(caster)->GetWeaponForAttack(RANGED_ATTACK))
@@ -10456,7 +10483,7 @@ index bf5c5c578..c5a6ce744 100644
  
          if (Player* modOwner = caster->GetSpellModOwner())
              modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_RANGE, maxRange);
-@@ -6499,6 +6552,12 @@ SpellCastResult Spell::CheckItems()
+@@ -6499,6 +6556,12 @@ SpellCastResult Spell::CheckItems()
                      }
  
                      Powers power = Powers(m_spellInfo->EffectMiscValue[i]);
@@ -10469,7 +10496,7 @@ index bf5c5c578..c5a6ce744 100644
                      if (target->GetPower(power) == target->GetMaxPower(power))
                      {
                          failReason = SPELL_FAILED_ALREADY_AT_FULL_POWER;
-@@ -6565,6 +6624,9 @@ SpellCastResult Spell::CheckItems()
+@@ -6565,6 +6628,9 @@ SpellCastResult Spell::CheckItems()
              {
                  if (m_spellInfo->Reagent[i] <= 0)
                      continue;
@@ -10633,6 +10660,21 @@ index a9fb2306c..e9743d3e0 100644
 +    }
 +
      player->SpawnCorpseBones();
+ }
+ 
+diff --git a/src/game/Spells/SpellHandler.cpp b/src/game/Spells/SpellHandler.cpp
+index c0919ce01..557eca0d1 100644
+--- a/src/game/Spells/SpellHandler.cpp
++++ b/src/game/Spells/SpellHandler.cpp
+@@ -305,6 +305,10 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPacket& recv_data)
+     if (!obj->CanUseNow(_player))
+         return;
+ 
++    // Zelda of Warcraft: using a chest, door, lever or anything else from the saddle - the hero gets off first
++    if (_player->IsMounted())
++        _player->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
++
+     obj->Use(_player);
  }
  
 diff --git a/src/game/Spells/SpellStacking.cpp b/src/game/Spells/SpellStacking.cpp
