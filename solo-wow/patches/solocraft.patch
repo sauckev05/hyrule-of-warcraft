@@ -1980,10 +1980,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..9bdc3bc5b
+index 000000000..c7e93a8ca
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6336 @@
+@@ -0,0 +1,6342 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2486,6 +2486,12 @@ index 000000000..9bdc3bc5b
 +    bool const boss = info->Rank == CREATURE_ELITE_WORLDBOSS || creature->GetScriptName().rfind("boss_", 0) == 0 ||
 +                      (!map->IsRaid() && info->Rank != CREATURE_ELITE_NORMAL && info->HealthMultiplier >= 4.0f);
 +    return boss ? bossRate : enemyRate;
++}
++
++uint32 ZeldaXP(uint32 xp)
++{
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.XPRate", 0.5f));
++    return (xp && rate > 0.0f) ? std::max<uint32>(1, uint32(xp * rate + 0.5f)) : 0;
 +}
 +
 +uint32 ZeldaDungeonXP(uint32 xp)
@@ -8322,10 +8328,10 @@ index 000000000..9bdc3bc5b
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..23f9ce60a
+index 000000000..c81575de3
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,329 @@
+@@ -0,0 +1,330 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -8484,6 +8490,7 @@ index 000000000..23f9ce60a
 +// Zelda of Warcraft: rage a hero gains, scaled by Zelda.RageGainRate (0.5: half from every source).
 +int32 ZeldaRageGain(int32 gain);
 +// Zelda of Warcraft: experience for a kill inside a dungeon or raid, scaled by Zelda.DungeonXPRate (0.5).
++uint32 ZeldaXP(uint32 xp);
 +uint32 ZeldaDungeonXP(uint32 xp);
 +// Health of a creature in a dungeon or raid: x2 for its enemies, x3 for its bosses
 +float ZeldaInstanceHealthRate(Creature const* creature);
@@ -9049,7 +9056,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..8428f6e35 100644
+index 4d8e9160a..cf6db22da 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -9129,7 +9136,7 @@ index 4d8e9160a..8428f6e35 100644
  
              sLog.outError("GetGameObjectIfCanInteractWith: GameObject '%s' [GUID: %u] is too far away from player %s [GUID: %u] to be used by him (distance=%f, maximal %f is allowed)",
                            go->GetGOInfo()->name,  go->GetGUIDLow(), GetName(), GetGUIDLow(), go->GetDistance(this), maxdist);
-@@ -2679,6 +2702,15 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
+@@ -2679,6 +2702,18 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
      if (level >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          return;
  
@@ -9139,13 +9146,16 @@ index 4d8e9160a..8428f6e35 100644
 +        xp = ZeldaBattlegroundSpent(this) ? 0 : ZeldaBattlegroundXP(xp);   // nothing once exalted there
 +    else if (victim && GetMap()->IsDungeon())
 +        xp = ZeldaDungeonXP(xp);
++    // ... and every experience, whatever it comes from, is half (Zelda.XPRate): kills, quests, exploring,
++    // on top of the two rules above (dungeon kills a quarter, battlegrounds 2.5x)
++    xp = ZeldaXP(xp);
 +    if (!xp)
 +        return;
 +
      // XP resting bonus for kill
      uint32 rested_bonus_xp = victim ? GetXPRestBonus(xp) : 0;
  
-@@ -4895,7 +4927,7 @@ float Player::GetMeleeCritFromAgility() const
+@@ -4895,7 +4930,7 @@ float Player::GetMeleeCritFromAgility() const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -9154,7 +9164,7 @@ index 4d8e9160a..8428f6e35 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -4939,7 +4971,7 @@ float Player::GetDodgeFromAgility(float amount) const
+@@ -4939,7 +4974,7 @@ float Player::GetDodgeFromAgility(float amount) const
      float valLevel1 = 0.0f;
      float valLevel60 = 0.0f;
      // critical
@@ -9163,7 +9173,7 @@ index 4d8e9160a..8428f6e35 100644
      {
          case CLASS_PALADIN:
          case CLASS_SHAMAN:
-@@ -5154,6 +5186,10 @@ bool Player::UpdateFishingSkill()
+@@ -5154,6 +5189,10 @@ bool Player::UpdateFishingSkill()
      if (SkillValue >= GetSkillMax(SKILL_FISHING))
          return false;
  
@@ -9174,7 +9184,16 @@ index 4d8e9160a..8428f6e35 100644
      uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
      ++m_fishingSteps;
      // random component, gets more rare as skill gets higher - evidence - when 4 skillups are needed, can be between 2 and 4
-@@ -7359,6 +7395,10 @@ void Player::UpdateEquipSpellsAtFormChange()
+@@ -6250,7 +6289,7 @@ void Player::CheckAreaExploreAndOutdoor()
+                 }
+ 
+                 GiveXP(XP, nullptr);
+-                SendExplorationExperience(area, XP);
++                SendExplorationExperience(area, ZeldaXP(XP));   // the experience given, halved (GiveXP)
+             }
+             DETAIL_LOG("PLAYER: Player %u discovered a new area: %u", GetGUIDLow(), area);
+         }
+@@ -7359,6 +7398,10 @@ void Player::UpdateEquipSpellsAtFormChange()
  
  void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool spellProc)
  {
@@ -9185,7 +9204,7 @@ index 4d8e9160a..8428f6e35 100644
      Item* item = GetWeaponForAttack(attType, true, true);
      if (!item)
          return;
-@@ -7391,9 +7431,11 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+@@ -7391,9 +7434,11 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
          if (HasGCD(spellInfo) || !IsSpellReady(*spellInfo, proto))
              return;
  
@@ -9200,7 +9219,7 @@ index 4d8e9160a..8428f6e35 100644
  
          float chance = (float)spellInfo->procChance;
  
-@@ -7407,6 +7449,28 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+@@ -7407,6 +7452,28 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
              chance = GetWeaponProcChance();
          }
  
@@ -9229,7 +9248,7 @@ index 4d8e9160a..8428f6e35 100644
          if (roll_chance_f(chance))
              CastSpell(Target, spellInfo->Id, TRIGGERED_OLD_TRIGGERED, item);
      }
-@@ -7431,8 +7495,8 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
+@@ -7431,8 +7498,8 @@ void Player::CastItemCombatSpell(Unit* Target, WeaponAttackType attType, bool sp
                  continue;
              }
  
@@ -9240,7 +9259,7 @@ index 4d8e9160a..8428f6e35 100644
                  continue;
  
              // some weapon enchantments have proc flags which need to be checked
-@@ -9515,6 +9579,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
+@@ -9515,6 +9582,11 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool
  
              uint32 type = pProto->InventoryType;
  
@@ -9252,7 +9271,7 @@ index 4d8e9160a..8428f6e35 100644
              if (eslot == EQUIPMENT_SLOT_OFFHAND)
              {
                  if (type == INVTYPE_WEAPON || type == INVTYPE_WEAPONOFFHAND)
-@@ -11003,6 +11072,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
+@@ -11003,6 +11075,9 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money)
  {
      MANGOS_ASSERT(pItem != nullptr);
  
@@ -9262,7 +9281,7 @@ index 4d8e9160a..8428f6e35 100644
      uint32 slot = m_currentBuybackSlot;
      // if current back slot non-empty search oldest or free
      if (m_items[slot])
-@@ -12352,6 +12424,10 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
+@@ -12352,6 +12427,10 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
              return false;
      }
  
@@ -9273,7 +9292,7 @@ index 4d8e9160a..8428f6e35 100644
      uint32 repFacId = qInfo->GetRepObjectiveFaction();
      return !(repFacId && GetReputationMgr().GetReputation(repFacId) < qInfo->GetRepObjectiveValue());
  }
-@@ -12408,6 +12484,10 @@ bool Player::CanRewardQuest(Quest const* pQuest, bool msg) const
+@@ -12408,6 +12487,10 @@ bool Player::CanRewardQuest(Quest const* pQuest, bool msg) const
      if (pQuest->GetRewOrReqMoney() < 0 && GetMoney() < uint32(-pQuest->GetRewOrReqMoney()))
          return false;
  
@@ -9284,7 +9303,7 @@ index 4d8e9160a..8428f6e35 100644
      return true;
  }
  
-@@ -12617,6 +12697,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12617,6 +12700,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
          if (pQuest->ReqItemId[i])
              DestroyItemCount(pQuest->ReqItemId[i], pQuest->ReqItemCount[i], true);
      }
@@ -9292,7 +9311,7 @@ index 4d8e9160a..8428f6e35 100644
  
      RemoveTimedQuest(quest_id);
  
-@@ -12659,6 +12740,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+@@ -12659,6 +12743,12 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
  
      // Used for client inform but rewarded only in case not max level
      uint32 xp = uint32(pQuest->XPValue(this) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
@@ -9305,7 +9324,16 @@ index 4d8e9160a..8428f6e35 100644
  
      if (GetLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
          GiveXP(xp, nullptr);
-@@ -13458,6 +13545,14 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
+@@ -12685,7 +12775,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
+         q_status.uState = QUEST_CHANGED;
+ 
+     if (announce)
+-        SendQuestReward(pQuest, xp);
++        SendQuestReward(pQuest, ZeldaXP(xp));       // the experience given, halved (GiveXP)
+ 
+     bool handled = false;
+ #ifdef ENABLE_PLAYERBOTS
+@@ -13458,6 +13548,14 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
          if (!qInfo || !qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER))
              continue;
  
@@ -9320,7 +9348,7 @@ index 4d8e9160a..8428f6e35 100644
          for (int j = 0; j < QUEST_ITEM_OBJECTIVES_COUNT; ++j)
          {
              uint32 reqitem = qInfo->ReqItemId[j];
-@@ -13492,6 +13587,13 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
+@@ -13492,6 +13590,13 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
          uint32 questid = GetQuestSlotQuestId(i);
          if (!questid)
              continue;
@@ -9334,7 +9362,7 @@ index 4d8e9160a..8428f6e35 100644
          Quest const* qInfo = sObjectMgr.GetQuestTemplate(questid);
          if (!qInfo)
              continue;
-@@ -17105,11 +17207,15 @@ bool Player::ActivateTaxiPathTo(std::vector<uint32> const& nodes, Creature* npc
+@@ -17105,11 +17210,15 @@ bool Player::ActivateTaxiPathTo(std::vector<uint32> const& nodes, Creature* npc
      // taximaster case
      if (npc)
      {
@@ -9353,7 +9381,7 @@ index 4d8e9160a..8428f6e35 100644
          }
  
          if (IsInDisallowedMountForm())
-@@ -18082,9 +18188,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
+@@ -18082,9 +18191,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
  
      // SMSG_SET_AURA_SINGLE
  
@@ -9368,7 +9396,7 @@ index 4d8e9160a..8428f6e35 100644
      GetSession()->SendPacket(data);
  
      if (!GetSession()->PlayerLoading())
-@@ -18152,6 +18261,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
+@@ -18152,6 +18264,27 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaTrigg
  
      DEBUG_LOG("SendTransferAbortedByLockStatus: Called for %s on map %u, LockAreaStatus %u, miscRequirement %u)", GetGuidStr().c_str(), mapEntry->MapID, lockStatus, miscRequirement);
  
@@ -9396,7 +9424,7 @@ index 4d8e9160a..8428f6e35 100644
      if (!at->status_failed_text.empty())
      {
          switch (lockStatus)
-@@ -19665,6 +19795,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
+@@ -19665,6 +19798,27 @@ void Player::LearnTalent(uint32 talentId, uint32 talentRank)
      if ((getClassMask() & talentTabInfo->ClassMask) == 0)
          return;
  
@@ -9424,7 +9452,7 @@ index 4d8e9160a..8428f6e35 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20183,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -20032,7 +20186,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -9433,7 +9461,7 @@ index 4d8e9160a..8428f6e35 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20372,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20375,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -9444,7 +9472,7 @@ index 4d8e9160a..8428f6e35 100644
      bool haveToSendEvent = false;
      bool wasPermanent = false;
      uint32 oldItemId = 0;
-@@ -20436,10 +20591,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
+@@ -20436,10 +20594,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
      if (IsGameMaster())
          return true;
  

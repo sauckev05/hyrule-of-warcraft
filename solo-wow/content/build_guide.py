@@ -62,9 +62,10 @@ PAGES = [
 
     # 4: levels and experience
     "You grow stronger by gaining experience - the purple bar at the bottom.$B$B"
-    "You get experience from finishing quests and defeating enemies. Fill the bar and you reach the next "
-    "level: more health, better stats, and a talent point from level 10.$B$B"
-    "Enemies inside dungeons and raids give half the experience, but they drop much better treasure.$B$B"
+    "You get experience from finishing quests, exploring and defeating enemies - only half as much as in "
+    "other worlds, so every level is earned! Fill the bar and you reach the next level: more health, better "
+    "stats, and a talent point from level 10.$B$B"
+    "Enemies inside dungeons and raids give half of that again, but they drop much better treasure.$B$B"
     "Enemies far below your level give little or nothing, so keep moving to new places!$B$B"
     "Worthy foes sometimes drop a Piece of Heart. Bring me four and you'll get a whole new heart. That "
     "means you get tougher!",
