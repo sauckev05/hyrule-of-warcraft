@@ -2013,10 +2013,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..22b3df6cb
+index 000000000..ddfc9833e
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6400 @@
+@@ -0,0 +1,6398 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2464,8 +2464,8 @@ index 000000000..22b3df6cb
 +}
 +
 +// every enemy blow and spell against the hero - melee, ranged, abilities, spells and their damage over time -
-+// can hit harder (Zelda.EnemyDamageRate, 1 = as is), out in the world and in dungeons, elites included; not in raids
-+// (SoloCraft alone sets their strength), and not the slow telegraphed Heavy Blow and Charged Bolt
++// can hit harder (Zelda.EnemyDamageRate, 1 = as is), out in the world, in dungeons and raids, elites included;
++// not the slow telegraphed Heavy Blow and Charged Bolt
 +float ZeldaEnemyDamageMultiplier(Unit const* attacker, Unit const* victim, SpellEntry const* spellInfo)
 +{
 +    const uint32 HEAVY_BLOW = 40011, CHARGED_BOLT = 40012;
@@ -2473,8 +2473,6 @@ index 000000000..22b3df6cb
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
 +        return 1.0f;
 +    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
-+        return 1.0f;
-+    if (attacker->GetMap()->IsRaid())
 +        return 1.0f;
 +    if (spellInfo && (spellInfo->Id == HEAVY_BLOW || spellInfo->Id == CHARGED_BOLT))
 +        return 1.0f;
@@ -2488,15 +2486,15 @@ index 000000000..22b3df6cb
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 4.0f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
 +        return 1.0f;
-+    // elites, rare elites and bosses hit less hard (Zelda.EliteMeleeDamageRate, 2), out in the world
-+    // and in dungeons; in raids SoloCraft alone sets their strength
-+    static float const eliteRate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EliteMeleeDamageRate", 2.0f));
++    // elites, rare elites and bosses hit harder still (Zelda.EliteMeleeDamageRate, 6), out in the world,
++    // in dungeons and in raids
++    static float const eliteRate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EliteMeleeDamageRate", 6.0f));
 +    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
 +        return 1.0f;
 +    uint32 const rank = static_cast<Creature const*>(attacker)->GetCreatureInfo()->Rank;
 +    float const all = ZeldaEnemyDamageMultiplier(attacker, victim, nullptr);
 +    if (rank != CREATURE_ELITE_NORMAL && rank != CREATURE_ELITE_RARE)
-+        return attacker->GetMap()->IsRaid() ? 1.0f : eliteRate * all;
++        return eliteRate * all;
 +    return rate * all;
 +}
 +
@@ -8780,7 +8778,7 @@ index 06567441e..40ccbe604 100644
      uint8 gender, skin, face, hairStyle, hairColor, facialHair, outfitId;
      recv_data >> gender >> skin >> face;
 diff --git a/src/game/Entities/Creature.cpp b/src/game/Entities/Creature.cpp
-index a10fdbb08..d2490f9e4 100644
+index a10fdbb08..ab2cff258 100644
 --- a/src/game/Entities/Creature.cpp
 +++ b/src/game/Entities/Creature.cpp
 @@ -17,6 +17,7 @@
@@ -8858,7 +8856,7 @@ index a10fdbb08..d2490f9e4 100644
      }
  
      if (m_lootStatus == CREATURE_LOOT_STATUS_LOOTED && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE))
-@@ -1262,6 +1290,56 @@ void Creature::SaveToDB(uint32 mapid)
+@@ -1262,6 +1290,57 @@ void Creature::SaveToDB(uint32 mapid)
      WorldDatabase.CommitTransaction();
  }
  
@@ -8905,9 +8903,10 @@ index a10fdbb08..d2490f9e4 100644
 +        return health ? worldHealth : worldDamage;
 +    }
 +
-+    InstanceTemplate const* temp = ObjectMgr::GetInstanceTemplate(creature->GetMapId());
-+    uint32 maxPlayers = (temp && temp->maxPlayers) ? temp->maxPlayers : (mapEntry->IsRaid() ? 40 : 5);
-+    float ratio = 5.0f / float(std::max(5u, maxPlayers));
++    // Zelda of Warcraft: every dungeon and raid is scaled as the low-level (ten-player) dungeons are,
++    // whatever group it was built for - Blackrock Depths, Scholomance, Stratholme and Dire Maul (five)
++    // and the raids (twenty, forty) alike
++    float ratio = 0.5f;
 +    float factor = health ? dungeonHealth * std::pow(ratio, raidHealthExp) : dungeonDamage * std::pow(ratio, raidDamageExp);
 +    return std::max(0.01f, std::min(1.0f, factor));
 +}
@@ -8915,7 +8914,7 @@ index a10fdbb08..d2490f9e4 100644
  void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
  {
      CreatureInfo const* cinfo = GetCreatureInfo();
-@@ -1305,7 +1383,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1305,7 +1384,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
      float intellect = 0.f;
      float spirit = 0.f;
  
@@ -8924,7 +8923,7 @@ index a10fdbb08..d2490f9e4 100644
      float damageMulti = cinfo->DamageMultiplier * damageMod;
      float damageMultiOLD = cinfo->DamageMultiplierOLD * damageMod;
      bool usedDamageMulti = false;
-@@ -1414,7 +1492,8 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
+@@ -1414,7 +1493,8 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
          }
      }
  
@@ -8934,7 +8933,7 @@ index a10fdbb08..d2490f9e4 100644
      if (health < 1)
          health = 1;
  
-@@ -1875,6 +1954,9 @@ void Creature::SetDeathState(DeathState s)
+@@ -1875,6 +1955,9 @@ void Creature::SetDeathState(DeathState s)
          else if (m_respawnOverrideOnce)
              m_respawnOverriden = false;
  
@@ -8944,7 +8943,7 @@ index a10fdbb08..d2490f9e4 100644
          if (m_settings.HasFlag(CreatureStaticFlags3::FOREVER_CORPSE_DURATION))
              m_corpseExpirationTime = GetMap()->GetCurrentClockTime() + std::chrono::hours(24*7);
          else
-@@ -2125,6 +2207,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
+@@ -2125,6 +2208,10 @@ bool Creature::IsVisibleInGridForPlayer(Player* pl) const
      if (IsInvisible())
          return false;
  
