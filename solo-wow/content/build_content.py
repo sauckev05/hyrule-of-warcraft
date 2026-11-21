@@ -371,15 +371,15 @@ def main():
     out.append('UPDATE `spell_proc_event` SET `Cooldown` = 0 WHERE `entry` = 15600;\n')
     # Dragon's Call: always from the Shade of Eranikus (Sunken Temple), and its whelps come often (5 a
     # minute instead of the weapon-speed chance) with no minute's cooldown between them - up to two at
-    # once (the core: Player::CastItemCombatSpell)
+    # once for each Dragon's Call in hand, four with one in each (the core: Player::CastItemCombatSpell)
     out.append('DELETE FROM `creature_loot_template` WHERE `entry` = 5709 AND `item` = 10847;\n'
                'INSERT INTO `creature_loot_template` (`entry`, `item`, `ChanceOrQuestChance`, `groupid`, `mincountOrRef`, '
                '`maxcount`, `condition_id`, `comments`) VALUES (5709, 10847, 100, 0, 1, 1, 0, \'Zelda: Dragon\\\'s Call\');\n')
     out.append('UPDATE `spell_template` SET `Category` = 0, `CategoryRecoveryTime` = 0, `RecoveryTime` = 0 WHERE `Id` = 13049;\n')
     out.append('UPDATE `item_template` SET `spellppmRate_1` = 5 WHERE `entry` = 10847;\n')
-    # ... and it is unique (one held at a time); its whelps hit and spit for 30% of what they did (melee
-    # 1.54281 x 0.3; their Acid Spit is build_mastery.py's 40035)
-    out.append('UPDATE `item_template` SET `MaxCount` = 1 WHERE `entry` = 10847;\n')
+    # ... and it is not unique (two can be held, one in each hand); its whelps hit and spit for 30% of what
+    # they did (melee 1.54281 x 0.3; their Acid Spit is build_mastery.py's 40035)
+    out.append('UPDATE `item_template` SET `MaxCount` = 0 WHERE `entry` = 10847;\n')
     out.append('UPDATE `creature_template` SET `DamageMultiplier` = 0.462843 WHERE `Entry` = 8776;\n')
     out.append('UPDATE `creature_ai_scripts` SET `action1_param1` = 40035 WHERE `id` = 877601;\n')
     # Linken's story now begins with Navi: The Hero of Time ends at the Wrecked Raft, whose It's a

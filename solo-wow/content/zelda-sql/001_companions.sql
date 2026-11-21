@@ -499,7 +499,7 @@ UPDATE `spell_template` SET `Category` = 0, `CategoryRecoveryTime` = 0, `Recover
 
 UPDATE `item_template` SET `spellppmRate_1` = 5 WHERE `entry` = 10847;
 
-UPDATE `item_template` SET `MaxCount` = 1 WHERE `entry` = 10847;
+UPDATE `item_template` SET `MaxCount` = 0 WHERE `entry` = 10847;
 
 UPDATE `creature_template` SET `DamageMultiplier` = 0.462843 WHERE `Entry` = 8776;
 
