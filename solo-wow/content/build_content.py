@@ -370,7 +370,7 @@ def main():
     # the only extra-attack proc that had one (every source stacks, ZeldaAfterMeleeHit)
     out.append('UPDATE `spell_proc_event` SET `Cooldown` = 0 WHERE `entry` = 15600;\n')
     # Dragon's Call: always from the Shade of Eranikus (Sunken Temple), and its whelps come often (5 a
-    # minute instead of the weapon-speed chance) with no minute's cooldown between them - up to five at
+    # minute instead of the weapon-speed chance) with no minute's cooldown between them - up to two at
     # once (the core: Player::CastItemCombatSpell)
     out.append('DELETE FROM `creature_loot_template` WHERE `entry` = 5709 AND `item` = 10847;\n'
                'INSERT INTO `creature_loot_template` (`entry`, `item`, `ChanceOrQuestChance`, `groupid`, `mincountOrRef`, '
