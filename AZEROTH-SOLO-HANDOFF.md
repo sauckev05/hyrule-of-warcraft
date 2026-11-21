@@ -181,7 +181,7 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   and bag buttons), ActionButton1-12, the bonus/multi/pet bars are hidden; MainMenuExpBar sits at the
   bottom edge with ReputationWatchBar above it; ShapeshiftBarFrame is reparented under the buffs
   (TOPRIGHT -170, -125). Q / E (ZELDA_STANCE_PREV/NEXT, keys version 8) cycle the stances with wrap.
-- Harder enemies: Zelda.EnemyMeleeDamageRate 4 (world normals), Zelda.EliteMeleeDamageRate 4 (2026-11-21, was 6; set in the PC mangosd.conf too)
+- Harder enemies: Zelda.EnemyMeleeDamageRate 4 (world normals), Zelda.EliteMeleeDamageRate 2 (2026-11-21, was 6, then 4; set in the PC mangosd.conf too)
 - 2026-11-20: every enemy blow and spell on the hero xN on top (Zelda.EnemyDamageRate; tried 3, 2, 1.5 - back to 1 = off, also set in the PC mangosd.conf): melee/ranged swings, weapon abilities, spells and DoTs; not raids, not Heavy Blow 40011 / Charged Bolt 40012 (ZeldaEnemyDamageMultiplier).
   (world elites/bosses), SoloCraft.DungeonHealth 0.65 / DungeonDamage 0.9 with raid exponents
   1.08 / 0.79 (raids as before). Heavy blows (ZeldaEnemyMechanics in ZeldaPlayerUpdate, one windup

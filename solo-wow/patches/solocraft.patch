@@ -2013,7 +2013,7 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..18a70c0ed
+index 000000000..22b3df6cb
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6400 @@
@@ -2488,9 +2488,9 @@ index 000000000..18a70c0ed
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 4.0f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
 +        return 1.0f;
-+    // elites, rare elites and bosses hit as hard (Zelda.EliteMeleeDamageRate, 4), out in the world
++    // elites, rare elites and bosses hit less hard (Zelda.EliteMeleeDamageRate, 2), out in the world
 +    // and in dungeons; in raids SoloCraft alone sets their strength
-+    static float const eliteRate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EliteMeleeDamageRate", 4.0f));
++    static float const eliteRate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EliteMeleeDamageRate", 2.0f));
 +    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
 +        return 1.0f;
 +    uint32 const rank = static_cast<Creature const*>(attacker)->GetCreatureInfo()->Rank;
