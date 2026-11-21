@@ -348,6 +348,23 @@ for _n, _sid in enumerate(SHIELD_SPEC, start=1):
     DESCRIPTION_EDITS[_sid] = ('Increases your chance to block attacks with a shield by $s1%% and generates %d '
                                'rage when a block occurs.' % _n)
 
+# Chained Essence of Eranikus: no longer used, worn - a blow against the hero (the core, ZeldaHitTaken)
+# poisons every enemy within 8 yards: Poison Cloud, 50 Nature damage every 1 sec for 10 sec (was every 5
+# sec for 45 sec), and not again until that poison ends
+CHAINED_ESSENCE, POISON_CLOUD, CHAINED_ESSENCE_WORN = 10455, 12766, 40036
+SPELL_EDITS[POISON_CLOUD] = dict(EffectAmplitude1=1000, DurationIndex=DURATION_10_SEC)
+DESCRIPTION_EDITS[POISON_CLOUD] = ('Poisons all enemies in an $a1 yard radius around the caster.  Victims of the '
+                                   'poison suffer $s1 Nature damage every $t1 sec for $d.')
+SPELLS += [
+    (CHAINED_ESSENCE_WORN, DIAMOND_FLASK_DRINK, 'Chained Essence of Eranikus',
+     'When struck by an enemy, poisons all enemies within 8 yards for 50 Nature damage every 1 sec for 10 sec. '
+     'This effect cannot occur again until the poison ends.',
+     dict(EffectApplyAuraName1=4, EffectBasePoints1=0, Effect2=0, EffectApplyAuraName2=0, EffectBasePoints2=0,
+          EffectAmplitude2=0, DurationIndex=DURATION_FOREVER, Attributes=0x1d0, SpellVisual=0)),
+]
+ITEM_EDITS[CHAINED_ESSENCE] = dict(spellid_1=CHAINED_ESSENCE_WORN, spelltrigger_1=1, spellcharges_1=0, spellppmRate_1=0,
+                                   spellcooldown_1=-1, spellcategory_1=0, spellcategorycooldown_1=-1)
+
 # Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
 # instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc
 BLOOD_CRAZE = (16487, 16489, 16492)

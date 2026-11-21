@@ -2013,10 +2013,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..a2b139347
+index 000000000..497f19439
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6354 @@
+@@ -0,0 +1,6381 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2159,6 +2159,7 @@ index 000000000..a2b139347
 +        uint32 naviSockApplied[2] = { 0, 0 };
 +        uint32 naviSockReadyAt[2] = { 0, 0 };
 +        uint32 diamondFlaskReadyAt = 0;                 // the worn Diamond Flask pours again after this
++        uint32 essenceReadyAt = 0;                      // the Chained Essence of Eranikus poisons again after this
 +        uint32 statueHintInstance = 0;                  // the Sunken Temple run Navi explained the statues in
 +        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
 +        uint32 naviHealReadyAt = 0;                     // and heal again after this (ms)
@@ -4137,6 +4138,32 @@ index 000000000..a2b139347
 +            hero->RemoveAurasDueToSpell(DIAMOND_FLASK_BUFF);
 +            hero->CastCustomSpell(hero, DIAMOND_FLASK_BUFF, nullptr, &heal, nullptr, TRIGGERED_OLD_TRIGGERED, flask);
 +            state.diamondFlaskReadyAt = (now + DIAMOND_FLASK_COOLDOWN_MS) | 1;
++        }
++    }
++    // Chained Essence of Eranikus, worn (or held in Navi's Light): any blow against the hero poisons every
++    // enemy within 8 yards - Poison Cloud, 50 Nature damage every second for 10 sec - and not again
++    // until that poison ends
++    {
++        uint32 const CHAINED_ESSENCE = 10455, POISON_CLOUD = 12766, ESSENCE_COOLDOWN_MS = 10000;
++        ZeldaState& state = StateFor(hero);
++        uint32 const now = WorldTimer::getMSTime();
++        if (!state.essenceReadyAt || int32(now - state.essenceReadyAt) >= 0)
++        {
++            Item* essence = nullptr;
++            for (uint8 slot : { uint8(EQUIPMENT_SLOT_TRINKET1), uint8(EQUIPMENT_SLOT_TRINKET2) })
++            {
++                Item* worn = hero->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
++                if (worn && worn->GetEntry() == CHAINED_ESSENCE)
++                    essence = worn;
++                else if (worn && worn->GetEntry() == NAVI_TRINKET && !essence &&
++                         (state.naviSockApplied[0] == CHAINED_ESSENCE || state.naviSockApplied[1] == CHAINED_ESSENCE))
++                    essence = worn;
++            }
++            if (essence)
++            {
++                hero->CastSpell(hero, POISON_CLOUD, TRIGGERED_OLD_TRIGGERED, essence);
++                state.essenceReadyAt = (now + ESSENCE_COOLDOWN_MS) | 1;
++            }
 +        }
 +    }
 +    // Dual Wield Specialization: a critical strike against the dual-wielding hero enrages him
