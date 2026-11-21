@@ -179,17 +179,20 @@ def main():
         action3_param1=0, action3_param2=0, action3_param3=0, comment="Zan'thraze the Hexblade - " + text)
         for sid, etype, flags, p, spell, target, text in HEXBLADE_AI]))
 
-    # the Altar of Jammal'an: a goober over his spot, used for the rite (core: ZeldaGameObjectUse)
+    # the Altar of Jammal'an: a goober over his spot, used for the rite (core: ZeldaGameObjectUse). It is the
+    # rite's goober (data1), so it can be clicked only while the rite is in the quest log (the core:
+    # ZeldaGameObjectActive), and it is not spawned by default (negative respawn): the Sunken Temple's
+    # script raises it when Jammal'an falls, and again whenever the temple loads with him dead
     m, x, y, z, o = JAMMALAN_SPOT
     out.append('DELETE FROM `gameobject_template` WHERE `entry` = %d;\n' % RITUAL_ALTAR)
     out.append('INSERT INTO `gameobject_template` (`entry`, `type`, `displayId`, `name`, `faction`, `flags`, `size`, '
-               '`data0`, `data1`) VALUES (%d, 10, %d, %s, 0, 0, 0.8, 0, 0);\n'
-               % (RITUAL_ALTAR, ALTAR_DISPLAY, esc("Altar of Jammal'an")))
+               '`data0`, `data1`) VALUES (%d, 10, %d, %s, 0, 0, 0.8, 0, %d);\n'
+               % (RITUAL_ALTAR, ALTAR_DISPLAY, esc("Altar of Jammal'an"), QUEST_RITE))
     out.append('DELETE FROM `gameobject` WHERE `id` = %d OR `guid` = %d;\n' % (RITUAL_ALTAR, RITUAL_ALTAR_GUID))
     import math
     out.append('INSERT INTO `gameobject` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, '
                '`orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, '
-               '`spawntimesecsmax`) VALUES (%d, %d, %d, 1, %.5f, %.5f, %.5f, %.7f, 0, 0, %.7f, %.7f, 25, 25);\n'
+               '`spawntimesecsmax`) VALUES (%d, %d, %d, 1, %.5f, %.5f, %.5f, %.7f, 0, 0, %.7f, %.7f, -25, -25);\n'
                % (RITUAL_ALTAR_GUID, RITUAL_ALTAR, m, x, y, z, o, math.sin(o / 2), math.cos(o / 2)))
 
     # the two quests, started by items (no giver) and finished by the core (no ender)

@@ -26,9 +26,9 @@ INSERT INTO `creature_ai_scripts` (`id`,`creature_id`,`event_type`,`event_invers
 (19120003,191200,0,0,100,1,3000,5000,25000,30000,0,0,11,16244,0,0,0,0,0,0,0,0,0,0,'Zan''thraze the Hexblade - Demoralizing Shout'),
 (19120004,191200,2,0,100,0,30,0,0,0,0,0,11,8599,0,0,0,0,0,0,0,0,0,0,'Zan''thraze the Hexblade - Enrage at 30% HP');
 DELETE FROM `gameobject_template` WHERE `entry` = 191210;
-INSERT INTO `gameobject_template` (`entry`, `type`, `displayId`, `name`, `faction`, `flags`, `size`, `data0`, `data1`) VALUES (191210, 10, 327, 'Altar of Jammal''an', 0, 0, 0.8, 0, 0);
+INSERT INTO `gameobject_template` (`entry`, `type`, `displayId`, `name`, `faction`, `flags`, `size`, `data0`, `data1`) VALUES (191210, 10, 327, 'Altar of Jammal''an', 0, 0, 0.8, 0, 90541);
 DELETE FROM `gameobject` WHERE `id` = 191210 OR `guid` = 5400190;
-INSERT INTO `gameobject` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, `orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, `spawntimesecsmax`) VALUES (5400190, 191210, 109, 1, -426.67749, -85.73757, -88.14072, 3.2114058, 0, 0, 0.9993908, -0.0348995, 25, 25);
+INSERT INTO `gameobject` (`guid`, `id`, `map`, `spawnMask`, `position_x`, `position_y`, `position_z`, `orientation`, `rotation0`, `rotation1`, `rotation2`, `rotation3`, `spawntimesecsmin`, `spawntimesecsmax`) VALUES (5400190, 191210, 109, 1, -426.67749, -85.73757, -88.14072, 3.2114058, 0, 0, 0.9993908, -0.0348995, -25, -25);
 DELETE FROM `quest_template` WHERE `entry` IN (90540, 90541);
 DELETE FROM `creature_questrelation` WHERE `quest` IN (90540, 90541);
 DELETE FROM `creature_involvedrelation` WHERE `quest` IN (90540, 90541);

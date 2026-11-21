@@ -86,11 +86,44 @@ index 20bcff241..a6c8243df 100644
      }
      return true;
  }
+diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.cpp
+index 412f95b0b..dde1d8701 100644
+--- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.cpp
+@@ -52,6 +52,12 @@ void instance_sunken_temple::OnObjectCreate(GameObject* pGo)
+             if (m_auiEncounter[TYPE_PROTECTORS] == DONE)
+                 pGo->SetGoState(GO_STATE_ACTIVE);
+             break;
++        // Zelda of Warcraft: the Altar of Jammal'an is not spawned by default; it rises where the prophet
++        // fell (SetData) and is there again whenever the temple loads with him dead (before any client sees it)
++        case GO_ALTAR_OF_JAMMALAN:
++            if (m_auiEncounter[TYPE_JAMMALAN] == DONE && !pGo->IsSpawned())
++                pGo->SetRespawnTime(7 * DAY);
++            break;
+         case GO_IDOL_OF_HAKKAR:
+         case GO_HAKKAR_DOOR_1:
+         case GO_HAKKAR_DOOR_2:
+@@ -183,6 +189,7 @@ void instance_sunken_temple::SetData(uint32 uiType, uint32 uiData)
+             {
+                 if (Creature* pEranikus = GetSingleCreatureFromStorage(NPC_SHADE_OF_ERANIKUS))
+                     pEranikus->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
++                DoRespawnGameObject(GO_ALTAR_OF_JAMMALAN, 7 * DAY);     // Zelda of Warcraft: the altar rises
+             }
+             m_auiEncounter[uiType] = uiData;
+             break;
 diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h
-index 341794277..4242ff5f2 100644
+index 341794277..a23787c17 100644
 --- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h
 +++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/sunken_temple/sunken_temple.h
-@@ -130,6 +130,7 @@ class instance_sunken_temple : public ScriptedInstance
+@@ -61,6 +61,7 @@ enum
+     GO_HAKKAR_DOOR_2      = 149433,
+ 
+     GO_JAMMALAN_BARRIER   = 149431,
++    GO_ALTAR_OF_JAMMALAN  = 191210,                         // Zelda of Warcraft: the Rite of Sul'thraze's altar, there once Jammal'an falls
+ 
+     // Event ids related to the statue activation
+     EVENT_ID_STATUE_1     = 3094,
+@@ -130,6 +131,7 @@ class instance_sunken_temple : public ScriptedInstance
          void Update(const uint32 diff) override;
  
          bool ProcessStatueEvent(uint32 uiEventId);
@@ -1980,10 +2013,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..c7e93a8ca
+index 000000000..a2b139347
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6342 @@
+@@ -0,0 +1,6354 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -5482,16 +5515,28 @@ index 000000000..c7e93a8ca
 +    return !player || !go || go->GetEntry() != GO_BLACK_ANVIL || IronfoeInHand(player);
 +}
 +
++// the Altar of Jammal'an answers only while The Rite of Sul'thraze is in the quest log, whether its
++// kill and items are done yet or not (a goober's own quest check wants it unfinished)
++static bool RiteAltarLive(Player const* player)
++{
++    if (!player || player->GetQuestRewardStatus(QUEST_RITE_OF_SULTHRAZE))
++        return false;
++    QuestStatus const status = player->GetQuestStatus(QUEST_RITE_OF_SULTHRAZE);
++    return status == QUEST_STATUS_INCOMPLETE || status == QUEST_STATUS_COMPLETE;
++}
++
++bool ZeldaGameObjectActive(Player* player, GameObject const* go)
++{
++    return player && go && go->GetEntry() == GO_ALTAR_OF_JAMMALAN && RiteAltarLive(player);
++}
++
 +bool ZeldaGameObjectUse(Player* player, GameObject* go)
 +{
 +    // the Altar of Jammal'an: ten seconds of rite, then the Atal'ai it calls (ZeldaSpellFinished)
 +    if (player && go && go->GetEntry() == GO_ALTAR_OF_JAMMALAN)
 +    {
-+        if (player->GetQuestRewardStatus(QUEST_RITE_OF_SULTHRAZE))
-+        {
-+            ZeldaCrystalFlare(player, go);
++        if (!RiteAltarLive(player))         // no rite in the quest log: the altar does nothing
 +            return true;
-+        }
 +        StateFor(player).riteAltar = go->GetObjectGuid();
 +        if (StateFor(player).riteTrial || player->IsNonMeleeSpellCasted(false) || !RiteReady(player, true))
 +            return true;
@@ -8328,10 +8373,10 @@ index 000000000..c7e93a8ca
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..c81575de3
+index 000000000..ec55fcdd7
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,330 @@
+@@ -0,0 +1,331 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -8393,6 +8438,7 @@ index 000000000..c81575de3
 +float ZeldaDualWieldHit(Unit const* unit);
 +float ZeldaDualWieldCritTaken(Unit const* unit);
 +bool ZeldaMountedShot();
++bool ZeldaGameObjectActive(Player* player, GameObject const* go);
 +// Zelda of Warcraft: Vanquisher's Mercy (40018, the Vanquisher's Sword's equip effect): every melee
 +// critical strike heals its $s1% (5%) of the hero's maximum health
 +void ZeldaCritHeal(Unit* attacker, bool melee = true);
@@ -8875,7 +8921,7 @@ index a378c4e1e..f53dd6559 100644
 +
  #endif
 diff --git a/src/game/Entities/GameObject.cpp b/src/game/Entities/GameObject.cpp
-index 043cad6ef..9da131fa5 100644
+index 043cad6ef..bed81a008 100644
 --- a/src/game/Entities/GameObject.cpp
 +++ b/src/game/Entities/GameObject.cpp
 @@ -17,6 +17,7 @@
@@ -8900,7 +8946,7 @@ index 043cad6ef..9da131fa5 100644
      else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
          outdoorPvP->HandleGameObjectCreate(this);
  
-@@ -1168,6 +1173,10 @@ void GameObject::Respawn()
+@@ -1168,6 +1173,14 @@ void GameObject::Respawn()
  
  bool GameObject::ActivateToQuest(Player* pTarget) const
  {
@@ -8908,10 +8954,14 @@ index 043cad6ef..9da131fa5 100644
 +    if (!ZeldaGameObjectAwake(pTarget, this))
 +        return false;
 +
++    // Zelda of Warcraft: objects of ours live for a quest in the log, finished or not (the Altar of Jammal'an)
++    if (ZeldaGameObjectActive(pTarget, this))
++        return true;
++
      // if GO is ReqCreatureOrGoN for quest
      if (pTarget->HasQuestForGO(GetEntry()))
          return true;
-@@ -1498,6 +1507,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1498,6 +1511,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
      {
          case GAMEOBJECT_TYPE_DOOR:                          // 0
          {
@@ -8922,7 +8972,7 @@ index 043cad6ef..9da131fa5 100644
              // doors never really despawn, only reset to default state/flags
              UseDoorOrButton();
  
-@@ -1643,6 +1656,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1643,6 +1660,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
              if (!info)
                  return;
  
@@ -8933,7 +8983,7 @@ index 043cad6ef..9da131fa5 100644
              // exception - 180619 - ossirian crystal - supposed to be kept from despawning by a pending spellcast - to be implemented, done in db for now
  
              TriggerLinkedGameObject(user);
-@@ -1787,7 +1804,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1787,7 +1808,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                          // TODO: find reasonable value for fishing hole search
                          fishingHole = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
  
@@ -8944,7 +8994,7 @@ index 043cad6ef..9da131fa5 100644
  
                      // fish catch or fail and junk allowed (after 3.1.0)
                      if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))
-@@ -1961,6 +1980,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
+@@ -1961,6 +1984,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
  
              if (player->CanUseBattleGroundObject())
              {
