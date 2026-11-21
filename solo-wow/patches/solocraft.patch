@@ -2013,7 +2013,7 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..233016f5b
+index 000000000..9ebe61823
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6400 @@
@@ -2464,12 +2464,12 @@ index 000000000..233016f5b
 +}
 +
 +// every enemy blow and spell against the hero - melee, ranged, abilities, spells and their damage over time -
-+// hits 3x harder (Zelda.EnemyDamageRate), out in the world and in dungeons, elites included; not in raids
++// hits 2x harder (Zelda.EnemyDamageRate), out in the world and in dungeons, elites included; not in raids
 +// (SoloCraft alone sets their strength), and not the slow telegraphed Heavy Blow and Charged Bolt
 +float ZeldaEnemyDamageMultiplier(Unit const* attacker, Unit const* victim, SpellEntry const* spellInfo)
 +{
 +    const uint32 HEAVY_BLOW = 40011, CHARGED_BOLT = 40012;
-+    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyDamageRate", 3.0f));
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyDamageRate", 2.0f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
 +        return 1.0f;
 +    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
@@ -2484,7 +2484,7 @@ index 000000000..233016f5b
 +float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim)
 +{
 +    // normal (not elite) enemies' melee and ranged attacks - not spells or effects - hit heroes
-+    // harder (Zelda.EnemyMeleeDamageRate, 4), and 3x that again (ZeldaEnemyDamageMultiplier)
++    // harder (Zelda.EnemyMeleeDamageRate, 4), and 2x that again (ZeldaEnemyDamageMultiplier)
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 4.0f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
 +        return 1.0f;

@@ -182,7 +182,7 @@ Two linked projects in the GitHub repo **sauckev05/hyrule-of-warcraft**:
   bottom edge with ReputationWatchBar above it; ShapeshiftBarFrame is reparented under the buffs
   (TOPRIGHT -170, -125). Q / E (ZELDA_STANCE_PREV/NEXT, keys version 8) cycle the stances with wrap.
 - Harder enemies: Zelda.EnemyMeleeDamageRate 4 (world normals), Zelda.EliteMeleeDamageRate 1.75
-- 2026-11-20: every enemy blow and spell on the hero x3 on top (Zelda.EnemyDamageRate 3): melee/ranged swings (so 4x -> 12x normals, 6x -> 18x elites), weapon abilities, spells and DoTs; not raids, not Heavy Blow 40011 / Charged Bolt 40012 (ZeldaEnemyDamageMultiplier).
+- 2026-11-20: every enemy blow and spell on the hero x2 on top (Zelda.EnemyDamageRate 2, also set in the PC mangosd.conf): melee/ranged swings (so 4x -> 8x normals, 6x -> 12x elites), weapon abilities, spells and DoTs; not raids, not Heavy Blow 40011 / Charged Bolt 40012 (ZeldaEnemyDamageMultiplier).
   (world elites/bosses), SoloCraft.DungeonHealth 0.65 / DungeonDamage 0.9 with raid exponents
   1.08 / 0.79 (raids as before). Heavy blows (ZeldaEnemyMechanics in ZeldaPlayerUpdate, one windup
   at a time per hero): enemies fighting the hero cast Heavy Blow 40011 (2 s Slam windup, dummy) in
