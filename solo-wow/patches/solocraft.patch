@@ -2013,10 +2013,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..497f19439
+index 000000000..233016f5b
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6381 @@
+@@ -0,0 +1,6400 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2463,10 +2463,28 @@ index 000000000..497f19439
 +    return best;
 +}
 +
++// every enemy blow and spell against the hero - melee, ranged, abilities, spells and their damage over time -
++// hits 3x harder (Zelda.EnemyDamageRate), out in the world and in dungeons, elites included; not in raids
++// (SoloCraft alone sets their strength), and not the slow telegraphed Heavy Blow and Charged Bolt
++float ZeldaEnemyDamageMultiplier(Unit const* attacker, Unit const* victim, SpellEntry const* spellInfo)
++{
++    const uint32 HEAVY_BLOW = 40011, CHARGED_BOLT = 40012;
++    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyDamageRate", 3.0f));
++    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
++        return 1.0f;
++    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
++        return 1.0f;
++    if (attacker->GetMap()->IsRaid())
++        return 1.0f;
++    if (spellInfo && (spellInfo->Id == HEAVY_BLOW || spellInfo->Id == CHARGED_BOLT))
++        return 1.0f;
++    return rate;
++}
++
 +float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim)
 +{
 +    // normal (not elite) enemies' melee and ranged attacks - not spells or effects - hit heroes
-+    // harder (Zelda.EnemyMeleeDamageRate, 4)
++    // harder (Zelda.EnemyMeleeDamageRate, 4), and 3x that again (ZeldaEnemyDamageMultiplier)
 +    static float const rate = std::max(0.0f, sConfig.GetFloatDefault("Zelda.EnemyMeleeDamageRate", 4.0f));
 +    if (!attacker || !victim || attacker->GetTypeId() != TYPEID_UNIT || attacker->IsPlayerControlled())
 +        return 1.0f;
@@ -2476,9 +2494,10 @@ index 000000000..497f19439
 +    if (victim->GetTypeId() != TYPEID_PLAYER && !victim->IsPlayerControlled())
 +        return 1.0f;
 +    uint32 const rank = static_cast<Creature const*>(attacker)->GetCreatureInfo()->Rank;
++    float const all = ZeldaEnemyDamageMultiplier(attacker, victim, nullptr);
 +    if (rank != CREATURE_ELITE_NORMAL && rank != CREATURE_ELITE_RARE)
-+        return attacker->GetMap()->IsRaid() ? 1.0f : eliteRate;
-+    return rate;
++        return attacker->GetMap()->IsRaid() ? 1.0f : eliteRate * all;
++    return rate * all;
 +}
 +
 +uint32 ZeldaSwingHitInfoFlags()
@@ -8400,10 +8419,10 @@ index 000000000..497f19439
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..ec55fcdd7
+index 000000000..fb8b6fb75
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,331 @@
+@@ -0,0 +1,332 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -8555,6 +8574,7 @@ index 000000000..ec55fcdd7
 +// Zelda of Warcraft: factor on an enemy creature's normal melee or ranged attack on a hero or
 +// the hero's side (Zelda.EnemyMeleeDamageRate, 3); 1 otherwise.
 +float ZeldaEnemyMeleeMultiplier(Unit const* attacker, Unit const* victim);
++float ZeldaEnemyDamageMultiplier(Unit const* attacker, Unit const* victim, SpellEntry const* spellInfo);
 +// a crushing blow's damage against a hero: 20% of his maximum health, a boss's 30% (0: not a hero's)
 +uint32 ZeldaCrushingDamage(Unit const* attacker, Unit const* victim);
 +// Zelda of Warcraft: extra SMSG_ATTACKERSTATEUPDATE hit-info bits for the swing being sent now
@@ -9644,7 +9664,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..63cc40650 100644
+index 00986af9e..33bb7af56 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -9948,16 +9968,18 @@ index 00986af9e..63cc40650 100644
  
      if (benefit)
      {
-@@ -7050,7 +7190,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7190,9 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
 -        DoneTotalMod *= Creature::_GetSpellDamageMod(((Creature*)this)->GetCreatureInfo()->Rank);
 +        DoneTotalMod *= Creature::_GetSpellDamageMod(((Creature*)this)->GetCreatureInfo()->Rank) * SoloCraftFactor((Creature*)this, false);
++    // Zelda of Warcraft: enemies' spells and their damage over time hit the hero harder
++    DoneTotalMod *= ZeldaEnemyDamageMultiplier(this, victim, spellInfo);
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7307,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7309,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -9971,7 +9993,7 @@ index 00986af9e..63cc40650 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7456,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7458,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -9985,7 +10007,17 @@ index 00986af9e..63cc40650 100644
      return AdvertisedBenefit;
  }
  
-@@ -8095,6 +8249,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -7598,6 +7754,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
+     {
+         if (Player* modOwner = GetSpellModOwner())
+             modOwner->ApplySpellMod(spellInfo->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, tmpDamage);
++        // Zelda of Warcraft: enemies' weapon abilities (Strike, Cleave...) hit the hero harder; their plain
++        // swings get it in Unit::CalculateMeleeDamage (ZeldaEnemyMeleeMultiplier)
++        tmpDamage *= ZeldaEnemyDamageMultiplier(this, victim, spellInfo);
+     }
+ 
+     // bonus result can be negative
+@@ -8095,6 +8254,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -9999,7 +10031,7 @@ index 00986af9e..63cc40650 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8565,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8570,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
