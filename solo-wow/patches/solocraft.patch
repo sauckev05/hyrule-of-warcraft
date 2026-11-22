@@ -1,3 +1,26 @@
+diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
+index 9f973d40b..df4c672d1 100644
+--- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
+@@ -129,10 +129,16 @@ void instance_blackrock_depths::OnObjectCreate(GameObject* pGo)
+ {
+     switch (pGo->GetEntry())
+     {
+-        case GO_ARENA_1:
+-        case GO_ARENA_2:
++        // Zelda of Warcraft: the Ring of Law's way out (the gates the end of its event opens) stays open once the
++        // event is done - a door loads closed whenever its grid or the instance (a server restart) loads again,
++        // and the done event can never run again to open it, which locked the way to the upper floor for good
+         case GO_ARENA_3:
+         case GO_ARENA_4:
++            if (m_auiEncounter[0] == DONE)
++                pGo->SetGoState(GO_STATE_ACTIVE);
++            break;
++        case GO_ARENA_1:
++        case GO_ARENA_2:
+         case GO_SHADOW_LOCK:
+         case GO_SHADOW_MECHANISM:
+         case GO_SHADOW_GIANT_DOOR:
 diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/gnomeregan/boss_thermaplugg.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/gnomeregan/boss_thermaplugg.cpp
 index 45ea9cdba..14876ddd0 100644
 --- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/gnomeregan/boss_thermaplugg.cpp
