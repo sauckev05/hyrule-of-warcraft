@@ -91,8 +91,8 @@ PAGES = [
     "Specialization blocks more often and gives rage on every block. Bleeding Edge makes enemies bleed, Deep "
     "Wounds bleeds them when you crit, and Blood Craze heals you on every crit.$B$B"
     "The weapon specializations depend on what you hold: two-handers counterattack, one-handers with a shield "
-    "unleash a Shield Cleave every 5th block, and two weapons hit more often - but enemies crit you more, and "
-    "each crit against you sends you into a Wrath of sure critical strikes!$B$B"
+    "unleash a Shield Cleave every 5th block, and two weapons hit more often, and each crit against you sends "
+    "you into a Wrath of sure critical strikes!$B$B"
     "Changed your mind? A class trainer can reset your talents for some gold.",
 
     # 7: inventory and equipping

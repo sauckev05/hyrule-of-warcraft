@@ -2013,10 +2013,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..ddfc9833e
+index 000000000..4c7029437
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6398 @@
+@@ -0,0 +1,6383 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4020,20 +4020,6 @@ index 000000000..ddfc9833e
 +    return 2.0f * float(std::max(warrior, rogue));     // 2% a point, 10% at 5/5
 +}
 +
-+// Dual Wield Specialization's price: while the warrior holds two weapons, enemies are 5% a talent point
-+// more likely to strike him critically (25% at 5/5) - attacks and spells alike (Unit::GetCritTakenChance)
-+float ZeldaDualWieldCritTaken(Unit const* unit)
-+{
-+    if (!unit || unit->GetTypeId() != TYPEID_PLAYER)
-+        return 0.0f;
-+    Player const* player = static_cast<Player const*>(unit);
-+    Item* main = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
-+    Item* off = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-+    if (!main || !off || off->GetProto()->Class != ITEM_CLASS_WEAPON || main->GetProto()->Class != ITEM_CLASS_WEAPON)
-+        return 0.0f;
-+    return 5.0f * float(ZeldaTalentRank(player, { 23584, 23585, 23586, 23587, 23588 }));
-+}
-+
 +// ---------------------------------------------------------------------------------- talents
 +// The warrior talents' Zelda effects (build_mastery.py has their tooltips and spells):
 +//  - Bleeding Edge (was Improved Rend): 10% a point on a melee hit, the enemy bleeds for 100% a point
@@ -4043,8 +4029,7 @@ index 000000000..ddfc9833e
 +//  - Two-Handed Weapon Specialization: 2% a point (the talent's aura); with a two-hander, an enemy
 +//    attack that hits the hero has 5% a point to provoke a counterattack that always crits
 +//  - Dual Wield Specialization: dual wielding, being critically hit enrages the hero (40029): two
-+//    stacks a point, each swing uses one and always hits critically; 12 sec. Its price: dual wielding,
-+//    enemies are 5% a point more likely to strike him critically (ZeldaDualWieldCritTaken)
++//    stacks a point, each swing uses one and always hits critically; 12 sec
 +//  - Shield Specialization: 2% block a point (the talent's aura) and 1 rage a point on every block
 +//  - One-Handed Weapon Specialization: with a shield, each block builds Shield Fury (40030); the
 +//    fifth unleashes Shield Cleave (40031) on every enemy around, a sure crit for 60% of a swing a point
@@ -8417,10 +8402,10 @@ index 000000000..ddfc9833e
 +}
 diff --git a/src/game/Chat/ZeldaCommands.h b/src/game/Chat/ZeldaCommands.h
 new file mode 100644
-index 000000000..fb8b6fb75
+index 000000000..36a2234f4
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.h
-@@ -0,0 +1,332 @@
+@@ -0,0 +1,331 @@
 +#ifndef ZELDA_COMMANDS_H
 +#define ZELDA_COMMANDS_H
 +
@@ -8480,7 +8465,6 @@ index 000000000..fb8b6fb75
 +// Zelda of Warcraft: Dual Wield Specialization gives 1% melee hit per point while two weapons are
 +// held (instead of off-hand damage); the extra hit chance of `unit`
 +float ZeldaDualWieldHit(Unit const* unit);
-+float ZeldaDualWieldCritTaken(Unit const* unit);
 +bool ZeldaMountedShot();
 +bool ZeldaGameObjectActive(Player* player, GameObject const* go);
 +// Zelda of Warcraft: Vanquisher's Mercy (40018, the Vanquisher's Sword's equip effect): every melee
@@ -9663,7 +9647,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..33bb7af56 100644
+index 00986af9e..44979681e 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -9881,15 +9865,7 @@ index 00986af9e..33bb7af56 100644
          if (roll_chance_combat(chance))
              return SPELL_MISS_REFLECT;
      }
-@@ -3533,6 +3644,7 @@ float Unit::GetCritTakenChance(SpellSchoolMask dmgSchoolMask, SpellDmgClass dmgC
-     // Resilience and resilience-like auras:
-     if (!heal)
-     {
-+        chance += ZeldaDualWieldCritTaken(this);       // Dual Wield Specialization's price
-         switch (uint32(dmgClass))
-         {
-             case SPELL_DAMAGE_CLASS_MELEE:
-@@ -3603,7 +3715,16 @@ uint32 Unit::CalculateCritAmount(const Unit *victim, uint32 amount, const SpellE
+@@ -3603,7 +3714,16 @@ uint32 Unit::CalculateCritAmount(const Unit *victim, uint32 amount, const SpellE
          return 0;
      const SpellSchoolMask schoolMask = GetSpellSchoolMask(entry);
      const uint32 creatureTypeMask = (victim ? victim->GetCreatureTypeMask() : 0);
@@ -9907,7 +9883,7 @@ index 00986af9e..33bb7af56 100644
      const SpellDmgClass dmgClass = SpellDmgClass(entry->DmgClass);
      const float ignoreReduction = 0.0f;
      const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction, heal) : 1.0f);
-@@ -3628,7 +3749,12 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3628,7 +3748,12 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
          SubDamageInfo& subDamage = meleeInfo->subDamage[i];
          const uint32 amount = subDamage.damage;
          const SpellSchoolMask schoolMask = subDamage.damageSchoolMask;
@@ -9921,7 +9897,7 @@ index 00986af9e..33bb7af56 100644
          const float taken = (victim ? victim->GetCritTakenMultiplier(schoolMask, dmgClass, ignoreReduction) : 1.0f);
          const uint32 outgoing = uint32(amount * multiplier);
          // Crit amount can't be less than normal hit
-@@ -3643,7 +3769,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
+@@ -3643,7 +3768,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
  
  float Unit::GetHitChance(WeaponAttackType attackType) const
  {
@@ -9930,7 +9906,7 @@ index 00986af9e..33bb7af56 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5102,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5101,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -9942,7 +9918,7 @@ index 00986af9e..33bb7af56 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6228,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6227,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -9951,7 +9927,7 @@ index 00986af9e..33bb7af56 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7002,6 +7133,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
+@@ -7002,6 +7132,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
              total += int32(ap_bonus * (GetTotalAttackPowerValue(IsSpellRequiresRangedAP(spellProto) ? RANGED_ATTACK : BASE_ATTACK) + ap_benefit));
          }
      }
@@ -9967,7 +9943,7 @@ index 00986af9e..33bb7af56 100644
  
      if (benefit)
      {
-@@ -7050,7 +7190,9 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7189,9 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -9978,7 +9954,7 @@ index 00986af9e..33bb7af56 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7309,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7308,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -9992,7 +9968,7 @@ index 00986af9e..33bb7af56 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7458,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7457,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -10006,7 +9982,7 @@ index 00986af9e..33bb7af56 100644
      return AdvertisedBenefit;
  }
  
-@@ -7598,6 +7754,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
+@@ -7598,6 +7753,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
      {
          if (Player* modOwner = GetSpellModOwner())
              modOwner->ApplySpellMod(spellInfo->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, tmpDamage);
@@ -10016,7 +9992,7 @@ index 00986af9e..33bb7af56 100644
      }
  
      // bonus result can be negative
-@@ -8095,6 +8254,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8253,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -10030,7 +10006,7 @@ index 00986af9e..33bb7af56 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8570,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8569,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {

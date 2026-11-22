@@ -264,10 +264,9 @@ for n, sid in enumerate(TWO_HANDED_SPEC, start=1):
                               'wield a two-handed weapon, an enemy attack that hits you has a %d%% chance to '
                               'provoke your counterattack, which always strikes critically.' % (5 * n))
 for n, sid in enumerate(WARRIOR_DUAL_WIELD, start=1):
-    DESCRIPTION_EDITS[sid] = ('Increases your chance to hit by %d%% while dual wielding, but enemies are %d%% more '
-                              'likely to land a critical strike on you while dual wielding. A critical strike '
-                              'against you while dual wielding sends you into a Wrath: your next %d swings always '
-                              'hit and strike critically. Lasts 12 sec.' % (2 * n, 5 * n, 2 * n))
+    DESCRIPTION_EDITS[sid] = ('Increases your chance to hit by %d%% while dual wielding. While dual wielding, a '
+                              'critical strike against you sends you into a Wrath: your next %d swings always '
+                              'hit and strike critically. Lasts 12 sec.' % (2 * n, 2 * n))
 for n, sid in enumerate(ONE_HANDED_SPEC, start=1):
     DESCRIPTION_EDITS[sid] = ('Increases the damage you deal with one-handed melee weapons by $s1%%. With a shield '
                               'equipped, every 5th block unleashes a cleave on all enemies around you, always a '
