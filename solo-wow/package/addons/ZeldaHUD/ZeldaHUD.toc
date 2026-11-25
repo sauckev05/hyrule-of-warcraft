@@ -17,3 +17,4 @@ mailfix.lua
 targetbar.lua
 castbar.lua
 navisock.lua
+spur.lua

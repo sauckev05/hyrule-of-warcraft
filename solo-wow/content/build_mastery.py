@@ -364,6 +364,20 @@ SPELLS += [
 ITEM_EDITS[CHAINED_ESSENCE] = dict(spellid_1=CHAINED_ESSENCE_WORN, spelltrigger_1=1, spellcharges_1=0, spellppmRate_1=0,
                                    spellcooldown_1=-1, spellcategory_1=0, spellcategorycooldown_1=-1)
 
+# the riding spur (the core: ZeldaSpur): key 5 on a mount spurs it on, Epona-style - each stack 20% faster, up
+# to five; one drops every 2 sec without a new spur, all of them when the hero stops or gets off. A plain
+# dummy buff (the core does the speed), with the rogue's Sprint icon so ZeldaHUD finds it for its red circles
+SPUR, ROGUE_SPRINT = 40037, 2983
+SPELLS += [
+    (SPUR, ROGUE_SPRINT, 'Spur',
+     'Spurs your mount on: 20% faster for each spur, up to 5.',
+     dict(Effect1=6, EffectApplyAuraName1=4, EffectBasePoints1=19, EffectDieSides1=1, EffectBaseDice1=1,
+          Effect2=0, EffectApplyAuraName2=0, EffectBasePoints2=0, Effect3=0, EffectApplyAuraName3=0,
+          EffectBasePoints3=0, EffectImplicitTargetA1=1, DurationIndex=DURATION_FOREVER, StackAmount=5,
+          Attributes=0, AttributesEx=0, RecoveryTime=0, ManaCost=0,
+          PowerType=0, SpellVisual=0, CastingTimeIndex=1, tooltip='Mount speed increased by $s1% per spur.')),
+]
+
 # Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
 # instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc
 BLOOD_CRAZE = (16487, 16489, 16492)

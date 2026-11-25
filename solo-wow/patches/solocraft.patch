@@ -2036,10 +2036,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..4c7029437
+index 000000000..a694326bd
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6383 @@
+@@ -0,0 +1,6429 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2186,9 +2186,10 @@ index 000000000..4c7029437
 +        uint32 statueHintInstance = 0;                  // the Sunken Temple run Navi explained the statues in
 +        time_t naviReviveReadyAt = 0;                   // Navi's Light can bring the hero back after this
 +        uint32 naviHealReadyAt = 0;                     // and heal again after this (ms)
-+        // running: after Zelda.SprintAfterSeconds of running without stopping the hero sprints
-+        uint32 runningSince = 0;
-+        bool sprinting = false;
++        // riding: key 5's spurs (ZeldaSpur); one drops when this passes without a new one
++        uint32 spurDecayAt = 0;
++        int32 spurShown = -1;                           // the spur circles ZeldaHUD shows (-1: none, not riding)
++        uint32 spurResendAt = 0;                        // riding, said again now and then (a relog or /reload)
 +        int32 swimStep = -1;                            // breath left, in tenths, the swim speed was set for
 +        // the five-player dungeon the hero is in (0 outside); leaving it resets it
 +        uint32 inDungeonMap = 0;
@@ -2424,6 +2425,13 @@ index 000000000..4c7029437
 +    }
 +}
 +
++// the riding spur: key 5 on a mount (the forward roll's key) spurs it on, Epona-style - each spur 20% faster,
++// up to five (the aura's stacks, shown as red circles under the hero by ZeldaHUD); without a new spur for
++// 2 sec one drops, then another every 2 sec; stopping or getting off drops them all (ZeldaPlayerUpdate)
++static const uint32 ZELDA_SPUR = 40037;
++static const float ZELDA_SPUR_SHARE = 0.2f;
++static const uint32 ZELDA_SPUR_DECAY_MS = 2000;
++
 +float ZeldaSpeedFactor(Player* player, uint32 moveType)
 +{
 +    if (!player)
@@ -2448,8 +2456,11 @@ index 000000000..4c7029437
 +    if (StateFor(player).shield || StateFor(player).parry)
 +        return 0.45f;                           // shield or parry up: a careful walk, whatever the run speed
 +    static float const runRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.RunSpeedRate", 1.3f));
-+    static float const sprintRate = std::max(0.1f, sConfig.GetFloatDefault("Zelda.SprintSpeedRate", 2.0f));
-+    return StateFor(player).sprinting ? sprintRate : runRate;
++    // riding, each spur (key 5, ZeldaSpur) makes the mount 20% faster, up to five
++    if (player->IsMounted())
++        if (SpellAuraHolder const* spur = player->GetSpellAuraHolder(ZELDA_SPUR))
++            return runRate * (1.0f + ZELDA_SPUR_SHARE * float(spur->GetStackAmount()));
++    return runRate;
 +}
 +
 +bool ZeldaQuestItemsAlwaysDrop()
@@ -3636,31 +3647,46 @@ index 000000000..4c7029437
 +        }
 +    }
 +
-+    // running without stopping for a while turns into a sprint; stopping ends it
++    // the riding spurs: one drops every 2 sec without a new one, all of them when the hero stops or gets off.
++    // ZeldaHUD draws them as five circles under the hero while he rides (a hidden "ZSPUR:n" line, -1 hides)
 +    {
-+        static uint32 const sprintAfter = uint32(std::max(0, sConfig.GetIntDefault("Zelda.SprintAfterSeconds", 15))) * 1000;
-+        uint32 const now = WorldTimer::getMSTime();
-+        bool const running = player->IsAlive() && player->IsMoving() && !player->IsWalking() && !player->IsTaxiFlying() &&
-+                             !state.shield && !state.parry && player->IsInWorld();
-+        if (running)
++        int32 shown = -1;
++        if (player->IsMounted() && !player->IsTaxiFlying() && player->IsAlive())
 +        {
-+            if (!state.runningSince)
-+                state.runningSince = now ? now : 1;
-+            else if (!state.sprinting && now - state.runningSince >= sprintAfter)
-+            {
-+                state.sprinting = true;
-+                player->UpdateSpeed(MOVE_RUN, true);
-+            }
++            SpellAuraHolder const* spur = player->GetSpellAuraHolder(ZELDA_SPUR);
++            shown = spur ? int32(spur->GetStackAmount()) : 0;
 +        }
-+        else if (state.runningSince)
++        uint32 const now = WorldTimer::getMSTime();
++        bool const resend = shown >= 0 && int32(now - state.spurResendAt) >= 0;
++        if ((shown != state.spurShown || resend) && player->IsInWorld() && player->GetSession())
 +        {
-+            state.runningSince = 0;
-+            if (state.sprinting)
++            state.spurShown = shown;
++            state.spurResendAt = now + 3000;
++            ChatHandler(player).PSendSysMessage("ZSPUR:%d", shown);
++        }
++    }
++    if (SpellAuraHolder* spur = player->GetSpellAuraHolder(ZELDA_SPUR))
++    {
++        uint32 const now = WorldTimer::getMSTime();
++        if (!player->IsMounted() || !player->IsMoving() || player->IsTaxiFlying() || !player->IsAlive())
++        {
++            player->RemoveAurasDueToSpell(ZELDA_SPUR);
++            state.spurDecayAt = 0;
++            player->UpdateSpeed(MOVE_RUN, true);
++        }
++        else if (state.spurDecayAt && int32(now - state.spurDecayAt) >= 0)
++        {
++            if (spur->GetStackAmount() <= 1)
 +            {
-+                state.sprinting = false;
-+                if (player->IsInWorld())
-+                    player->UpdateSpeed(MOVE_RUN, true);
++                player->RemoveAurasDueToSpell(ZELDA_SPUR);
++                state.spurDecayAt = 0;
 +            }
++            else
++            {
++                spur->SetStackAmount(spur->GetStackAmount() - 1, player);
++                state.spurDecayAt = (now + ZELDA_SPUR_DECAY_MS) | 1;
++            }
++            player->UpdateSpeed(MOVE_RUN, true);
 +        }
 +    }
 +
@@ -6961,9 +6987,26 @@ index 000000000..4c7029437
 +    player->KnockBackWithAngle(angle, horizontal, vertical);
 +}
 +
++// key 5 in the saddle: a spur (ZELDA_SPUR) - the mount runs 20% faster for each, up to five
++static void ZeldaSpur(Player* player)
++{
++    if (!player->IsAlive() || player->IsTaxiFlying() || !player->IsMoving())
++        return;                             // a spur wants a mount on the move
++    player->CastSpell(player, ZELDA_SPUR, TRIGGERED_OLD_TRIGGERED);
++    StateFor(player).spurDecayAt = (WorldTimer::getMSTime() + ZELDA_SPUR_DECAY_MS) | 1;
++    player->UpdateSpeed(MOVE_RUN, true);
++}
++
 +bool ChatHandler::HandleZeldaRollCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    // the forward roll's key on a mount spurs it on instead (the side rolls still get the hero off)
++    bool const forward = !args || !*args || args[0] == 'f' || args[0] == 'F';
++    if (forward && player->IsMounted() && !player->IsTaxiFlying())
++    {
++        ZeldaSpur(player);
++        return true;
++    }
 +    DismountToFight(player);            // a roll from the saddle: the hero jumps down and rolls
 +    if (!CanAct(player) || player->IsInWater())
 +        return true;
@@ -7136,6 +7179,9 @@ index 000000000..4c7029437
 +        else if (a == "off" || a == "0")
 +            on = false;
 +    }
++    // no guard in the air: a shield or parry raised mid-jump would root the hero where he hangs
++    if (on && player->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)))
++        on = false;
 +    if (on)
 +        DismountToFight(player);        // raising the guard from the saddle: the hero jumps down first
 +    if (on && !CanAct(player))

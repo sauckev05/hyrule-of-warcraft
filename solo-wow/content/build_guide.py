@@ -103,9 +103,9 @@ PAGES = [
     "it back until you log out.$B$B"
     "You carry up to 10 of each potion, and potions have no cooldown. Mana potions turn into a shield that "
     "absorbs damage! Right-click one to put it on key 6.$B$B"
-    "Right-click a mount to put it on key 7. You can shoot from the saddle, but swinging your sword, "
-    "rolling, raising your shield or throwing the boomerang gets you off - and so does talking to someone, "
-    "using or gathering something, or taking a flight path.$B$B"
+    "Right-click a mount to put it on key 7. You can shoot from the saddle, and 5 spurs it on. Swinging your "
+    "sword, rolling sideways, raising your shield or throwing the boomerang gets you off - and so does "
+    "talking to someone, using or gathering something, or taking a flight path.$B$B"
     "Loot is picked up for you automatically.",
 
     # 8: items and weapon types
@@ -131,9 +131,10 @@ PAGES = [
 
     # 10: getting around
     "Getting around Azeroth!$B$B"
-    "Run without stopping for 15 seconds and you start sprinting, twice as fast. You swim fast too, until "
-    "you run out of breath.$B$B"
-    "Ride a mount (key 7) for long trips, or take a flight master's gryphon or wind rider between towns.$B$B"
+    "You swim fast, until you run out of breath.$B$B"
+    "Ride a mount (key 7) for long trips, or take a flight master's gryphon or wind rider between towns. "
+    "Riding, press 5 to spur your mount on like Epona: each spur is 20% faster, up to five red circles. "
+    "Stop spurring and they drop one every 2 seconds; stop or get off and they are gone.$B$B"
     "Every town is friendly to you, Alliance and Horde alike, so you can go anywhere and talk to anyone.$B$B"
     "The Kirin Tor mages in Stormwind's Wizard's Sanctum and outside Dalaran send you between the two.",
 

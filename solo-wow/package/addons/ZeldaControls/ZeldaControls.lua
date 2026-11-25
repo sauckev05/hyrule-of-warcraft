@@ -283,6 +283,10 @@ end
 
 function ZeldaControls_Shield(state)
 	local wanted = (state == "down")
+	-- no guard in the air: the server refuses one mid-jump too, so the pose never starts there
+	if wanted and IsFalling and IsFalling() then
+		return
+	end
 	if wanted ~= shieldUp then
 		shieldUp = wanted
 		if wanted then
