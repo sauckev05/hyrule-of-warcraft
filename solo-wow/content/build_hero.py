@@ -131,9 +131,9 @@ TABARD = 1202
 # over a robe, and is slit up the front from slit_z with the halves gap apart (at the slit's top, at
 # the hem), and up the back from back_slit_z (back_gap) if given; hem_z cuts it shorter (0: the
 # robe's own length, to the ankles)
-# W3: J3's openings front and back, fitted like J2 (as close as the robe), a fine frayed front hem
-# (K3 was push=0.03, hip_push=0.03, slit_z=0.9, gap=(0.008, 0.05), hem_z=0.3, front opening only)
-TABARD_SKIRT = dict(push=0.006, slit_z=0.9, gap=(0.01, 0.08), hem_z=0.3, hip_push=0.036, back_slit_z=0.9, back_gap=(0.01, 0.08), hip_z=(1.1, 0.9, 0.45), worn=dict(length=0.05, tip_wear=0.3, tear_min=0.4, cols=20, rows=2, seed=7))
+# W2's tatters, B2's back (a wide V from just under the belt to the hem's corners, torn as the
+# front), the front drawn up to end just on top of the boots (front_hem; W3 was the first tried)
+TABARD_SKIRT = dict(push=0.006, slit_z=0.9, gap=(0.01, 0.08), hem_z=0.3, hip_push=0.036, hip_z=(1.1, 0.9, 0.45), worn=dict(length=0.1, tip_wear=0.35, tear_min=0.6, cols=10, rows=3, seed=11, below=0.9), back_v=dict(top_z=1.0, angle=48), worn_back=dict(length=0.12, tip_wear=0.35, tear_min=0.6, cols=10, rows=3, seed=29, below=1.0), front_hem=0.73)
 ROBE = 1302
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
@@ -688,6 +688,12 @@ def _tabard_skirt(m, d, recs):
     new_of, twin = {}, {}
     def place(g, dy=0.0, rot=0.0):
         x, y, z = p_of(g)
+        fh = t.get('front_hem')
+        if fh and z < t['slit_z']:                  # the front shorter: its rows below the slit's top
+            a_ = abs(math.degrees(math.atan2(y, x - cx)))    # drawn up, the back left as it is
+            k = max(0.0, min(1.0, (130.0 - a_) / 35.0))
+            zf = fh + (z - low) * (t['slit_z'] - fh) / (t['slit_z'] - low)
+            z = z + (zf - z) * k
         if rot:                                     # turned round the legs' axis (the back's V opening)
             r0, a0 = math.hypot(x - cx, y), math.atan2(y, x - cx) + math.radians(rot)
             x, y = cx + r0 * math.cos(a0), r0 * math.sin(a0)
@@ -720,7 +726,7 @@ def _tabard_skirt(m, d, recs):
             f = s_top * (1.0 - wt) + s_low * wt
         rec = bytearray(d[o_v + g * 48:o_v + g * 48 + 48])
         struct.pack_into('<3f', rec, 0, x2, y2, z)
-        struct.pack_into('<2f', rec, 32, u_mid + (u_side - u_mid) * f, v_top + (v_hem - v_top) * (top - z) / (top - low))
+        struct.pack_into('<2f', rec, 32, u_mid + (u_side - u_mid) * f, v_top + (v_hem - v_top) * min(1.0, (top - z) / (top - low)))
         recs.extend(rec)
         return len(recs) // 48 - 1
     for g in verts:
