@@ -54,7 +54,7 @@ HERO_HEAD = 0.97              # the head (and hair and helm) a touch under stock
 # worn pieces on the young body: the shoulder pads shrink with the narrower shoulders, the helm grows
 # with the bigger head, and every attachment point moves with the skin around it
 SHOULDER_ATTACH = (5, 6)
-SHOULDER_PAD_SCALE = 0.78
+SHOULDER_PAD_SCALE = 0.86
 HELM_ATTACH = 11
 HEAD_BONE = 64
 # the cape: every cloak wears the split cape (1504), stretched from the shoulder blades down
