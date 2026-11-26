@@ -2036,7 +2036,7 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..2891d3787
+index 000000000..7676a52d5
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6475 @@
@@ -2426,11 +2426,11 @@ index 000000000..2891d3787
 +}
 +
 +// the riding spur: key 5 on a mount (the forward roll's key) spurs it on, Epona-style - each spur 20% faster,
-+// up to five (the aura's stacks, shown as red circles under the hero by ZeldaHUD); without a new spur for
-+// 2 sec one drops, then another every 2 sec; stopping or getting off drops them all (ZeldaPlayerUpdate)
++// up to five (the aura's stacks, shown as red circles over the target bar by ZeldaHUD); without a new spur for
++// 3 sec one drops, then another every 3 sec; stopping or getting off drops them all (ZeldaPlayerUpdate)
 +static const uint32 ZELDA_SPUR = 40037;
 +static const float ZELDA_SPUR_SHARE = 0.2f;
-+static const uint32 ZELDA_SPUR_DECAY_MS = 2000;
++static const uint32 ZELDA_SPUR_DECAY_MS = 3000;
 +
 +float ZeldaSpeedFactor(Player* player, uint32 moveType)
 +{
@@ -3647,7 +3647,7 @@ index 000000000..2891d3787
 +        }
 +    }
 +
-+    // the riding spurs: one drops every 2 sec without a new one, all of them when the hero stops or gets off.
++    // the riding spurs: one drops every 3 sec without a new one, all of them when the hero stops or gets off.
 +    // ZeldaHUD draws them as five circles under the hero while he rides (a hidden "ZSPUR:n" line, -1 hides)
 +    {
 +        int32 shown = -1;

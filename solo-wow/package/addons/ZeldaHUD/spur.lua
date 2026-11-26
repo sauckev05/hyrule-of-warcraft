@@ -1,6 +1,7 @@
 -- Zelda HUD: Epona's spurs. Riding, key 5 spurs the mount on (the server's ZeldaSpur): each spur 20%
--- faster, up to five, one dropping every 2 sec without a new one. Like Ocarina of Time's carrots, five
--- red circles under the hero show them while he rides; the server sends a hidden "ZSPUR:n" line
+-- faster, up to five, one dropping every 3 sec without a new one. Like Ocarina of Time's carrots, five
+-- red circles show them while he rides, just above the enemy charge-up bar (castbar.lua) over the
+-- target's health bar (targetbar.lua); the server sends a hidden "ZSPUR:n" line
 -- (n spurs, -1 when he is not riding), and says it again every few seconds while he rides.
 
 local COUNT, SIZE, GAP = 5, 22, 8
@@ -8,7 +9,13 @@ local COUNT, SIZE, GAP = 5, 22, 8
 local frame = CreateFrame("Frame", "ZeldaSpurFrame", UIParent)
 frame:SetWidth(COUNT * SIZE + (COUNT - 1) * GAP)
 frame:SetHeight(SIZE)
-frame:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
+-- the charge-up bar sits 28 px over the target bar's anchor and is 10 px tall with a 3 px border:
+-- the circles go a little above its top edge
+if ZeldaTargetAnchor then
+	frame:SetPoint("BOTTOM", ZeldaTargetAnchor, "TOP", 0, 58)
+else
+	frame:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 175)
+end
 frame:SetFrameStrata("MEDIUM")
 frame:Hide()
 

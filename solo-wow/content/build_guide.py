@@ -135,7 +135,7 @@ PAGES = [
     "Ride a mount (key 7) for long trips, or take a flight master's gryphon or wind rider between towns. "
     "Riding, press 5 to spur your mount on like Epona: each spur is 20% faster, up to five red circles, "
     "and your mount calls out with every one. "
-    "Stop spurring and they drop one every 2 seconds; stop or get off and they are gone. "
+    "Stop spurring and they drop one every 3 seconds; stop or get off and they are gone. "
     "Riding training costs 400 gold, and the fast riding at level 60 costs 2000 gold.$B$B"
     "Every town is friendly to you, Alliance and Horde alike, so you can go anywhere and talk to anyone.$B$B"
     "The Kirin Tor mages in Stormwind's Wizard's Sanctum and outside Dalaran send you between the two.",

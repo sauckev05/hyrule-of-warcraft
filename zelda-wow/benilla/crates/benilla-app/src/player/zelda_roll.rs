@@ -131,8 +131,12 @@ fn tumble(
     mut swings: Option<ResMut<crate::creature_anim::ZeldaSwingRequests>>,
     mut sounds: MessageWriter<crate::sound::ZeldaRollSound>,
     body: Query<Option<&benilla_assets::ModelAnimations>, (With<Embodied>, Without<FlyCam>)>,
+    own: Query<&crate::net::ObjectStore, (With<Embodied>, Without<FlyCam>)>,
 ) {
     let now = time.elapsed_secs();
+    // in the saddle the forward roll's key spurs the mount (the server's ZeldaSpur): no dash, which
+    // would hold the horse to roll speed for the dash's time
+    let mounted = own.single().is_ok_and(|s| s.0.unit_mount_display_id() != 0);
     let mut forward_now = false;
     if let Some(kind) = request.pending.take() {
         trace(|| format!("asked kind={kind} rolling={}", state.rolling.is_some()));
@@ -143,7 +147,8 @@ fn tumble(
                 && now - state.last_start >= DODGE_COOLDOWN_SECS
                 && player.airborne_since.is_none()
                 && !player.swimming
-                && !player.server_riding;
+                && !player.server_riding
+                && !mounted;
             if ready {
                 let lasts = ROLL_SECS[0];
                 player.zelda_dash = Some(super::state::ZeldaDash {
@@ -154,7 +159,7 @@ fn tumble(
                 state.armed = Some((kind, now));
                 forward_now = true;
             } else {
-                trace(|| format!("refused kind=1: rolling={} since_last={:.3} airborne={}",
+                trace(|| format!("refused kind=1: rolling={} since_last={:.3} airborne={} mounted={mounted}",
                                  state.rolling.is_some(), now - state.last_start, player.airborne_since.is_some()));
             }
         } else if state.rolling.is_none() {
