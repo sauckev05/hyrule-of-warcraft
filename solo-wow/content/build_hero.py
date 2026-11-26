@@ -117,6 +117,8 @@ CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape
 CAPE_BORDER_V = 0.90               # with a worn hem: the texture v above which the hem's border is drawn to scale
 CAPE_FLARE = 0.22                  # below that, how fast the half width keeps widening (per profile length)
 FULL_CAPE = 1502
+NO_CAPE = 1501                 # the upper back's no-cape piece
+CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
 CAPE_BOTTOM_Z = 0.40          # the split cape's tails end at mid-calf (stock: 0.73, at the thigh)
@@ -600,18 +602,35 @@ def _cape_extras(m, d, pos):
                 new_tris += [local[g] for g in f]
             for f in cowl_faces:
                 new_tris += [local[g] for g in f]
+            # the upper back: with a cape on, the game hides the no-cape piece (1501) and the stock
+            # cape's collar covers that spot; the cloak's yoke no longer does, so the body keeps it:
+            # 1501's triangles are added to the body's own submesh (0), always drawn
+            body_rec, body_k = None, None
+            if CAPE_COVER_BACK:
+                ids = [struct.unpack_from('<H', d, o_sub + k * 32)[0] for k in range(n_sub)]
+                if 0 in ids and NO_CAPE in ids:
+                    body_k, k1 = ids.index(0), ids.index(NO_CAPE)
+                    sv0, nv0, st0, nt0 = struct.unpack_from('<4H', d, o_sub + body_k * 32 + 4)
+                    st1, nt1 = struct.unpack_from('<2H', d, o_sub + k1 * 32 + 8)
+                    body = tris[st0:st0 + nt0] + tris[st1:st1 + nt1]
+                    top = max(body) + 1
+                    body_rec = (min(sv0, min(body)), top - min(sv0, min(body)), len(tris) + len(new_tris), len(body))
+                    new_tris += body
             arrs = []
             for data in (struct.pack('<%dH' % len(idx), *idx), struct.pack('<%dH' % (len(tris) + len(new_tris)), *(tris + new_tris)), props):
                 while len(d) % 16:
                     d.append(0)
                 arrs.append(len(d)); d += data
+            cape_n = len(new_tris) - (body_rec[3] if body_rec else 0)
             done[(o_i, o_t)] = (len(idx), arrs[0], len(tris) + len(new_tris), arrs[1], len(props) // 4, arrs[2],
-                                (sv, len(idx) - sv, len(tris), len(new_tris)), cape)
-        ni, oi, nt_, ot, np_, op, rec, cape = done[(o_i, o_t)]
+                                (sv, len(idx) - sv, len(tris), cape_n), cape, body_rec, body_k)
+        ni, oi, nt_, ot, np_, op, rec, cape, body_rec, body_k = done[(o_i, o_t)]
         struct.pack_into('<IIIIII', d, view, ni, oi, nt_, ot, np_, op)
         for k in range(n_sub):
             if struct.unpack_from('<H', d, o_sub + k * 32)[0] == FULL_CAPE and k == cape:
                 struct.pack_into('<4H', d, o_sub + k * 32 + 4, *rec)
+        if body_rec is not None:
+            struct.pack_into('<4H', d, o_sub + body_k * 32 + 4, *body_rec)
 
 
 
