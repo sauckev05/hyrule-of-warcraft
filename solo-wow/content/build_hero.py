@@ -686,8 +686,11 @@ def _tabard_skirt(m, d, recs):
     cx = t.get('axis_x', 0.02)
     (u_mid, u_side), (v_top, v_hem) = t.get('u', (0.727, 0.895)), t.get('v', (0.371, 0.172))
     new_of, twin = {}, {}
-    def place(g, dy=0.0):
+    def place(g, dy=0.0, rot=0.0):
         x, y, z = p_of(g)
+        if rot:                                     # turned round the legs' axis (the back's V opening)
+            r0, a0 = math.hypot(x - cx, y), math.atan2(y, x - cx) + math.radians(rot)
+            x, y = cx + r0 * math.cos(a0), r0 * math.sin(a0)
         ang = math.atan2(y, x - cx)
         rad = math.hypot(x - cx, y) or 1.0
         # a little more out over the hips (below the belt, above the thighs part), where the legs'
@@ -724,9 +727,17 @@ def _tabard_skirt(m, d, recs):
         x, y, z = p_of(g)
         a = abs(math.degrees(math.atan2(y, x - cx)))
         front = a < 5.0 and x > cx
-        back = a > 175.0 and t.get('back_slit_z')
+        back = a > 175.0 and (t.get('back_slit_z') or t.get('back_v'))
         slit_z = t['slit_z'] if front else (t.get('back_slit_z') if back else None)
-        if slit_z and z < slit_z:
+        if back and t.get('back_v') and z < t['back_v']['top_z']:
+            # the back's wide opening: the middle's twins turned apart round the legs, a V from just
+            # under the belt to the hem's corners
+            v = t['back_v']
+            turn = v['angle'] * (v['top_z'] - z) / (v['top_z'] - low)
+            side = 1.0 if p_of(g)[1] >= 0 else -1.0
+            new_of[g] = place(g, 0.0, -turn * side if side > 0 else turn)
+            twin[g] = place(g, 0.0, turn if side > 0 else -turn)
+        elif slit_z and z < slit_z:
             gaps = t['gap'] if front else t.get('back_gap', t['gap'])
             frac = (slit_z - z) / (slit_z - low)
             gap = gaps[0] + (gaps[1] - gaps[0]) * frac
@@ -748,10 +759,12 @@ def _tabard_skirt(m, d, recs):
             f = a / 90.0 if a <= 90 else (180.0 - a) / 90.0
             return u_mid + (u_side - u_mid) * f, v_top + (v_hem - v_top) * min(1.0, (top - z) / (top - low))
         out = _worn_front(out, recs, t['worn'], cx, uv_of)
+        if t.get('worn_back'):
+            out = _worn_front(out, recs, t['worn_back'], cx, uv_of, back=True)
     return out
 
 
-def _worn_front(tris, recs, w, cx, uv_of):
+def _worn_front(tris, recs, w, cx, uv_of, back=False):
     """Tear the tabard skirt's front hem (TABARD_SKIRT worn): a ragged fringe hangs from the
     front's whole bottom edge (each half's hem, from the slit's corner down the cut to the side),
     tips and tears in turn as the cloak's worn hem, shortening to nothing at the side where the
@@ -770,8 +783,12 @@ def _worn_front(tris, recs, w, cx, uv_of):
         for e in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
             k = tuple(sorted(e))
             count[k] = count.get(k, 0) + 1
-    hem = [e for e, c in count.items() if c == 1 and min(pos(e[0])[2], pos(e[1])[2]) < w.get('below', 0.62)
-           and max(ang(e[0]), ang(e[1])) <= 112 and not (ang(e[0]) < 25 and ang(e[1]) < 25)]
+    if back:                                        # the back's hem and its opening's edges
+        hem = [e for e, c in count.items() if c == 1 and min(pos(e[0])[2], pos(e[1])[2]) < w.get('below', 0.62)
+               and min(ang(e[0]), ang(e[1])) >= 105]
+    else:
+        hem = [e for e, c in count.items() if c == 1 and min(pos(e[0])[2], pos(e[1])[2]) < w.get('below', 0.62)
+               and max(ang(e[0]), ang(e[1])) <= 112 and not (ang(e[0]) < 25 and ang(e[1]) < 25)]
     def weights(g):
         wv = struct.unpack_from('<4B', recs, g * 48 + 12)
         bi = struct.unpack_from('<4B', recs, g * 48 + 16)
@@ -796,7 +813,7 @@ def _worn_front(tris, recs, w, cx, uv_of):
         for a_, b_ in edges:
             adj.setdefault(a_, []).append(b_)
             adj.setdefault(b_, []).append(a_)
-        start = min(adj, key=ang)
+        start = max(adj, key=ang) if back else min(adj, key=ang)
         chain, prev = [start], None
         while True:
             nxt = [g for g in adj[chain[-1]] if g != prev and g not in chain]
