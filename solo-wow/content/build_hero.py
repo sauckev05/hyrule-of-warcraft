@@ -68,7 +68,17 @@ HEAD_BONE = 64
 # underside straight back), in the stock model's units; only the head bone's own vertices
 NOSE = dict(top=(1.905, 0.165), tip=(1.852, 0.176), base=(1.838, 0.150), plane=0.147,
             zmin=1.835, zmax=1.91, ymax=0.046, xmin=0.140, width=0.75, depth=0.85, round=0.45)
-# the cape: every cloak wears the split cape (1504), stretched from the shoulder blades down
+# the cape: every cloak wears one shape; 'split' is the split cape (1504) stretched from the shoulder
+# blades down, 'full' the long cape (1502) made a wide cloak hanging from over the shoulders, its
+# edges coming round the legs (CAPE_FULL_BOTTOM: where it ends)
+CAPE_STYLE = 'full'
+CAPE_FULL_BOTTOM = 0.40            # the split cape's own length (CAPE_BOTTOM_Z)
+CAPE_SHOULDER = 0.36               # how far out over the backs of the shoulders the full cloak spreads
+CAPE_ARM_GAP_HALF = 0.27           # under the shoulders, the cloak's half width (0: as wide as CAPE_SHOULDER)
+CAPE_HEM_HALF = 0.40               # the hem's half width
+CAPE_EDGE_X = -0.17                # the edges' depth under the shoulders (more negative: further back)
+CAPE_EDGE_FORWARD = 0.10           # how far forward the edges come by the hem
+FULL_CAPE = 1502
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
 CAPE_BOTTOM_Z = 0.40          # the split cape's tails end at mid-calf (stock: 0.73, at the thigh)
@@ -89,6 +99,8 @@ def _shape_nose(m):
             continue
         if v['bi'][0] != HEAD_BONE or v['w'][0] != 255:
             continue
+        if v['uv'][0] > 0.1 or v['uv'][1] > 0.9:
+            continue        # not the nose's own skin: the eyes beside it (their swatch) keep their place
         # the profile at this height: the bridge line above the tip, the underside line below
         if z >= zp:
             u = min(1.0, (z - zp) / (zt - zp))
@@ -100,6 +112,46 @@ def _shape_nose(m):
         x2 = min(x, prof - n['round'] * abs(y))
         x2 = n['plane'] + (x2 - n['plane']) * n['depth']
         v['pos'] = (max(x2, min(x, n['plane'])), y * n['width'], z)
+
+
+def _full_cape(m, pos):
+    """The long cape (1502) as a wide cloak hanging behind: its top spreads over the backs of the
+    shoulders (CAPE_SHOULDER: how far out), the panel falls straight and widens to CAPE_FULL_BOTTOM,
+    its edges coming forward beside the legs; the front stays open."""
+    verts = set()
+    for s in m.subs:
+        if s['id'] == FULL_CAPE:
+            verts |= {m.vlookup[m.tris[t]] for t in range(s['st'], s['st'] + s['nt'])}
+    top, stock_bottom = 1.42, 0.335
+    w = CAPE_SHOULDER                                   # the shoulder line's half width
+    # the yoke (stock vertex ids, left/right) laid over the backs of the shoulders
+    YOKE = {(2285, 2288): (-0.02, 0.20, 1.735),        # beside the neck, on the shoulder top
+            (2271, 2272): (-0.14, 0.15, 1.705),        # behind the neck
+            (2243, 2240): (-0.20, 0.21, 1.585),        # between the shoulder blades
+            (2278, 2279): (-0.12, w - 0.04, 1.705),    # the back of the shoulder top
+            (2286, 2287): (-0.15, w, 1.585)}           # down the back of the shoulder, to the arm
+    yoke = {}
+    for (a, b), place in YOKE.items():
+        yoke[a] = place
+        yoke[b] = place
+    for v in verts:
+        x0, y0, z0 = m.verts[v]['pos']
+        side = 1.0 if y0 >= 0 else -1.0
+        if v in yoke:
+            nx, ny, nz = yoke[v]
+            pos[v] = (nx, side * ny, nz)
+            continue
+        if z0 >= 1.45:
+            continue
+        u = max(0.0, min(1.0, (top - z0) / (top - stock_bottom)))      # 0 at the back, 1 at the hem
+        row_half = 0.176 + (0.367 - 0.176) * u
+        s_ = min(1.0, abs(y0) / row_half)                             # 0 middle .. 1 edge
+        top_half = CAPE_ARM_GAP_HALF if CAPE_ARM_GAP_HALF else w + 0.01
+        half = top_half + (CAPE_HEM_HALF - top_half) * u              # the new half width
+        x_mid = -0.20 - 0.10 * u                                      # the middle hangs behind
+        x_edge = CAPE_EDGE_X + CAPE_EDGE_FORWARD * u                  # the edges come round the legs
+        nz = top - u * (top - CAPE_FULL_BOTTOM)
+        pos[v] = (x_mid + (x_edge - x_mid) * s_ * s_, side * s_ * half, nz)
 
 
 def _bulk_armour(m, pos):
@@ -136,13 +188,15 @@ def build_model(stock, sound_map):
     shape = dict(deform.VARIANTS['B'], head=HERO_HEAD)
     _shape_nose(m)
     pos = deform.deform(m, shape)
+    if CAPE_STYLE == 'full':
+        _full_cape(m, pos)
     # the split cape, longer: everything below the anchor is stretched down (and a little back)
     cape = set()
     for s in m.subs:
-        if s['id'] == SPLIT_CAPE:
+        if s['id'] == SPLIT_CAPE and CAPE_STYLE == 'split':
             for t in range(s['st'], s['st'] + s['nt']):
                 cape.add(m.vlookup[m.tris[t]])
-    low = min(pos[v][2] for v in cape)
+    low = min(pos[v][2] for v in cape) if cape else 0.0
     k = (CAPE_ANCHOR_Z - CAPE_BOTTOM_Z) / (CAPE_ANCHOR_Z - low)
     anchor_x = sum(pos[v][0] for v in cape if abs(pos[v][2] - CAPE_ANCHOR_Z) < 0.05) / \
         max(1, sum(1 for v in cape if abs(pos[v][2] - CAPE_ANCHOR_Z) < 0.05))
@@ -160,8 +214,9 @@ def build_model(stock, sound_map):
     for view in _views(d):
         n_sub, o_sub = struct.unpack_from('<II', d, view + 24)
         subs = [(i, struct.unpack_from('<H', d, o_sub + i * 32)[0]) for i in range(n_sub)]
-        split = [i for i, sid in subs if sid == SPLIT_CAPE]
-        for other in (1502, 1503, 1505, 1506):
+        keep = FULL_CAPE if CAPE_STYLE == 'full' else SPLIT_CAPE
+        split = [i for i, sid in subs if sid == keep]
+        for other in [c for c in (1502, 1503, 1504, 1505, 1506) if c != keep]:
             mine = [i for i, sid in subs if sid == other]
             for a, b in zip(mine, split):
                 d[o_sub + a * 32 + 2:o_sub + a * 32 + 32] = d[o_sub + b * 32 + 2:o_sub + b * 32 + 32]

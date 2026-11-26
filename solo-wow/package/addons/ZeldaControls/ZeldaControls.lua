@@ -67,15 +67,17 @@ Track("StrafeLeftStart", "StrafeLeftStop", "strafeLeft")
 Track("StrafeRightStart", "StrafeRightStop", "strafeRight")
 
 -- Key 5: the roll goes the way the hero is moving - backward a backflip, left or right a side
--- roll, forward (or standing) the forward roll. In the saddle the server spurs the mount instead,
--- whichever way (the " 5" tells it the press came from key 5).
+-- roll while the right mouse button is held (A/D then strafe), forward or standing (or A/D alone,
+-- which only turn) the forward roll. In the saddle the server spurs the mount instead, whichever
+-- way (the " 5" tells it the press came from key 5).
 function ZeldaControls_Roll()
 	local cmd = ".zroll f"
+	local steering = IsMouselooking and IsMouselooking()
 	if held.back then
 		cmd = ".zflip"
-	elseif (held.turnLeft or held.strafeLeft) and not (held.turnRight or held.strafeRight) then
+	elseif steering and (held.turnLeft or held.strafeLeft) and not (held.turnRight or held.strafeRight) then
 		cmd = ".zroll l"
-	elseif (held.turnRight or held.strafeRight) and not (held.turnLeft or held.strafeLeft) then
+	elseif steering and (held.turnRight or held.strafeRight) and not (held.turnLeft or held.strafeLeft) then
 		cmd = ".zroll r"
 	end
 	ZeldaControls_Command(cmd .. " 5")
