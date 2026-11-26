@@ -352,3 +352,13 @@ installed on the PC with models in `E:\.ollama` (unused).
   - Scarf front thinner, same width: bulge 0.04, front_bulge 0.15, ridges 0.014/0.016.
   - Preview tip: tabard textures are palette BLPs with 8-bit alpha, which PIL misreads (tabtex/blp8.py).
   - patch-Z md5 405093d8…; backup: patch-Z.before-L2.MPQ.bak (733fcd19…).
+- Now (installed 2026-11-26, d6c750db): K3 tabard, a robe-shaped surcoat that replaces the L2 flaps
+  (TABARD_LONG None).
+  - _tabard_skirt rebuilds tabard submesh 1202 as a copy of the robe skirt (1302), using the robe's
+    leg weights.
+  - Pushed out by push 0.03, plus hip_push 0.03, so the thighs (1301, which stays visible with a
+    tabard) don't poke through.
+  - UVs use the stock flaps' strip of the body texture (u 0.727-0.895, v 0.371-0.172), mirrored
+    around the legs.
+  - Slit up the front from z 0.9, gap 0.008-0.05; hem cut at 0.3 (mid-shin).
+  - patch-Z md5 f1055d90…; backup: patch-Z.before-K3.MPQ.bak (L2, 405093d8…).
