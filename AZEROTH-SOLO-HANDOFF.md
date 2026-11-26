@@ -308,3 +308,6 @@ installed on the PC with models in `E:\.ollama` (unused).
   button held (IsMouselooking). Backups: patch-Z.before-cloak.MPQ.bak, ZeldaControls.lua.before-cloak.bak.
 - Then (installed): cloak T1 (CAPE_SHOULDER 0.34, CAPE_PROFILE: a gentle waist taper widening to the
   hem; T2 was the stronger hourglass). Backup: patch-Z.before-T1.MPQ.bak.
+- Now (installed 2026-11-25, e079e857): cloak T2 (CAPE_SHOULDER 0.32, CAPE_PROFILE half-widths
+  0.22 → 0.17 at the waist → 0.46 at the hem). patch-Z md5 14ab2470…; backup of T1:
+  patch-Z.before-T2.MPQ.bak (b05fc6fa…).
