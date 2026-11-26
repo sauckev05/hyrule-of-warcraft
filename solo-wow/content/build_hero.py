@@ -86,13 +86,33 @@ CAPE_PROFILE = [(0, 0.17), (0.19, 0.155), (0.41, 0.22), (0.63, 0.30), (0.82, 0.3
 # the depth), seed; CAPE_FULL_BOTTOM is then where the longest tips end
 CAPE_TATTER = dict(teeth=6, depth=0.17, uneven=0.5, tip_wear=0.3, tear_min=0.6, seed=11)   # W3
 # the scarf every cape wears round the neck (None: none): a thick roll on the shoulders under the helm
-CAPE_COWL = dict(x=0.015, u=(0.35, 0.95), v=(0.30, 0.60), seed=5, neck_share=0.5, lean=0.0,      # S1
-                 neck=(0.08, 0.07), base=(0.12, 0.15), z=1.70, height=0.05, bulk=0.035, folds=0.3,
-                 fold_count=11, front_bulk=0.2, front_drop=0.3, droop=0.03, sag=0.3, fold_sag=0.01,
-                 back_bulk=0.5, back_out=0.05,
-                 layers=[dict(z=1.725, height=0.042, bulk=0.03, droop=0.02, seed=2),
-                         dict(z=1.665, height=0.05, bulk=0.042, droop=0.05, front_bulk=0.35, seed=9,
-                              neck=(0.095, 0.085))])
+# S1, the donut roll it replaced: shape roll, two wraps (see git history)
+CAPE_COWL = dict(  # F3: the scarf rests on the body like a mound, S1's two rolls in front, wide behind
+    x=0.015,
+    u=(0.35, 0.95),
+    v=(0.3, 0.6),
+    seed=5,
+    neck_share=0.5,
+    lean=0.0,
+    shape='mound',
+    neck=dict(front=(0.09, 0.08), back=(0.09, 0.08)),
+    top_z=dict(front=1.765, back=1.77),
+    front_dip=0.03,
+    foot=(0.165, 0.19, 0.2),
+    lean_in=dict(front=0.15, back=0.1),
+    foot_min_z=1.56,
+    bulge=dict(front=0.055, back=0.065),
+    folds=dict(front=0.3, back=0.15),
+    fold_count=11,
+    front_bulge=0.25,
+    peak=dict(front=0.65, back=0.6),
+    lift=0.006,
+    tuck=0.02,
+    v_bands=2,
+    rows=20,
+    ridges=((0.26, 0.042, 0.11), (0.5, -0.02, 0.06), (0.74, 0.046, 0.12)),
+    ridge_spread=1.5,
+)
 CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape ends (T2 was drawn to 0.40)
 CAPE_BORDER_V = 0.90               # with a worn hem: the texture v above which the hem's border is drawn to scale
 CAPE_FLARE = 0.22                  # below that, how fast the half width keeps widening (per profile length)
