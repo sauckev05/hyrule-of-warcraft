@@ -281,3 +281,5 @@ installed on the PC with models in `E:\.ollama` (unused).
   follow the slim skin, shoulder pads at 0.78 and the helm at 1.08 (one-key global-sequence scale
   tracks on bones 83/84/87); display 17560 scale 0.93 (shorter). Backups: patch-Z.before-herotune.MPQ.bak,
   data\dbc-before-hero\CreatureDisplayInfo.before-herotune.dbc.
+- Then (installed): display scale 0.90 and the head, hair and helm at 0.97 (HERO_SCALE / HERO_HEAD in
+  build_hero.py). Backups: patch-Z.before-herohead.MPQ.bak, CreatureDisplayInfo.before-herohead.dbc.
