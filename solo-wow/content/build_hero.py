@@ -129,7 +129,8 @@ TABARD = 1202
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
 # over a robe, and is slit up the front from slit_z with the halves gap apart (at the slit's top, at
-# the hem); hem_z cuts it shorter (0: the robe's own length, to the ankles)
+# the hem), and up the back from back_slit_z (back_gap) if given; hem_z cuts it shorter (0: the
+# robe's own length, to the ankles)
 TABARD_SKIRT = dict(push=0.03, hip_push=0.03, slit_z=0.9, gap=(0.008, 0.05), hem_z=0.3)   # K3
 ROBE = 1302
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
@@ -703,10 +704,14 @@ def _tabard_skirt(m, d, recs):
         return len(recs) // 48 - 1
     for g in verts:
         x, y, z = p_of(g)
-        front = abs(math.degrees(math.atan2(y, x - cx))) < 5.0 and x > cx
-        if front and z < t['slit_z']:
-            frac = (t['slit_z'] - z) / (t['slit_z'] - low)
-            gap = t['gap'][0] + (t['gap'][1] - t['gap'][0]) * frac
+        a = abs(math.degrees(math.atan2(y, x - cx)))
+        front = a < 5.0 and x > cx
+        back = a > 175.0 and t.get('back_slit_z')
+        slit_z = t['slit_z'] if front else (t.get('back_slit_z') if back else None)
+        if slit_z and z < slit_z:
+            gaps = t['gap'] if front else t.get('back_gap', t['gap'])
+            frac = (slit_z - z) / (slit_z - low)
+            gap = gaps[0] + (gaps[1] - gaps[0]) * frac
             new_of[g] = place(g, gap)
             twin[g] = place(g, -gap)
         else:
