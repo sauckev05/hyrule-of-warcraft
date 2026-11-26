@@ -40,10 +40,22 @@ VOICE_DIRS = {
     'Sound\\Character\\Human\\HumanVocalMale': 'Sound\\Character\\ZeldaHero\\HumanVocalMale',
     'Sound\\Character\\PlayerExertions\\HumanMaleFinal': 'Sound\\Character\\ZeldaHero\\HumanMaleFinal',
 }
-# variant C of the voice demo: 26% faster (about +4 semitones), a bigger room
-VOICE_FILTER = 'asetrate=22050*1.26,aresample=22050,aecho=0.8:0.6:45|80:0.28|0.16,apad=pad_dur=0.25'
+# the voice demo's variant C without its room: 26% faster (about +4 semitones), dry, so it sounds
+# like the speaker is right there rather than in a hall
+VOICE_FILTER = 'asetrate=22050*1.26,aresample=22050,apad=pad_dur=0.1'
 FACE = 0                      # the face the young look is painted on, in every skin colour
 FACE_FILE = 'Character\\Human\\Male\\HumanMaleFace%sHero%02d_%02d.blp'
+# no stock human male facial hair is clean shaven (style 0 is a moustache and goatee): for players,
+# style 0 is a bare face (see-through facial hair textures)
+CLEAN_FACIAL_STYLE = 0
+NO_FACIAL_HAIR = ('Character\\Human\\FacialLowerHairHeroNone.blp', 'Character\\Human\\FacialUpperHairHeroNone.blp')
+HERO_SCALE = 0.93             # the whole hero, a little shorter: a 17-year-old beside grown men
+# worn pieces on the young body: the shoulder pads shrink with the narrower shoulders, the helm grows
+# with the bigger head, and every attachment point moves with the skin around it
+SHOULDER_ATTACH = (5, 6)
+SHOULDER_PAD_SCALE = 0.78
+HELM_ATTACH = 11
+HEAD_BONE = 64
 # the cape: every cloak wears the split cape (1504), stretched from the shoulder blades down
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
@@ -97,6 +109,7 @@ def build_model(stock, sound_map):
             mine = [i for i, sid in subs if sid == other]
             for a, b in zip(mine, split):
                 d[o_sub + a * 32 + 2:o_sub + a * 32 + 32] = d[o_sub + b * 32 + 2:o_sub + b * 32 + 32]
+    _fit_attachments(m, d, pos, deform)
     # the animations' sound events ($CSD, the emotes' voices) play the young voice
     n_ev, o_ev = struct.unpack_from('<II', d, 0x114)
     for e in range(n_ev):
@@ -105,6 +118,47 @@ def build_model(stock, sound_map):
         if d[r:r + 4] == b'$CSD' and data in sound_map:
             struct.pack_into('<I', d, r + 4, sound_map[data])
     return bytes(d)
+
+
+def _const_scale(d, bone_rec, k):
+    """Give a bone a constant scale: a one-key track on global sequence 0, the data appended."""
+    while len(d) % 4:
+        d.append(0)
+    times = len(d)
+    d += struct.pack('<I', 0)
+    values = len(d)
+    d += struct.pack('<3f', k, k, k)
+    struct.pack_into('<Hh6I', d, bone_rec + 0x44, 1, 0, 0, 0, 1, times, 1, values)
+
+
+def _fit_attachments(m, d, pos, deform):
+    """Move every attachment point (and its own bone's pivot) with the skin around it, so worn and
+    held things sit on the young body; shrink the shoulder pads and grow the helm with the head."""
+    n_att, o_att = struct.unpack_from('<II', d, 0x104)
+    skinned = {bi for v in m.verts for w, bi in zip(v['w'], v['bi']) if w}
+    body = sorted({m.vlookup[m.tris[t]] for sub in m.subs if sub['id'] in (0, 401, 501)
+                   for t in range(sub['st'], sub['st'] + sub['nt'])})     # the skin, not the cape or hair
+    for a in range(n_att):
+        rec = o_att + a * 48
+        aid, bone = struct.unpack_from('<II', d, rec)
+        if bone in skinned or bone >= len(m.bones):
+            continue
+        p = struct.unpack_from('<3f', d, rec + 8)
+        bone_rec = m.o_bone + bone * 0x6c
+        if aid == HELM_ATTACH:
+            # the head bone's pivot with the head's own scale: the helm grows exactly as the head did
+            head = deform.VARIANTS['B']['head']
+            struct.pack_into('<3f', d, bone_rec + 0x60, *m.bones[HEAD_BONE]['pivot'])
+            _const_scale(d, bone_rec, head)
+            continue
+        near = sorted(body, key=lambda i: sum((m.verts[i]['pos'][k] - p[k]) ** 2 for k in range(3)))[:12]
+        shift = [sum(pos[i][k] - m.verts[i]['pos'][k] for i in near) / len(near) for k in range(3)]
+        q = tuple(p[k] + shift[k] for k in range(3))
+        struct.pack_into('<3f', d, rec + 8, *q)
+        if tuple(round(c, 4) for c in m.bones[bone]['pivot']) == tuple(round(c, 4) for c in p):
+            struct.pack_into('<3f', d, bone_rec + 0x60, *q)
+        if aid in SHOULDER_ATTACH:
+            _const_scale(d, bone_rec, SHOULDER_PAD_SCALE)
 
 
 # ---------------------------------------------------------------- the DBCs
@@ -172,6 +226,7 @@ def patch_display_info(path):
     row = list(next(r for r in rows if r[0] == STOCK_MODEL_ID))
     row[0] = HERO_DISPLAY
     row[1] = HERO_MODEL_ID
+    row[4] = struct.unpack('<I', struct.pack('<f', HERO_SCALE))[0]
     rows.append(row)
     return write_dbc(f, sorted(rows, key=lambda r: r[0]), strings)
 
@@ -210,6 +265,9 @@ def patch_sections(dbc_dir):
         if r[1] == HUMAN and r[2] == 0 and r[3] == 1 and r[4] == FACE:
             r[6] = add_string(strings, FACE_FILE % ('Lower', FACE, r[5]))
             r[7] = add_string(strings, FACE_FILE % ('Upper', FACE, r[5]))
+        if r[1] == HUMAN and r[2] == 0 and r[3] == 2 and r[4] == CLEAN_FACIAL_STYLE:
+            r[6] = add_string(strings, NO_FACIAL_HAIR[0])
+            r[7] = add_string(strings, NO_FACIAL_HAIR[1])
     return write_dbc(f, rows, strings)
 
 
@@ -284,6 +342,10 @@ def build_files(dbc_dir, stock_m2, face_dir, voice_dir, out_dir):
         'DBFilesClient\\CharSections.dbc': patch_sections(dbc_dir),
     }
     patch.update(face_files(face_dir))
+    from PIL import Image
+    from scarlet_horse import blp_raw1_alpha
+    patch[NO_FACIAL_HAIR[0]] = blp_raw1_alpha(Image.new('RGBA', (128, 64), (0, 0, 0, 0)))
+    patch[NO_FACIAL_HAIR[1]] = blp_raw1_alpha(Image.new('RGBA', (128, 32), (0, 0, 0, 0)))
     work = os.path.join(out_dir, 'voice-tmp')
     os.makedirs(work, exist_ok=True)
     patch.update(voice_files(voice_dir, files, work))
