@@ -686,14 +686,76 @@ def _tabard_skirt(m, d, recs):
     cx = t.get('axis_x', 0.02)
     (u_mid, u_side), (v_top, v_hem) = t.get('u', (0.727, 0.895)), t.get('v', (0.371, 0.172))
     new_of, twin = {}, {}
+    # the robe's own radius round the legs by height and angle (its rings, between them linearly)
+    rings = {}
+    for g in verts:
+        x, y, z = p_of(g)
+        rings.setdefault(round(z * 10) / 10, []).append((abs(math.degrees(math.atan2(y, x - cx))), math.hypot(x - cx, y), z, g))
+    ring_list = sorted((sum(p[2] for p in pts) / len(pts), sorted(pts)) for pts in rings.values())
+    def ring_r(pts, a_):
+        if a_ <= pts[0][0]:
+            return pts[0][1]
+        for (a0, r0, _, _g0), (a1, r1, _, _g1) in zip(pts, pts[1:]):
+            if a_ <= a1:
+                return r0 + (r1 - r0) * (a_ - a0) / ((a1 - a0) or 1.0)
+        return pts[-1][1]
+    def radius_at(a_, z):
+        if z <= ring_list[0][0]:
+            return ring_r(ring_list[0][1], a_)
+        for (z0, p0), (z1, p1) in zip(ring_list, ring_list[1:]):
+            if z <= z1:
+                f = (z - z0) / ((z1 - z0) or 1.0)
+                return ring_r(p0, a_) * (1 - f) + ring_r(p1, a_) * f
+        return ring_r(ring_list[-1][1], a_)
+    def w_of(g):
+        wv = struct.unpack_from('<4B', d, o_v + g * 48 + 12)
+        bi = struct.unpack_from('<4B', d, o_v + g * 48 + 16)
+        return {b_: x_ / 255.0 for b_, x_ in zip(bi, wv) if x_}
+    def ring_w(pts, a_):
+        near = sorted(pts, key=lambda p: abs(p[0] - a_))[:2]
+        if len(near) == 1 or abs(near[1][0] - near[0][0]) < 1e-6:
+            return w_of(near[0][3])
+        f = max(0.0, min(1.0, (a_ - near[0][0]) / (near[1][0] - near[0][0])))
+        out = {}
+        for wt, p in ((1 - f, near[0]), (f, near[1])):
+            for b_, x_ in w_of(p[3]).items():
+                out[b_] = out.get(b_, 0.0) + wt * x_
+        return out
+    def weights_at(a_, z):
+        """The robe's own bone weights at a height and angle (between its rings)."""
+        for (z0, p0), (z1, p1) in zip(ring_list, ring_list[1:]):
+            if z <= z1:
+                f = max(0.0, min(1.0, (z - z0) / ((z1 - z0) or 1.0)))
+                out = {}
+                for wt, pts in ((1 - f, p0), (f, p1)):
+                    for b_, x_ in ring_w(pts, a_).items():
+                        out[b_] = out.get(b_, 0.0) + wt * x_
+                return out
+        return ring_w(ring_list[-1][1], a_)
     def place(g, dy=0.0, rot=0.0):
         x, y, z = p_of(g)
+        reweigh = None
         fh = t.get('front_hem')
         if fh and z < t['slit_z']:                  # the front shorter: its rows below the slit's top
             a_ = abs(math.degrees(math.atan2(y, x - cx)))    # drawn up, the back left as it is
             k = max(0.0, min(1.0, (130.0 - a_) / 35.0))
             zf = fh + (z - low) * (t['slit_z'] - fh) / (t['slit_z'] - low)
-            z = z + (zf - z) * k
+            z_new = z + (zf - z) * k
+            # and drawn in to the skirt's own width at that height (the robe flares to its hem)
+            r_now = math.hypot(x - cx, y) or 1.0
+            r_new = radius_at(a_, z_new)
+            sc = 1.0 + (r_new / r_now - 1.0) * k
+            x, y, z = cx + (x - cx) * sc, y * sc, z_new
+            if k > 0:                                # and moving with the legs as the robe does there
+                mixw = {}
+                for wt, dct in ((1 - k, w_of(g)), (k, weights_at(a_, z_new))):
+                    for b_, x_ in dct.items():
+                        mixw[b_] = mixw.get(b_, 0.0) + wt * x_
+                top4 = sorted(mixw.items(), key=lambda kv: -kv[1])[:4]
+                tot = sum(v_ for _, v_ in top4) or 1.0
+                q = [int(round(255 * v_ / tot)) for _, v_ in top4]
+                q[0] += 255 - sum(q)
+                reweigh = (q + [0] * (4 - len(q)), [b_ for b_, _ in top4] + [0] * (4 - len(top4)))
         if rot:                                     # turned round the legs' axis (the back's V opening)
             r0, a0 = math.hypot(x - cx, y), math.atan2(y, x - cx) + math.radians(rot)
             x, y = cx + r0 * math.cos(a0), r0 * math.sin(a0)
@@ -725,6 +787,9 @@ def _tabard_skirt(m, d, recs):
             wt = max(0.0, min(1.0, (top_z - z) / ((top_z - low_z) or 1.0)))
             f = s_top * (1.0 - wt) + s_low * wt
         rec = bytearray(d[o_v + g * 48:o_v + g * 48 + 48])
+        if reweigh:
+            struct.pack_into('<4B', rec, 12, *reweigh[0])
+            struct.pack_into('<4B', rec, 16, *reweigh[1])
         struct.pack_into('<3f', rec, 0, x2, y2, z)
         struct.pack_into('<2f', rec, 32, u_mid + (u_side - u_mid) * f, v_top + (v_hem - v_top) * min(1.0, (top - z) / (top - low)))
         recs.extend(rec)
