@@ -296,3 +296,9 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Key 5 (installed 2026-11-25 night, bf5f3f22): ZeldaControls tracks the held movement keys; key 5
   rolls that way (back = .zflip 5, left/right = .zroll l|r 5, else .zroll f 5); in the saddle any
   key-5 press spurs; one spur every 1.5 s at most (ZELDA_SPUR_COOLDOWN_MS).
+- Double jump (installed 2026-11-25 night, 2f3d175d): Benilla relaunches at jump speed on a second
+  jump press in the air (once a flight; not mounted/swimming), sending a JUMP; the hero plays clip 155
+  (port_flip.py: the night elf male's flipping JumpStart retargeted onto the human male, from 100 ms)
+  via ZeldaSwingAnim step 7. Also: the face smoothed harder (young_face v2) and a smaller pointed nose
+  (NOSE in build_hero.py). Backups: patch-Z.before-doublejump.MPQ.bak, benilla.before-doublejump.exe.
+  Patch-Z is built locally: rebuild_hero.py (installed patch-Z of 2026-11-25 + build_hero files).
