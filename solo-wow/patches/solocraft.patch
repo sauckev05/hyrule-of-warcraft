@@ -2036,10 +2036,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..7676a52d5
+index 000000000..c5364a15f
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6475 @@
+@@ -0,0 +1,6481 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2188,6 +2188,7 @@ index 000000000..7676a52d5
 +        uint32 naviHealReadyAt = 0;                     // and heal again after this (ms)
 +        // riding: key 5's spurs (ZeldaSpur); one drops when this passes without a new one
 +        uint32 spurDecayAt = 0;
++        uint32 spurReadyAt = 0;                         // the next spur may come from here (ZELDA_SPUR_COOLDOWN_MS)
 +        int32 spurShown = -1;                           // the spur circles ZeldaHUD shows (-1: none, not riding)
 +        uint32 spurResendAt = 0;                        // riding, said again now and then (a relog or /reload)
 +        int32 swimStep = -1;                            // breath left, in tenths, the swim speed was set for
@@ -2431,6 +2432,7 @@ index 000000000..7676a52d5
 +static const uint32 ZELDA_SPUR = 40037;
 +static const float ZELDA_SPUR_SHARE = 0.2f;
 +static const uint32 ZELDA_SPUR_DECAY_MS = 3000;
++static const uint32 ZELDA_SPUR_COOLDOWN_MS = 1500;      // one spur (one red circle) every 1.5 sec at most
 +
 +float ZeldaSpeedFactor(Player* player, uint32 moveType)
 +{
@@ -7015,6 +7017,10 @@ index 000000000..7676a52d5
 +{
 +    if (!player->IsAlive() || player->IsTaxiFlying() || !player->IsMoving())
 +        return;                             // a spur wants a mount on the move
++    uint32 const now = WorldTimer::getMSTime();
++    if (StateFor(player).spurReadyAt && int32(now - StateFor(player).spurReadyAt) < 0)
++        return;                             // the last spur is still cooling down
++    StateFor(player).spurReadyAt = (now + ZELDA_SPUR_COOLDOWN_MS) | 1;
 +    SpellAuraHolder const* before = player->GetSpellAuraHolder(ZELDA_SPUR);
 +    uint32 const stacksBefore = before ? before->GetStackAmount() : 0;
 +    player->CastSpell(player, ZELDA_SPUR, TRIGGERED_OLD_TRIGGERED);
