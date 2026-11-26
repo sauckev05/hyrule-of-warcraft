@@ -54,7 +54,12 @@ HERO_HEAD = 0.97              # the head (and hair and helm) a touch under stock
 # worn pieces on the young body: the shoulder pads shrink with the narrower shoulders, the helm grows
 # with the bigger head, and every attachment point moves with the skin around it
 SHOULDER_ATTACH = (5, 6)
-SHOULDER_PAD_SCALE = 0.90
+SHOULDER_PAD_SCALE = 1.0       # the stock shoulder pads, their normal size
+# the worn gauntlet cuffs (forearm geosets 402-404) and boot tops (shin geosets 502-504) bulk out 25%
+# around the limb, like armour over a slim arm or leg (the bare forearm 401 and leg 501 stay slim)
+ARMOUR_GEOSETS = {402: (78, 95, 79, 97), 403: (78, 95, 79, 97), 404: (78, 95, 79, 97),
+                  502: (53, 68, 54, 70), 503: (53, 68, 54, 70), 504: (53, 68, 54, 70)}
+ARMOUR_BULK = 1.25
 HELM_ATTACH = 11
 HEAD_BONE = 64
 # the cape: every cloak wears the split cape (1504), stretched from the shoulder blades down
@@ -67,6 +72,24 @@ SQL_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'zelda-sql', 
 
 
 # ---------------------------------------------------------------- the model
+
+def _bulk_armour(m, pos):
+    """Push the gauntlet cuffs and boot tops out from their limb's axis (elbow to wrist, knee to
+    ankle on that side) by ARMOUR_BULK; the limb's length and the seam's height stay."""
+    for sid, (a_left, b_left, a_right, b_right) in ARMOUR_GEOSETS.items():
+        for s in m.subs:
+            if s['id'] != sid:
+                continue
+            for v in {m.vlookup[m.tris[t]] for t in range(s['st'], s['st'] + s['nt'])}:
+                p = pos[v]
+                a, b = (a_left, b_left) if m.verts[v]['pos'][1] > 0 else (a_right, b_right)
+                pa, pb = m.bones[a]['pivot'], m.bones[b]['pivot']
+                axis = [pb[k] - pa[k] for k in range(3)]
+                ll = sum(c * c for c in axis) or 1.0
+                t = sum((p[k] - pa[k]) * axis[k] for k in range(3)) / ll
+                foot = [pa[k] + axis[k] * t for k in range(3)]
+                pos[v] = tuple(foot[k] + (p[k] - foot[k]) * ARMOUR_BULK for k in range(3))
+
 
 def _views(d):
     n, o = struct.unpack_from('<II', d, 0x4c)
@@ -99,6 +122,7 @@ def build_model(stock, sound_map):
             z = CAPE_ANCHOR_Z - (CAPE_ANCHOR_Z - z) * k
             x = anchor_x + (x - anchor_x) * (1 + (k - 1) * CAPE_BACK_SHARE)
             pos[v] = (x, y, z)
+    _bulk_armour(m, pos)
     m.write_positions(pos)
     d = m.data
     # every cloak shape draws the split cape: each other cape submesh takes the split cape's ranges
