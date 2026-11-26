@@ -319,3 +319,12 @@ installed on the PC with models in `E:\.ollama` (unused).
   - N1 shoulders: CAPE_SHOULDER 0.29; CAPE_PROFILE starts 0.20, waist 0.165.
   - Both extras are added by _cape_extras: new vertices appended, one shared triangle list, 1502 repointed.
   - patch-Z md5 fbe89d32…; backup: patch-Z.before-N1.MPQ.bak (T2, 14ab2470…).
+- Now (installed 2026-11-25, 0abcf898): the F3 scarf and N3 shoulders. These replace the S1 scarf and N1 shoulders; the W3 hem stays.
+  - The scarf is CAPE_COWL shape 'mound' (_mound_geometry). For each direction round the neck, a ring
+    point is dropped onto the body or the cape yoke (the front stops at foot_min_z 1.56 on the chest).
+    The cloth rises from there to a lip just under the helm. At its foot it takes that surface's bone
+    weights, blending to 22/48 at the top.
+  - Settings blend from front to back. The front has S1's two rolls (ridges, v_bands 2) in S1's colours;
+    the back is wide like M3. The old roll shape is still in the code ('layers', _cowl_layer).
+  - N3 shoulders: CAPE_SHOULDER 0.235; CAPE_PROFILE starts 0.17, waist 0.155.
+  - patch-Z md5 79522d14…; backup: patch-Z.before-F3.MPQ.bak (N1 + S1, fbe89d32…).
