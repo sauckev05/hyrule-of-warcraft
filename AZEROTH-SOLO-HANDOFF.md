@@ -344,3 +344,11 @@ installed on the PC with models in `E:\.ollama` (unused).
     mangosd.exe from the azeroth-solo-latest release asset (gh api .../releases/assets/<id>, octet-stream).
   - md5s: patch-Z 733fcd19…, mangosd 6d1b6cf3…, 023 2f897425…, 025 3c79023e….
   - Backups: *.before-spursounds.* (patch-Z, mangosd.exe, 023/025 .sql.bak).
+- Now (installed 2026-11-26, bfc55db8): L2 long tabard and a thinner scarf front.
+  - Tabard: TABARD_LONG L2. Front hem at 0.20, back at 0.24, flare 0.3.
+  - The front is slit from its second row (_tabard_geometry twins the middle vertices). With calm, the
+    front hangs from the pelvis (21), not its swinging chain (24/52/67), and each half leans fully to
+    its thigh (25/26) at the hem.
+  - Scarf front thinner, same width: bulge 0.04, front_bulge 0.15, ridges 0.014/0.016.
+  - Preview tip: tabard textures are palette BLPs with 8-bit alpha, which PIL misreads (tabtex/blp8.py).
+  - patch-Z md5 405093d8…; backup: patch-Z.before-L2.MPQ.bak (733fcd19…).
