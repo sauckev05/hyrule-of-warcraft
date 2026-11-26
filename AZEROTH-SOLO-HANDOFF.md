@@ -288,3 +288,8 @@ installed on the PC with models in `E:\.ollama` (unused).
   pushed out 15% from the limb axis (ARMOUR_BULK; 25% before). Backups: patch-Z.before-armour.MPQ.bak, patch-Z.before-armour15.MPQ.bak.
 - Then (installed): the cuff/boot bulk undone (ARMOUR_BULK 1.0); shoulder pads stay at 1.0.
   Backup of the 15% version: patch-Z.before-armourback.MPQ.bak.
+- Spur fix (installed 2026-11-25 night, commit 4aa59f73): Benilla no longer starts the forward roll's
+  dash when key 5 is pressed on a mount (it held the mount to roll speed for 0.65 s each spur);
+  spur circles sit just above the enemy charge-up bar (spur.lua, anchored to ZeldaTargetAnchor);
+  one spur drops every 3 sec (ZELDA_SPUR_DECAY_MS 3000). Backups: mangosd.before-spurfix.exe,
+  benilla.before-spurfix.exe, spur.lua.before-spurfix.bak.
