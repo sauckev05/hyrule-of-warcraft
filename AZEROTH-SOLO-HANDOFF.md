@@ -389,3 +389,15 @@ installed on the PC with models in `E:\.ollama` (unused).
   - Open: the user reports the tabard design missing at the waist sides above the belt. Their textures
     cover that area, so I asked for the tabard's name and a front screenshot.
   - patch-Z md5 0f6ac447…; backup: patch-Z.before-sides.MPQ.bak (094e9bbd…).
+- Now (installed 2026-11-26, 157bb631): the E3 3D belt.
+  - build_hero BELT: a band where belts are painted. That is the body's texture rows v 0.375-0.4375,
+    the top 16 px of a belt's LegUpper texture; on the body z ~1.06-1.2.
+  - The band is cast onto geosets 0/1301; its UV and weights come from the body under it. Thickness
+    0.008, grow 0.006, and a buckle plate at the front (±16°, 0.009 proud).
+  - It is its own submesh 1652 (_add_belt_submesh): a texunit cloned from the body's, with a new
+    two-sided material.
+  - Benilla (geosets.rs ZELDA_BELT_GEOSET) shows 1652 when the belt slot is worn. Ids above 1700 are
+    always drawn, so the belt needs a managed id.
+  - Getting the client: take benilla.exe from the zelda-wow-latest release asset.
+  - md5s: patch-Z e566f0ff…, benilla acd6e12a….
+  - Backups: patch-Z.before-belt.MPQ.bak (0f6ac447…), ZeldaWoW\benilla.before-belt.exe (2d6bd98f…).
