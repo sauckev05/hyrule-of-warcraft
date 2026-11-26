@@ -13,6 +13,10 @@ const HELMET_GEOSET_VIS: &str = "DBFilesClient\\HelmetGeosetVisData.dbc";
 /// The 16 default region bases of `cc+0x144` (ctors `0x476810`/`0x476960`); group 7's is 702.
 /// Entries 0–3, hair and facial hair, are replaced by the customization; 4–15 are the equipment
 /// groups' bare defaults.
+/// Zelda of Warcraft's 3D belt (build_hero.py `BELT_GEOSET`): a managed ID (at most 1700, so it is
+/// hidden unless picked), shown when the belt slot is worn.
+pub const ZELDA_BELT_GEOSET: u16 = 1652;
+
 const REGION_BASES: [u16; 16] = [
     1, 101, 201, 301, 401, 501, 601, 702, 801, 901, 1001, 1101, 1201, 1301, 1401, 1501,
 ];
@@ -170,6 +174,11 @@ impl CharacterGeosets {
         if let Some(v) = equip.cloak.filter(|v| *v != 0) {
             disable(&mut set, 1500, 1599);
             set.push(1501 + v as u16);
+        }
+        // Zelda of Warcraft: a worn belt shows the hero model's 3D belt, a band (and buckle) where
+        // belts are painted (build_hero.py BELT, geoset ZELDA_BELT_GEOSET); no stock model has it.
+        if equip.bodyslots[2].is_some() {
+            set.push(ZELDA_BELT_GEOSET);
         }
         // The client sets a flag per submesh (`0x7110d0`), so a repeated enable is a no-op there.
         set.sort_unstable();

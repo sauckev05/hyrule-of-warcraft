@@ -129,10 +129,10 @@ TABARD = 1202
 # a 3D belt (None: none): a thin band round the waist where belts are painted (the body's
 # rows at v 0.375-0.4375, a belt's LegUpper texture's top strip), standing thick out from the body,
 # its texture the body's own at that spot (so each belt's design, buckle and all, is on it), with an
-# optional raised buckle plate at the front; geoset: the submesh it joins (0 to preview on the body;
-# BELT_GEOSET, which the client shows when a belt is worn)
-BELT = None
-BELT_GEOSET = 1802
+# optional raised buckle plate at the front; geoset: 0 to preview it on the body, else its own submesh
+# (BELT_GEOSET, drawn with the body's texture, two-sided), which the client shows when a belt is worn
+BELT = dict(geoset=1652, thick=0.008, grow=0.006, buckle=dict(half_angle=16, thick=0.009, rise=0.008))   # E3
+BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
 # over a robe, and is slit up the front from slit_z with the halves gap apart (at the slit's top, at
@@ -1198,6 +1198,57 @@ def _cape_extras(m, d, pos):
             struct.pack_into('<4H', d, o_sub + body_k * 32 + 4, *body_rec)
         if tab_rec is not None:
             struct.pack_into('<4H', d, o_sub + tab_k * 32 + 4, *tab_rec)
+    if belt_tris and BELT.get('geoset', BELT_GEOSET) != 0:
+        _add_belt_submesh(d, belt_tris, BELT.get('geoset', BELT_GEOSET))
+
+
+def _add_belt_submesh(d, faces, sub_id):
+    """The belt's own submesh in every view: its triangles appended to the view's triangle list, a
+    submesh record (like the body's, the new range) and a texture unit (like the body's, so the
+    body's texture, with a new two-sided material) appended to their arrays, which move to the end."""
+    n_mat, o_mat = struct.unpack_from('<II', d, 0x84)
+    mats = bytes(d[o_mat:o_mat + n_mat * 4])
+    while len(d) % 16:
+        d.append(0)
+    new_mat = n_mat
+    struct.pack_into('<II', d, 0x84, n_mat + 1, len(d))
+    d += mats + struct.pack('<HH', 0x04, 0)          # two-sided, opaque
+    done = {}
+    for view in _views(d):
+        n_i, o_i, n_t, o_t = struct.unpack_from('<IIII', d, view)
+        n_sub, o_sub = struct.unpack_from('<II', d, view + 24)
+        n_tu, o_tu = struct.unpack_from('<II', d, view + 32)
+        idx = struct.unpack_from('<%dH' % n_i, d, o_i)
+        local = {g: k for k, g in enumerate(idx)}
+        if any(g not in local for tri in faces for g in tri):
+            continue                                    # a view without the new vertices
+        key = (o_t, o_sub, o_tu)
+        if key not in done:
+            tris = list(struct.unpack_from('<%dH' % n_t, d, o_t))
+            tl = [local[g] for tri in faces for g in tri]
+            subs = bytearray(d[o_sub:o_sub + n_sub * 32])
+            body = next(k for k in range(n_sub) if struct.unpack_from('<H', subs, k * 32)[0] == 0)
+            rec = bytearray(subs[body * 32:body * 32 + 32])
+            struct.pack_into('<H', rec, 0, sub_id)
+            struct.pack_into('<4H', rec, 4, min(tl), max(tl) + 1 - min(tl), len(tris), len(tl))
+            subs += rec
+            tus = bytearray(d[o_tu:o_tu + n_tu * 24])
+            tu_body = next(k for k in range(n_tu) if struct.unpack_from('<H', tus, k * 24 + 4)[0] == body)
+            tu = bytearray(tus[tu_body * 24:tu_body * 24 + 24])
+            struct.pack_into('<H', tu, 4, n_sub)                # the new submesh
+            struct.pack_into('<H', tu, 6, n_sub)
+            struct.pack_into('<H', tu, 10, new_mat)             # two-sided
+            tus += tu
+            arrs = []
+            for data in (struct.pack('<%dH' % (len(tris) + len(tl)), *(tris + tl)), bytes(subs), bytes(tus)):
+                while len(d) % 16:
+                    d.append(0)
+                arrs.append(len(d)); d += data
+            done[key] = (len(tris) + len(tl), arrs[0], n_sub + 1, arrs[1], n_tu + 1, arrs[2])
+        nt, ot, ns, os_, nu, ou = done[key]
+        struct.pack_into('<II', d, view + 8, nt, ot)
+        struct.pack_into('<II', d, view + 24, ns, os_)
+        struct.pack_into('<II', d, view + 32, nu, ou)
 
 
 
