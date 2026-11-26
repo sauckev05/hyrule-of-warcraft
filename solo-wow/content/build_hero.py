@@ -17,6 +17,7 @@ usage: build_hero.py                                      writes zelda-sql/024_h
        build_hero.py <client dbc dir> <HumanMale.m2> <face dir> <voice dir> <out dir> [<NightElfMale.m2>]
                                                           writes the patch files and server DBCs
 """
+import math
 import os
 import struct
 import subprocess
@@ -90,7 +91,9 @@ def _shape_nose(m):
             continue
         # the profile at this height: the bridge line above the tip, the underside line below
         if z >= zp:
-            prof = xp + (xt - xp) * min(1.0, (z - zp) / (zt - zp))
+            u = min(1.0, (z - zp) / (zt - zp))
+            # the bridge: straight, or scooped in a little above the tip (a young, short nose)
+            prof = xp + (xt - xp) * u - n.get('scoop', 0.0) * math.sin(math.pi * u)
         else:
             prof = xp + (xb - xp) * min(1.0, (zp - z) / (zp - zb))
         # off the middle the nose falls away (a narrow ridge), then the whole nose sits lower
