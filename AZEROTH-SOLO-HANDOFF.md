@@ -384,3 +384,8 @@ installed on the PC with models in `E:\.ollama` (unused).
   - They also take the robe's bone weights there (weights_at, blended by k). Before, they kept their
     shin weights and swung out at the knee.
   - patch-Z md5 094e9bbd…; backup: patch-Z.before-frontfix.MPQ.bak (5b2011e0…).
+- Now (installed 2026-11-26, 1f0e1d71): the tabard's sides end at the boot tops with the front
+  (front_span 118-134°); only the back (the V opening) stays long.
+  - Open: the user reports the tabard design missing at the waist sides above the belt. Their textures
+    cover that area, so I asked for the tabard's name and a front screenshot.
+  - patch-Z md5 0f6ac447…; backup: patch-Z.before-sides.MPQ.bak (094e9bbd…).
