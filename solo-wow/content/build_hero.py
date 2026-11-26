@@ -697,6 +697,22 @@ def _tabard_skirt(m, d, recs):
         y2 = y + push * y / rad + dy
         a = abs(math.degrees(ang))
         f = a / 90.0 if a <= 90 else (180.0 - a) / 90.0
+        trim = t.get('trim')
+        if trim:
+            # the tabard's trim line (at s_str across the strip) down each edge of the openings and
+            # each side: s runs from the line at the opening to the strip's middle and back to the
+            # line at the side; at the belt it is the plain mapping, so the line there continues
+            # the chest's and then branches to the opening's edge and the side by the slit's top
+            def curve(pts):
+                for (a0, s0), (a1, s1) in zip(pts, pts[1:]):
+                    if a <= a1:
+                        return s0 + (s1 - s0) * (a - a0) / ((a1 - a0) or 1.0)
+                return pts[-1][1]
+            s_low = curve(trim['edges'])           # below the slit's top: the line down every edge
+            s_top = curve(trim['belt'])            # at the belt: the line where the chest's ends
+            top_z, low_z = trim.get('from', (top, t['slit_z']))
+            wt = max(0.0, min(1.0, (top_z - z) / ((top_z - low_z) or 1.0)))
+            f = s_top * (1.0 - wt) + s_low * wt
         rec = bytearray(d[o_v + g * 48:o_v + g * 48 + 48])
         struct.pack_into('<3f', rec, 0, x2, y2, z)
         struct.pack_into('<2f', rec, 32, u_mid + (u_side - u_mid) * f, v_top + (v_hem - v_top) * (top - z) / (top - low))
