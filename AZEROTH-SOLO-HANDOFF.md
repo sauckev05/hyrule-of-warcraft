@@ -311,3 +311,11 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Now (installed 2026-11-25, e079e857): cloak T2 (CAPE_SHOULDER 0.32, CAPE_PROFILE half-widths
   0.22 → 0.17 at the waist → 0.46 at the hem). patch-Z md5 14ab2470…; backup of T1:
   patch-Z.before-T2.MPQ.bak (b05fc6fa…).
+- Now (installed 2026-11-25, 82685d2a): the full cloak with a worn hem, a scarf and thinner shoulders.
+  - W3 hem: CAPE_TATTER, 6 deep uneven tears; tips at CAPE_FULL_BOTTOM 0.10. The T2 shape is kept down
+    to CAPE_PROFILE_BOTTOM 0.40, then flares on (CAPE_FLARE). The hem border keeps its scale (CAPE_BORDER_V).
+  - S1 scarf: CAPE_COWL, two wraps round the neck under the helm, over the cape's yoke at the back.
+    Weighted to bones 22/48 and drawn in the cloak's submesh with the cape's texture.
+  - N1 shoulders: CAPE_SHOULDER 0.29; CAPE_PROFILE starts 0.20, waist 0.165.
+  - Both extras are added by _cape_extras: new vertices appended, one shared triangle list, 1502 repointed.
+  - patch-Z md5 fbe89d32…; backup: patch-Z.before-N1.MPQ.bak (T2, 14ab2470…).
