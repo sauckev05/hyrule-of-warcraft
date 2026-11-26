@@ -1,0 +1,9 @@
+--------------
+INSERT INTO `creature_model_info` (`modelid`, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`,
+    `modelid_other_gender`, `modelid_other_team`)
+SELECT 17560, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`, 50, `modelid_other_team`
+FROM `creature_model_info` WHERE `modelid` = 49
+--------------
+
+ERROR 1054 (42S22) at line 5: Unknown column 'modelid_other_team' in 'SELECT'
+repo/solo-wow/content/zelda-sql/024_hero.sql
