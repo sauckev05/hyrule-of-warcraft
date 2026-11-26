@@ -362,3 +362,10 @@ installed on the PC with models in `E:\.ollama` (unused).
     around the legs.
   - Slit up the front from z 0.9, gap 0.008-0.05; hem cut at 0.3 (mid-shin).
   - patch-Z md5 f1055d90…; backup: patch-Z.before-K3.MPQ.bak (L2, 405093d8…).
+- Now (installed 2026-11-26, 8555ee1a): W3 tabard.
+  - TABARD_SKIRT with push 0.006 (J2's fit) and hip_push 0.036 down to the knee (hip_z 1.1/0.9/0.45).
+  - Openings at the front and back from z 0.9, gap 0.01-0.08.
+  - worn: a frayed fringe hangs from the front hem's boundary edges (_worn_front), length 0.05, 20 columns,
+    fading out at the sides.
+  - Expect some thigh to show through when running; a robe would hide 1301, a tabard can't.
+  - patch-Z md5 e521b662…; backup: patch-Z.before-W3.MPQ.bak (K3, f1055d90…).
