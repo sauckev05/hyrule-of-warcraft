@@ -26,7 +26,8 @@ PAGES = [
     "a Charged Shot.$B"
     "3 - Shield. Hold to raise it. Without a shield you hold your weapon up to parry.$B"
     "4 - Boomerang.$B"
-    "5 - Roll forward. Shift+Q and Shift+E roll to the sides, Shift+S is a backflip.$B"
+    "5 - Roll the way you're moving: forward (or standing) a forward roll, left or right a side roll, "
+    "backward a backflip. Shift+Q and Shift+E roll to the sides and Shift+S is a backflip too.$B"
     "6 - Potion slot. Right-click a healing or mana potion to put it there.$B"
     "7 - Mount slot. Right-click a mount to put it there.$B"
     "8 - Your character and all your bags.$B"
@@ -104,7 +105,7 @@ PAGES = [
     "You carry up to 10 of each potion, and potions have no cooldown. Mana potions turn into a shield that "
     "absorbs damage! Right-click one to put it on key 6.$B$B"
     "Right-click a mount to put it on key 7. You can shoot from the saddle, and 5 spurs it on. Swinging your "
-    "sword, rolling sideways, raising your shield or throwing the boomerang gets you off - and so does "
+    "sword, rolling sideways or backflipping with Shift, raising your shield or throwing the boomerang gets you off - and so does "
     "talking to someone, using or gathering something, or taking a flight path.$B$B"
     "Loot is picked up for you automatically.",
 

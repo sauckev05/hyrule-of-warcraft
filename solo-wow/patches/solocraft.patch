@@ -2036,10 +2036,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..c5364a15f
+index 000000000..af371cc81
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6481 @@
+@@ -0,0 +1,6490 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2108,6 +2108,7 @@ index 000000000..c5364a15f
 +#include <vector>
 +#include <mutex>
 +#include <unordered_map>
++#include <cstring>
 +#include <unordered_set>
 +
 +namespace
@@ -7035,9 +7036,11 @@ index 000000000..c5364a15f
 +bool ChatHandler::HandleZeldaRollCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
-+    // the forward roll's key on a mount spurs it on instead (the side rolls still get the hero off)
++    // the forward roll's key on a mount spurs it on instead (the side rolls still get the hero off);
++    // key 5 picks its roll by the movement keys held (".zroll l 5"), and in the saddle always spurs
 +    bool const forward = !args || !*args || args[0] == 'f' || args[0] == 'F';
-+    if (forward && player->IsMounted() && !player->IsTaxiFlying())
++    bool const key5 = args && std::strchr(args, '5');
++    if ((forward || key5) && player->IsMounted() && !player->IsTaxiFlying())
 +    {
 +        ZeldaSpur(player);
 +        return true;
@@ -7067,9 +7070,15 @@ index 000000000..c5364a15f
 +    return true;
 +}
 +
-+bool ChatHandler::HandleZeldaFlipCommand(char* /*args*/)
++bool ChatHandler::HandleZeldaFlipCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    // key 5 held with the back key (".zflip 5"): in the saddle it spurs, like every key-5 press
++    if (args && std::strchr(args, '5') && player->IsMounted() && !player->IsTaxiFlying())
++    {
++        ZeldaSpur(player);
++        return true;
++    }
 +    DismountToFight(player);
 +    if (!CanAct(player) || player->IsInWater())
 +        return true;

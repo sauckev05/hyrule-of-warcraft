@@ -34,10 +34,51 @@ local bowDrawing = false       -- ".zbow draw" went out: the hero stands rooted 
 local ROLL_KINDS = { [".zroll f"] = 1, [".zroll l"] = 2, [".zroll r"] = 3, [".zflip"] = 4 }
 
 function ZeldaControls_Command(cmd)
-	if ROLL_KINDS[cmd] and ZeldaRollAnim then
-		ZeldaRollAnim(ROLL_KINDS[cmd])
+	local base = string.gsub(cmd, " 5$", "")       -- key 5's rolls carry a " 5" for the server
+	if ROLL_KINDS[base] and ZeldaRollAnim then
+		ZeldaRollAnim(ROLL_KINDS[base])
 	end
 	SendChatMessage(cmd, "SAY")
+end
+
+-- The movement keys held right now, for key 5: every key runs its binding's body, so wrapping the
+-- movement functions sees each press (Start) and release (Stop). Turning and strafing both count
+-- as going left or right.
+local held = {}
+local function Track(startName, stopName, way)
+	local start, stop = getglobal(startName), getglobal(stopName)
+	if not start or not stop then
+		return
+	end
+	setglobal(startName, function(a1, a2, a3)
+		held[way] = true
+		return start(a1, a2, a3)
+	end)
+	setglobal(stopName, function(a1, a2, a3)
+		held[way] = nil
+		return stop(a1, a2, a3)
+	end)
+end
+Track("MoveForwardStart", "MoveForwardStop", "forward")
+Track("MoveBackwardStart", "MoveBackwardStop", "back")
+Track("TurnLeftStart", "TurnLeftStop", "turnLeft")
+Track("TurnRightStart", "TurnRightStop", "turnRight")
+Track("StrafeLeftStart", "StrafeLeftStop", "strafeLeft")
+Track("StrafeRightStart", "StrafeRightStop", "strafeRight")
+
+-- Key 5: the roll goes the way the hero is moving - backward a backflip, left or right a side
+-- roll, forward (or standing) the forward roll. In the saddle the server spurs the mount instead,
+-- whichever way (the " 5" tells it the press came from key 5).
+function ZeldaControls_Roll()
+	local cmd = ".zroll f"
+	if held.back then
+		cmd = ".zflip"
+	elseif (held.turnLeft or held.strafeLeft) and not (held.turnRight or held.strafeRight) then
+		cmd = ".zroll l"
+	elseif (held.turnRight or held.strafeRight) and not (held.turnLeft or held.strafeLeft) then
+		cmd = ".zroll r"
+	end
+	ZeldaControls_Command(cmd .. " 5")
 end
 
 -- The Spin Attack's charge bar: a cast bar (like Slam's) that fills while the sword key is held,
