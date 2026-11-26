@@ -2036,10 +2036,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..af371cc81
+index 000000000..0efc00a77
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6490 @@
+@@ -0,0 +1,6525 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -6992,7 +6992,7 @@ index 000000000..af371cc81
 +
 +// key 5 in the saddle: a spur (ZELDA_SPUR) - the mount runs 20% faster for each, up to five
 +// the mount's own call (its idle snort, whinny or growl) by mount display, from zelda_mount_sound
-+// (build_mount_sounds.py); read once, on the first spur
++// (build_mount_sounds.py), for a mount with no attack sounds; read once, on the first spur
 +static uint32 MountCall(uint32 mountDisplay)
 +{
 +    static std::unordered_map<uint32, uint32> const calls = []
@@ -7014,6 +7014,33 @@ index 000000000..af371cc81
 +    return it == calls.end() ? 0 : it->second;
 +}
 +
++// the mount's attack sounds, one file each and in turn by the red circle (zelda_mount_attack,
++// build_mount_sounds.py; patch-Z's single-file SoundEntries rows); read once, on the first spur
++static std::vector<uint32> const* MountAttacks(uint32 mountDisplay)
++{
++    static std::unordered_map<uint32, std::vector<uint32>> const attacks = []
++    {
++        std::unordered_map<uint32, std::vector<uint32>> m;
++        if (auto result = WorldDatabase.Query("SELECT `display_id`, `sound_id` FROM `zelda_mount_attack` ORDER BY `display_id`, `seq`"))
++        {
++            do
++            {
++                Field* f = result->Fetch();
++                m[f[0].GetUInt32()].push_back(f[1].GetUInt32());
++            }
++            while (result->NextRow());
++        }
++        sLog.outString("Zelda: attack sounds loaded for %u mount displays", uint32(m.size()));
++        return m;
++    }();
++    auto it = attacks.find(mountDisplay);
++    return it == attacks.end() || it->second.empty() ? nullptr : &it->second;
++}
++
++// the hero's grunt on each red circle, in turn: the forward roll's, the backflip's, the side roll's
++// (patch-Z's SoundEntries 20190-20192, build_hero.py SPUR_VOICE_*)
++static uint32 const ZELDA_SPUR_VOICES[3] = { 20190, 20191, 20192 };
++
 +static void ZeldaSpur(Player* player)
 +{
 +    if (!player->IsAlive() || player->IsTaxiFlying() || !player->IsMoving())
@@ -7027,8 +7054,16 @@ index 000000000..af371cc81
 +    player->CastSpell(player, ZELDA_SPUR, TRIGGERED_OLD_TRIGGERED);
 +    SpellAuraHolder const* after = player->GetSpellAuraHolder(ZELDA_SPUR);
 +    if (after && after->GetStackAmount() > stacksBefore)
-+        if (uint32 call = MountCall(player->GetMountID()))
-+            player->PlayDistanceSound(call);    // each new speed stack: the mount calls out
++    {
++        // each new red circle: the mount's next attack sound (its idle call if it has none) and
++        // the hero's next grunt, both going round by the circle's number
++        uint32 const circle = after->GetStackAmount() - 1;
++        if (std::vector<uint32> const* attacks = MountAttacks(player->GetMountID()))
++            player->PlayDistanceSound((*attacks)[circle % attacks->size()]);
++        else if (uint32 call = MountCall(player->GetMountID()))
++            player->PlayDistanceSound(call);
++        player->PlayDistanceSound(ZELDA_SPUR_VOICES[circle % 3]);
++    }
 +    StateFor(player).spurDecayAt = (WorldTimer::getMSTime() + ZELDA_SPUR_DECAY_MS) | 1;
 +    player->UpdateSpeed(MOVE_RUN, true);
 +}

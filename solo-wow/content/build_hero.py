@@ -18,6 +18,7 @@ usage: build_hero.py                                      writes zelda-sql/024_h
                                                           writes the patch files and server DBCs
 """
 import math
+import json
 import os
 import struct
 import subprocess
@@ -87,7 +88,7 @@ CAPE_PROFILE = [(0, 0.185), (0.19, 0.16), (0.41, 0.22), (0.63, 0.30), (0.82, 0.3
 CAPE_TATTER = dict(teeth=6, depth=0.17, uneven=0.5, tip_wear=0.3, tear_min=0.6, seed=11)   # W3
 # the scarf every cape wears round the neck (None: none): a thick roll on the shoulders under the helm
 # S1, the donut roll it replaced: shape roll, two wraps (see git history)
-CAPE_COWL = dict(  # F3: the scarf rests on the body like a mound, S1's two rolls in front, wide behind
+CAPE_COWL = dict(  # R2 (from F3): the scarf rests on the body like a mound, two soft round rolls in front, wide behind
     x=0.015,
     u=(0.35, 0.95),
     v=(0.3, 0.6),
@@ -101,16 +102,17 @@ CAPE_COWL = dict(  # F3: the scarf rests on the body like a mound, S1's two roll
     foot=(0.165, 0.19, 0.2),
     lean_in=dict(front=0.15, back=0.1),
     foot_min_z=1.56,
-    bulge=dict(front=0.055, back=0.065),
-    folds=dict(front=0.3, back=0.15),
+    bulge=dict(front=0.06, back=0.065),
+    folds=dict(front=0.2, back=0.15),
     fold_count=11,
     front_bulge=0.25,
-    peak=dict(front=0.65, back=0.6),
+    peak=dict(front=0.55, back=0.6),
+    round=dict(front=0.7, back=1.0),                       # R2: the front rounded
     lift=0.006,
     tuck=0.02,
     v_bands=2,
     rows=20,
-    ridges=((0.26, 0.042, 0.11), (0.5, -0.02, 0.06), (0.74, 0.046, 0.12)),
+    ridges=((0.3, 0.02, 0.16), (0.72, 0.022, 0.18)),        # R2: two soft round rolls (F3's were pointed)
     ridge_spread=1.5,
 )
 CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape ends (T2 was drawn to 0.40)
@@ -125,6 +127,11 @@ CAPE_BOTTOM_Z = 0.40          # the split cape's tails end at mid-calf (stock: 0
 CAPE_BACK_SHARE = 0.4         # how much of the extra length also leans back, off the legs
 # the galahad character (the core's one-time change): hair style 6 is geoset 7, colour 6 golden blond
 SQL_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'zelda-sql', '024_hero.sql')
+# key 5 in the saddle (ZeldaSpur): each red circle the hero grunts, in turn, as on the forward roll, the
+# backflip and the side rolls (Benilla's ROLL_SOUNDS), and the mount gives its next attack sound
+SPUR_VOICE_BASE = 20190
+SPUR_VOICE_FILES = ('HumanMaleMainAttackC.wav', 'HumanMaleMainAttackA.wav', 'HumanMaleMainAttackB.wav')
+MOUNT_ATTACKS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mount_attack_sounds.json')
 
 
 # ---------------------------------------------------------------- the model
@@ -408,7 +415,7 @@ def _mound_geometry(m, d, recs, pos, c):
         col = [(top - rr * c.get('tuck', 0.02) - np.array([0, 0, 0.03]), top_w, -0.15)]     # the lip, tucked in
         for r in range(rows + 1):
             t = r / rows
-            hump = math.sin(math.pi * t ** par('peak', th, 0.75))
+            hump = math.sin(math.pi * t ** par('peak', th, 0.75)) ** par('round', th, 1.0)   # round < 1: fuller, rounder
             wraps = sum(hh * math.exp(-((t - tc) / ww) ** 2) for tc, hh, ww in c.get('ridges', ())) * ridge_w
             pt = top + ch * t + n_out * (bulge * hump + wraps)
             col.append((pt, None, t))
@@ -795,6 +802,24 @@ def sound_entries(dbc_dir):
                 files.append((directory + '\\' + _str(strings, v), VOICE_DIRS[directory] + '\\' + _str(strings, v)))
         mapping[r[0]] = new[0]
         new_rows.append(new)
+    by_id = {r[0]: r for r in rows + new_rows}
+    def single(new_id, parent, slot):
+        """A SoundEntries row playing just one of `parent`'s files (the rest of it as the parent's)."""
+        row = list(by_id[parent])
+        name = _str(strings, row[3 + slot])
+        row[0] = new_id
+        row[2] = add_string(strings, 'Zelda %s %d' % (_str(strings, by_id[parent][2]), slot + 1))
+        row[3:13] = [add_string(strings, name)] + [0] * 9
+        row[13:23] = [by_id[parent][13 + slot] or 1] + [0] * 9
+        return row
+    # the hero's grunts on the spurs, in turn: the roll's, the backflip's, the side flip's
+    hero_attack = mapping[2941]
+    attack_files = [_str(strings, v) for v in by_id[hero_attack][3:13] if v]
+    for k, wav in enumerate(SPUR_VOICE_FILES):
+        new_rows.append(single(SPUR_VOICE_BASE + k, hero_attack, attack_files.index(wav)))
+    # the mounts' attack sounds, a file each (build_mount_sounds.py)
+    for new_id, parent, slot, _wav in json.load(open(MOUNT_ATTACKS))['entries']:
+        new_rows.append(single(new_id, parent, slot))
     return write_dbc(f, rows + new_rows, strings), mapping, sorted(set(files))
 
 
