@@ -126,6 +126,13 @@ NO_CAPE = 1501                 # the upper back's no-cape piece
 # lower it hangs (leg_share at the hem), the halves gap apart by gap (at the slit's top, at the hem)
 TABARD_LONG = None     # L2 (tried): dict(front_bottom=0.2, back_bottom=0.24, flare=0.3, gap=(0.008, 0.03), leg_share=1.0, top_share=0.35, calm=True)
 TABARD = 1202
+# a 3D belt (None: none): a thin band round the waist where belts are painted (the body's
+# rows at v 0.375-0.4375, a belt's LegUpper texture's top strip), standing thick out from the body,
+# its texture the body's own at that spot (so each belt's design, buckle and all, is on it), with an
+# optional raised buckle plate at the front; geoset: the submesh it joins (0 to preview on the body;
+# BELT_GEOSET, which the client shows when a belt is worn)
+BELT = None
+BELT_GEOSET = 1802
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
 # over a robe, and is slit up the front from slit_z with the halves gap apart (at the slit's top, at
@@ -947,6 +954,154 @@ def _worn_front(tris, recs, w, cx, uv_of, back=False):
                     new_tris.append(tri if sum(nx[i] * vn[i] for i in range(3)) >= 0 else [tri[0], tri[2], tri[1]])
     return tris + new_tris
 
+def _belt_geometry(m, d, recs, pos):
+    """The 3D belt (BELT): round the waist, between the body's rows where a belt is painted, a band
+    standing thick out from the body (cast onto it from outside for each way round), its texture
+    coordinate the body's own under it, its weights the body's; rims close it to the body above
+    and below; an optional buckle plate stands further out at the front. Returns faces (global)."""
+    import math
+    import numpy as np
+    c = BELT
+    cx = c.get('axis_x', 0.02)
+    tri_v = []
+    for sm in m.subs:
+        if sm['id'] in (0, 1301):
+            tri_v += [[m.vlookup[m.tris[t + k]] for k in range(3)] for t in range(sm['st'], sm['st'] + sm['nt'], 3)]
+    tri_v = np.array(tri_v)
+    P = np.array(pos, dtype=float)
+    UV = np.array([m.verts[v]['uv'] for v in range(len(m.verts))])
+    A, B, C = P[tri_v[:, 0]], P[tri_v[:, 1]], P[tri_v[:, 2]]
+    E1, E2 = B - A, C - A
+    def cast(o, dr):
+        h = np.cross(dr, E2); det = (E1 * h).sum(1)
+        ok = np.abs(det) > 1e-9
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        sv = o - A; u = (sv * h).sum(1) * inv
+        q = np.cross(sv, E1); v = (q * dr).sum(1) * inv
+        t = (q * E2).sum(1) * inv
+        hit = ok & (u >= -1e-4) & (v >= -1e-4) & (u + v <= 1 + 1e-4) & (t > 1e-6)
+        if not hit.any():
+            return None
+        k = int(np.argmin(np.where(hit, t, np.inf)))
+        return o + t[k] * dr, k, (1 - u[k] - v[k], u[k], v[k])
+    def weights_of(k, bary):
+        w = {}
+        for vi, bw in zip(tri_v[k], bary):
+            vv = m.verts[int(vi)]
+            for bone, ww in zip(vv['bi'], vv['w']):
+                if ww:
+                    w[bone] = w.get(bone, 0.0) + bw * ww / 255.0
+        return w
+    def pack_w(w):
+        top4 = sorted(w.items(), key=lambda kv: -kv[1])[:4]
+        tot = sum(x for _, x in top4) or 1.0
+        q = [int(round(255 * x / tot)) for _, x in top4]
+        q[0] += 255 - sum(q)
+        return q + [0] * (4 - len(q)), [b for b, _ in top4] + [0] * (4 - len(top4))
+    def belt_z(a, v):
+        """Where on the body, at angle a (deg, 0 front), the texture row v lies (the body's rings)."""
+        rows = c.get('rows', {0.375: [(0, 1.195), (46, 1.208), (95, 1.217), (134, 1.211), (180, 1.205)],
+                               0.4375: [(0, 1.057), (57, 1.089), (93, 1.105), (145, 1.096), (180, 1.091)]})
+        def at(pts):
+            for (a0, z0), (a1, z1) in zip(pts, pts[1:]):
+                if a <= a1:
+                    return z0 + (z1 - z0) * (a - a0) / ((a1 - a0) or 1.0)
+            return pts[-1][1]
+        (v0, p0), (v1, p1) = sorted(rows.items())
+        return at(p0) + (at(p1) - at(p0)) * (v - v0) / (v1 - v0)
+    base = bytearray(d[struct.unpack_from('<I', d, 0x48)[0]:struct.unpack_from('<I', d, 0x48)[0] + 48])
+    def vertex(p, uv, w, n):
+        rec = bytearray(base)
+        struct.pack_into('<3f', rec, 0, *map(float, p))
+        qw, qb = pack_w(w)
+        struct.pack_into('<4B', rec, 12, *qw)
+        struct.pack_into('<4B', rec, 16, *qb)
+        struct.pack_into('<3f', rec, 20, *map(float, n))
+        struct.pack_into('<2f', rec, 32, *map(float, uv))
+        recs.extend(rec)
+        return len(recs) // 48 - 1
+    v_top, v_bot = c.get('v', (0.375, 0.4375))
+    grow = c.get('grow', 0.0)                       # the band a little taller than the painted strip
+    n_around = c.get('around', 64)
+    thick = c['thick']
+    def surface(a_deg, z):
+        """The body under (a, z): point, uv, weights, outward normal."""
+        a = math.radians(a_deg)
+        out = np.array([math.cos(a), math.sin(a), 0.0])
+        o = np.array([cx, 0.0, z]) + out * 0.6
+        got = cast(o, -out)
+        if got is None:
+            return None
+        p, k, bary = got
+        uv = sum(UV[int(vi)] * bw for vi, bw in zip(tri_v[k], bary))
+        return p, uv, weights_of(k, bary), out
+    cols = []
+    for i in range(n_around):
+        a = 360.0 * i / n_around - 180.0
+        aa = abs(a)
+        zt = belt_z(aa, v_top) + grow
+        zb = belt_z(aa, v_bot) - grow
+        lo, hi = surface(a, zb), surface(a, zt)
+        if lo is None or hi is None:
+            cols.append(None)
+            continue
+        col = []
+        for (p, uv, w, out), vv in ((hi, v_top), (lo, v_bot)):
+            uv = (uv[0], vv)                          # the strip's own row at its edges
+            inner = vertex(p + out * 0.002, uv, w, out)
+            outer = vertex(p + out * (0.002 + thick), uv, w, out)
+            col.append((inner, outer))
+        cols.append(col)
+    faces = []
+    for i in range(n_around):
+        a_, b_ = cols[i], cols[(i + 1) % n_around]
+        if a_ is None or b_ is None:
+            continue
+        (ai_t, ao_t), (ai_b, ao_b) = a_
+        (bi_t, bo_t), (bi_b, bo_b) = b_
+        faces += [(ao_t, ao_b, bo_t), (bo_t, ao_b, bo_b)]           # the band's face
+        faces += [(ai_t, ao_t, bi_t), (bi_t, ao_t, bo_t)]           # its top rim
+        faces += [(ao_b, ai_b, bo_b), (bo_b, ai_b, bi_b)]           # its bottom rim
+    # the buckle plate: a raised slab at the front, the belt's own buckle drawn on it
+    bk = c.get('buckle')
+    if bk:
+        half_a = bk['half_angle']
+        rows_ = []
+        for z_frac in (0.0, 1.0):
+            row = []
+            for s_ in (-1.0, -0.5, 0.0, 0.5, 1.0):
+                a = s_ * half_a
+                zt = belt_z(abs(a), v_top) + grow + bk.get('rise', 0.0)
+                zb = belt_z(abs(a), v_bot) - grow - bk.get('rise', 0.0)
+                z = zt + (zb - zt) * z_frac
+                sf = surface(a, z)
+                if sf is None:
+                    row.append(None); continue
+                p, uv, w, out = sf
+                u = 0.504 + (bk.get('u_edge', 0.58) - 0.504) * abs(s_)
+                vv = v_top + (v_bot - v_top) * z_frac
+                lift = 0.002 + thick + bk['thick']
+                row.append((vertex(p + out * lift, (u, vv), w, out), vertex(p + out * (0.002 + thick), (u, vv), w, out)))
+            rows_.append(row)
+        top, bot = rows_
+        for k in range(4):
+            if None in (top[k], top[k + 1], bot[k], bot[k + 1]):
+                continue
+            faces += [(top[k][0], bot[k][0], top[k + 1][0]), (top[k + 1][0], bot[k][0], bot[k + 1][0])]
+        for row, flip in ((top, False), (bot, True)):                 # its top and bottom edges
+            for k in range(4):
+                if None in (row[k], row[k + 1]):
+                    continue
+                f = [(row[k][1], row[k][0], row[k + 1][1]), (row[k + 1][1], row[k][0], row[k + 1][0])]
+                faces += [(x, z_, y) for x, y, z_ in f] if flip else f
+        for k, flip in ((0, True), (4, False)):                        # its ends
+            if None in (top[k], bot[k]):
+                continue
+            f = [(top[k][1], bot[k][1], top[k][0]), (top[k][0], bot[k][1], bot[k][0])]
+            faces += [(x, z_, y) for x, y, z_ in f] if flip else f
+    return faces
+
+
 def _cape_extras(m, d, pos):
     """Add the worn hem and the scarf to the full cloak's submesh (1502, the big one): the new
     vertices go on the end of the vertex list; every view shares the one index and triangle list,
@@ -956,6 +1111,7 @@ def _cape_extras(m, d, pos):
     hem_faces = _hem_geometry(m, d, pos, recs) if CAPE_TATTER else []
     cowl_faces = _cowl_geometry(m, d, recs, pos) if CAPE_COWL else []
     tabard_tris = _tabard_skirt(m, d, recs) if TABARD_SKIRT else (_tabard_geometry(m, d, recs) if TABARD_LONG else None)
+    belt_tris = _belt_geometry(m, d, recs, pos) if BELT else None
     drop = set(HEM) if CAPE_TATTER else set()
     n_new = len(recs) // 48
     while len(d) % 16:
@@ -1012,6 +1168,8 @@ def _cape_extras(m, d, pos):
                     sv0, nv0, st0, nt0 = struct.unpack_from('<4H', d, o_sub + body_k * 32 + 4)
                     st1, nt1 = struct.unpack_from('<2H', d, o_sub + k1 * 32 + 8)
                     body = tris[st0:st0 + nt0] + tris[st1:st1 + nt1]
+                    if belt_tris and BELT.get('geoset', BELT_GEOSET) == 0:
+                        body += [local[g] for tri in belt_tris for g in tri]
                     top = max(body) + 1
                     body_rec = (min(sv0, min(body)), top - min(sv0, min(body)), len(tris) + len(new_tris), len(body))
                     new_tris += body
@@ -1109,7 +1267,7 @@ def build_model(stock, sound_map):
     _bulk_armour(m, pos)
     m.write_positions(pos)
     d = m.data
-    if CAPE_STYLE == 'full' and (CAPE_TATTER or CAPE_COWL or TABARD_LONG or TABARD_SKIRT):
+    if CAPE_STYLE == 'full' and (CAPE_TATTER or CAPE_COWL or TABARD_LONG or TABARD_SKIRT or BELT):
         _cape_extras(m, d, pos)
     # every cloak shape draws the split cape: each other cape submesh takes the split cape's ranges
     # (its own id stays, so the cloak's geoset group still picks it), in every level of detail
