@@ -302,3 +302,7 @@ installed on the PC with models in `E:\.ollama` (unused).
   via ZeldaSwingAnim step 7. Also: the face smoothed harder (young_face v2) and a smaller pointed nose
   (NOSE in build_hero.py). Backups: patch-Z.before-doublejump.MPQ.bak, benilla.before-doublejump.exe.
   Patch-Z is built locally: rebuild_hero.py (installed patch-Z of 2026-11-25 + build_hero files).
+- Cloak and eyes (installed 2026-11-25 late, da492698): every cape is the full cloak A1 (build_hero
+  CAPE_STYLE 'full': 1502 over the backs of the shoulders, narrower under them, to 0.40); the nose
+  reshape skips the eyes (only uv u<0.1, v<0.9); key 5 + A/D side-rolls only with the right mouse
+  button held (IsMouselooking). Backups: patch-Z.before-cloak.MPQ.bak, ZeldaControls.lua.before-cloak.bak.
