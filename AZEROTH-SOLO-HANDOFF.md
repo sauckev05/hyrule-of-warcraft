@@ -378,3 +378,9 @@ installed on the PC with models in `E:\.ollama` (unused).
   - patch-Z md5 2684a097…; backup: patch-Z.before-B2.MPQ.bak (W3, e521b662…).
 - Now (installed 2026-11-26, df8aab0a): the tabard front lowered to front_hem 0.65 (was 0.73; 0.69 was
   tried). The user is happy with this length. patch-Z md5 5b2011e0…; backup: patch-Z.before-lower.MPQ.bak (0.73, 2684a097…).
+- Now (installed 2026-11-26, 85f6c958): the tabard front no longer sticks out.
+  - Points raised by front_hem are pulled in to the robe's radius at their new height (radius_at, from
+    the robe's rings).
+  - They also take the robe's bone weights there (weights_at, blended by k). Before, they kept their
+    shin weights and swung out at the knee.
+  - patch-Z md5 094e9bbd…; backup: patch-Z.before-frontfix.MPQ.bak (5b2011e0…).
