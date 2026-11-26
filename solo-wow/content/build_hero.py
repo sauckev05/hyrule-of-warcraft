@@ -85,6 +85,8 @@ CAPE_PROFILE = [(0, 0.22), (0.19, 0.17), (0.41, 0.22), (0.63, 0.30), (0.82, 0.38
 # tears reach, model units), uneven (spacing jitter), tip_wear / tear_min (tips' and tears' share of
 # the depth), seed; CAPE_FULL_BOTTOM is then where the longest tips end
 CAPE_TATTER = None
+# the scarf every cape wears round the neck (None: none): a thick roll on the shoulders under the helm
+CAPE_COWL = None
 CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape ends (T2 was drawn to 0.40)
 CAPE_BORDER_V = 0.90               # with a worn hem: the texture v above which the hem's border is drawn to scale
 CAPE_FLARE = 0.22                  # below that, how fast the half width keeps widening (per profile length)
@@ -206,13 +208,15 @@ def _hem_profile():
     return pts
 
 
-def _tatter_hem(m, d, pos):
-    """Replace the full cloak's last band (from the row above the hem down) with a finer strip
-    whose bottom is torn into uneven points (CAPE_TATTER). The band hangs on one bone, so every new
+HEM = (2257, 2250, 2249, 2251, 2255)              # the full cloak's hem row, stock vertex ids
+
+
+def _hem_geometry(m, d, pos, recs):
+    """The worn hem (CAPE_TATTER): a finer strip replacing the full cloak's last band (from the row
+    above the hem down), its bottom torn into uneven points. The band hangs on one bone, so every new
     vertex copies a hem vertex (weights, normal) with its own position and texture coordinate; the
-    texture is cut with the cloth, so the tears bite into the hem's border. Every view shares the
-    one index and triangle list, so the strip is appended once and the cloak's submesh repointed."""
-    HEM = (2257, 2250, 2249, 2251, 2255)          # the hem row, stock vertex ids
+    texture is cut with the cloth, so the tears bite into the hem's border. New vertex records go on
+    recs; returns the faces (global vertex ids)."""
     ROW = (2256, 2253, 2248, 2252, 2254)          # the row above it (u ~0.81), stock vertex ids
     span = 1.42 - _profile_bottom()
     u_end = (1.42 - CAPE_FULL_BOTTOM) / span       # the longest tips
@@ -238,8 +242,7 @@ def _tatter_hem(m, d, pos):
         return CAPE_BORDER_V - (h - h_border) / max(1e-6, h_row - h_border) * (CAPE_BORDER_V - v_row)
     def src(s):                                    # the hem vertex the new one copies
         return HEM[min(range(5), key=lambda k: abs((-1, -0.62, 0, 0.62, 1)[k] - s))]
-    n_v, o_v = struct.unpack_from('<II', d, 0x44)
-    recs = bytearray(d[o_v:o_v + n_v * 48])
+    o_v = struct.unpack_from('<I', d, 0x48)[0]
     grid = []                                      # grid[r][c] = global vertex id
     for r in range(rows + 1):
         line = []
@@ -253,11 +256,6 @@ def _tatter_hem(m, d, pos):
             line.append(len(recs) // 48)
             recs += rec
         grid.append(line)
-    n_new = len(recs) // 48
-    while len(d) % 16:
-        d.append(0)
-    struct.pack_into('<II', d, 0x44, n_new, len(d))
-    d += recs
     # faces: the row above zipped to the strip's first row, then the strip's quads
     row_s = [_signed_s(pos, v) for v in ROW]
     faces = []
@@ -271,6 +269,109 @@ def _tatter_hem(m, d, pos):
         for c in range(len(cols) - 1):
             a, b, e, f = grid[r][c], grid[r][c + 1], grid[r + 1][c], grid[r + 1][c + 1]
             faces += [(a, b, e), (b, f, e)]
+    return faces
+
+
+def _cowl_geometry(m, d, recs):
+    """The scarf (CAPE_COWL): a thick roll of the cape's cloth wound round the base of the neck,
+    resting on the shoulders under any helm, bunched in folds and drooping lower in front. A closed
+    tube: around the neck (theta, 0 at the front) and round its own cross-section (phi). Weighted to
+    the chest (bone 22) and, toward its top, partly the neck (48). Returns faces, outward-facing."""
+    faces = []
+    for layer in CAPE_COWL.get('layers', [{}]):
+        faces += _cowl_layer(d, recs, dict(CAPE_COWL, **layer))
+    return faces
+
+
+def _cowl_layer(d, recs, c):
+    """One wrap of the scarf (see _cowl_geometry)."""
+    import math, random
+    o_v = struct.unpack_from('<I', d, 0x48)[0]
+    base = bytearray(d[o_v + HEM[2] * 48:o_v + HEM[2] * 48 + 48])
+    rnd = random.Random(c.get('seed', 5))
+    nt, nph = c.get('around', 48), c.get('cross', 12)
+    ph = [rnd.uniform(0, 2 * math.pi) for _ in range(4)]
+    def crease(th):                                                  # soft bulges between sharp creases, -0.6 .. 0.4
+        k = c['fold_count']
+        f = abs(math.sin(k * th / 2 + ph[0])) ** 0.5 * (0.75 + 0.25 * math.sin(3 * th + ph[1]))
+        return f - 0.6
+    def point(th, phi):
+        front = ((1 + math.cos(th)) / 2) ** 3                       # 1 at the front, 0 behind
+        fold = 1 + c['folds'] * crease(th)
+        back = ((1 - math.cos(th)) / 2) ** 2                        # 1 behind, 0 in front
+        R = c['bulk'] * fold * (1 + c['front_bulk'] * front + c.get('back_bulk', 0.0) * back)   # half thickness
+        H = c['height'] * (1 + 0.15 * math.sin(3 * th + ph[2])) * (1 + c['front_drop'] * front * 0.5)
+        zc = c['z'] - c['droop'] * front
+        sag = 1 + c.get('sag', 0.3) * max(0.0, -math.sin(phi))       # the cloth settles: fuller low and out
+        rho = (R + R * math.cos(phi)) * sag
+        z = zc + H * math.sin(phi) - c.get('fold_sag', 0.0) * max(0.0, -crease(th)) * max(0.0, math.cos(phi))
+        k = max(0.0, min(1.0, (c['z'] + c['height'] - z) / (2 * c['height'])))   # 0 top .. 1 bottom
+        a = c['neck'][0] + (c['base'][0] - c['neck'][0]) * k        # the neck widening into the shoulders
+        b = c['neck'][1] + (c['base'][1] - c['neck'][1]) * k
+        a += c.get('back_out', 0.0) * back                           # behind: out over the cloak's yoke
+        return (c['x'] + (a + rho) * math.cos(th), (b + rho) * math.sin(th), z)
+    grid = []
+    for i in range(nt):
+        th = 2 * math.pi * i / nt
+        line = []
+        for j in range(nph):
+            phi = 2 * math.pi * j / nph
+            p = point(th, phi)
+            e = 1e-3
+            dt = [point(th + e, phi)[k] - point(th - e, phi)[k] for k in range(3)]
+            dp = [point(th, phi + e)[k] - point(th, phi - e)[k] for k in range(3)]
+            n = [dt[1] * dp[2] - dt[2] * dp[1], dt[2] * dp[0] - dt[0] * dp[2], dt[0] * dp[1] - dt[1] * dp[0]]
+            out = [math.cos(phi) * math.cos(th), math.cos(phi) * math.sin(th), math.sin(phi)]
+            if sum(n[k] * out[k] for k in range(3)) < 0:
+                n = [-x for x in n]
+            ln = math.sqrt(sum(x * x for x in n)) or 1.0
+            rec = bytearray(base)
+            struct.pack_into('<3f', rec, 0, *p)
+            w48 = max(0.0, min(1.0, (p[2] - c['z'] + c['height']) / (2 * c['height']))) * c.get('neck_share', 0.5)
+            w = round(255 * w48)
+            struct.pack_into('<4B', rec, 12, 255 - w, w, 0, 0)
+            struct.pack_into('<4B', rec, 16, 22, 48, 0, 0)
+            struct.pack_into('<3f', rec, 20, *(x / ln for x in n))
+            tu = c['u'][0] + (c['u'][1] - c['u'][0]) * (1 - abs(th / math.pi - 1))   # mirrored, no seam
+            tv = c['v'][0] + (c['v'][1] - c['v'][0]) * (1 - abs(phi / math.pi - 1))
+            struct.pack_into('<2f', rec, 32, tu, tv)
+            line.append(len(recs) // 48)
+            recs += rec
+        grid.append(line)
+    faces = []
+    def wp(g):
+        return struct.unpack_from('<3f', recs, g * 48)
+    for i in range(nt):
+        for j in range(nph):
+            a, b = grid[i][j], grid[(i + 1) % nt][j]
+            e, f = grid[i][(j + 1) % nph], grid[(i + 1) % nt][(j + 1) % nph]
+            for tri in ((a, b, e), (b, f, e)):
+                p0, p1, p2 = (wp(g) for g in tri)
+                n = [(p1[1]-p0[1])*(p2[2]-p0[2]) - (p1[2]-p0[2])*(p2[1]-p0[1]),
+                     (p1[2]-p0[2])*(p2[0]-p0[0]) - (p1[0]-p0[0])*(p2[2]-p0[2]),
+                     (p1[0]-p0[0])*(p2[1]-p0[1]) - (p1[1]-p0[1])*(p2[0]-p0[0])]
+                vn = struct.unpack_from('<3f', recs, tri[0] * 48 + 20)
+                faces.append(tri if sum(n[k] * vn[k] for k in range(3)) >= 0 else (tri[0], tri[2], tri[1]))
+    return faces
+
+
+
+
+def _cape_extras(m, d, pos):
+    """Add the worn hem and the scarf to the full cloak's submesh (1502, the big one): the new
+    vertices go on the end of the vertex list; every view shares the one index and triangle list,
+    so the cloak's triangles are appended once and its submesh repointed in every view."""
+    n_v, o_v = struct.unpack_from('<II', d, 0x44)
+    recs = bytearray(d[o_v:o_v + n_v * 48])
+    hem_faces = _hem_geometry(m, d, pos, recs) if CAPE_TATTER else []
+    cowl_faces = _cowl_geometry(m, d, recs) if CAPE_COWL else []
+    drop = set(HEM) if CAPE_TATTER else set()
+    n_new = len(recs) // 48
+    while len(d) % 16:
+        d.append(0)
+    struct.pack_into('<II', d, 0x44, n_new, len(d))
+    d += recs
+    faces = hem_faces
     def wpos(g):
         return struct.unpack_from('<3f', d, struct.unpack_from('<I', d, 0x48)[0] + g * 48)
     done = {}
@@ -287,8 +388,8 @@ def _tatter_hem(m, d, pos):
                         and local.get(HEM[2]) in tris[struct.unpack_from('<H', d, o_sub + k * 32 + 8)[0]:
                                                       sum(struct.unpack_from('<2H', d, o_sub + k * 32 + 8))])
             sv, nv, st, nt = struct.unpack_from('<4H', d, o_sub + cape * 32 + 4)
-            hem_l = {local[g] for g in HEM}
-            keep = [tris[t:t + 3] for t in range(st, st + nt, 3) if not hem_l & set(tris[t:t + 3])]
+            drop_l = {local[g] for g in drop}
+            keep = [tris[t:t + 3] for t in range(st, st + nt, 3) if not drop_l & set(tris[t:t + 3])]
             ref = keep[0]                          # the cloak's own facing, from a kept triangle
             def facing(tri_g):
                 a, b, c = (wpos(g) for g in tri_g)
@@ -307,6 +408,8 @@ def _tatter_hem(m, d, pos):
                 if (facing(f) > 0) != want:
                     f = (f[0], f[2], f[1])
                 new_tris += [local[g] for g in f]
+            for f in cowl_faces:
+                new_tris += [local[g] for g in f]
             arrs = []
             for data in (struct.pack('<%dH' % len(idx), *idx), struct.pack('<%dH' % (len(tris) + len(new_tris)), *(tris + new_tris)), props):
                 while len(d) % 16:
@@ -319,6 +422,8 @@ def _tatter_hem(m, d, pos):
         for k in range(n_sub):
             if struct.unpack_from('<H', d, o_sub + k * 32)[0] == FULL_CAPE and k == cape:
                 struct.pack_into('<4H', d, o_sub + k * 32 + 4, *rec)
+
+
 
 
 def _signed_s(pos, v):
@@ -384,8 +489,8 @@ def build_model(stock, sound_map):
     _bulk_armour(m, pos)
     m.write_positions(pos)
     d = m.data
-    if CAPE_STYLE == 'full' and CAPE_TATTER:
-        _tatter_hem(m, d, pos)
+    if CAPE_STYLE == 'full' and (CAPE_TATTER or CAPE_COWL):
+        _cape_extras(m, d, pos)
     # every cloak shape draws the split cape: each other cape submesh takes the split cape's ranges
     # (its own id stays, so the cloak's geoset group still picks it), in every level of detail
     for view in _views(d):
