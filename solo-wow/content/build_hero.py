@@ -14,7 +14,7 @@
 - The young face: face 0 in all ten skin colours, softened (CharSections points at the new files).
 
 usage: build_hero.py                                      writes zelda-sql/024_hero.sql
-       build_hero.py <client dbc dir> <HumanMale.m2> <face dir> <voice dir> <out dir>
+       build_hero.py <client dbc dir> <HumanMale.m2> <face dir> <voice dir> <out dir> [<NightElfMale.m2>]
                                                           writes the patch files and server DBCs
 """
 import os
@@ -63,6 +63,10 @@ ARMOUR_GEOSETS = {402: (78, 95, 79, 97), 403: (78, 95, 79, 97), 404: (78, 95, 79
 ARMOUR_BULK = 1.0
 HELM_ATTACH = 11
 HEAD_BONE = 64
+# the nose: smaller and pointed, a triangle seen from the side (bridge straight down to a sharp tip,
+# underside straight back), in the stock model's units; only the head bone's own vertices
+NOSE = dict(top=(1.905, 0.165), tip=(1.852, 0.176), base=(1.838, 0.150), plane=0.147,
+            zmin=1.835, zmax=1.91, ymax=0.046, xmin=0.140, width=0.75, depth=0.85, round=0.45)
 # the cape: every cloak wears the split cape (1504), stretched from the shoulder blades down
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
@@ -73,6 +77,27 @@ SQL_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'zelda-sql', 
 
 
 # ---------------------------------------------------------------- the model
+
+def _shape_nose(m):
+    """Reshape the nose in the stock positions (the body deform then carries it with the head)."""
+    n = NOSE
+    (zt, xt), (zp, xp), (zb, xb) = n['top'], n['tip'], n['base']
+    for v in m.verts:
+        x, y, z = v['pos']
+        if not (n['zmin'] <= z <= n['zmax'] and abs(y) <= n['ymax'] and x >= n['xmin']):
+            continue
+        if v['bi'][0] != HEAD_BONE or v['w'][0] != 255:
+            continue
+        # the profile at this height: the bridge line above the tip, the underside line below
+        if z >= zp:
+            prof = xp + (xt - xp) * min(1.0, (z - zp) / (zt - zp))
+        else:
+            prof = xp + (xb - xp) * min(1.0, (zp - z) / (zp - zb))
+        # off the middle the nose falls away (a narrow ridge), then the whole nose sits lower
+        x2 = min(x, prof - n['round'] * abs(y))
+        x2 = n['plane'] + (x2 - n['plane']) * n['depth']
+        v['pos'] = (max(x2, min(x, n['plane'])), y * n['width'], z)
+
 
 def _bulk_armour(m, pos):
     """Push the gauntlet cuffs and boot tops out from their limb's axis (elbow to wrist, knee to
@@ -106,6 +131,7 @@ def build_model(stock, sound_map):
     m = M2(fh.name)
     os.unlink(fh.name)
     shape = dict(deform.VARIANTS['B'], head=HERO_HEAD)
+    _shape_nose(m)
     pos = deform.deform(m, shape)
     # the split cape, longer: everything below the anchor is stretched down (and a little back)
     cape = set()
@@ -301,26 +327,35 @@ def patch_sections(dbc_dir):
 # ---------------------------------------------------------------- the face and the voice
 
 def young_face(upper, lower):
-    """The stock face, younger: the brow and cheek creases softened and the folds partly filled,
-    the eyes, brows and skin tone kept (the original colour mean is restored, so it matches the body)."""
-    from PIL import Image, ImageFilter, ImageChops, ImageStat
+    """The stock face, younger: smoothed hard (the forehead and cheek creases, the nose's shading
+    under the smaller nose), the folds partly filled; the eyes, mouth and ears keep their detail and
+    the brows a little of theirs; the original colour mean is restored, so it matches the body."""
+    from PIL import Image, ImageFilter, ImageChops, ImageStat, ImageDraw
     face = Image.new('RGB', (128, 96))
     face.paste(upper.convert('RGB'), (0, 0))
     face.paste(lower.convert('RGB'), (0, 32))
     keep = 18                                           # the eye and teeth swatches at the bottom
     work = face.crop((0, 0, 128, 96 - keep))
-    soft = Image.blend(work, work.filter(ImageFilter.GaussianBlur(1.6)), 0.35)
-    base = soft.filter(ImageFilter.GaussianBlur(8))
-    lift = Image.blend(soft, ImageChops.lighter(soft, base), 0.40)
-    m0, m1 = ImageStat.Stat(work).mean, ImageStat.Stat(lift).mean
-    lift = Image.merge('RGB', [ch.point(lambda v, k=m0[i] / m1[i]: min(255, int(v * k)))
-                               for i, ch in enumerate(lift.split())])
-    mask = Image.new('L', work.size, 255)
+    smooth = work.filter(ImageFilter.GaussianBlur(3.0))
+    base = work.filter(ImageFilter.GaussianBlur(10))
+    smooth = Image.blend(smooth, ImageChops.lighter(smooth, base), 0.6)
+    mask = Image.new('L', work.size, 0)                 # what keeps the original (white)
+    d = ImageDraw.Draw(mask)
+    d.ellipse((2, 29, 34, 40), fill=255)                # eye
+    d.ellipse((6, 24, 34, 31), fill=90)                 # brow, mostly smoothed
+    d.ellipse((-6, 55, 17, 63), fill=200)               # mouth
+    d.rectangle((60, 29, 84, 56), fill=255)             # ear
+    mask = mask.filter(ImageFilter.GaussianBlur(2.5))
+    out = Image.composite(work, Image.blend(work, smooth, 0.9), mask)
+    m0, m1 = ImageStat.Stat(work).mean, ImageStat.Stat(out).mean
+    out = Image.merge('RGB', [ch.point(lambda v, k=m0[i] / m1[i]: min(255, int(v * k)))
+                              for i, ch in enumerate(out.split())])
+    feather = Image.new('L', work.size, 255)
     h = work.size[1]
     for y in range(h - 8, h):
         for x in range(128):
-            mask.putpixel((x, y), int(255 * (h - 1 - y) / 8))
-    face.paste(Image.composite(lift, work, mask), (0, 0))
+            feather.putpixel((x, y), int(255 * (h - 1 - y) / 8))
+    face.paste(Image.composite(out, work, feather), (0, 0))
     return face.crop((0, 0, 128, 32)), face.crop((0, 32, 128, 96))
 
 
@@ -350,9 +385,16 @@ def voice_files(voice_dir, files, work):
 
 # ---------------------------------------------------------------- outputs
 
-def build_files(dbc_dir, stock_m2, face_dir, voice_dir, out_dir):
-    """Every patch-Z file of the hero, and the server's three DBCs written into out_dir."""
+def build_files(dbc_dir, stock_m2, face_dir, voice_dir, out_dir, ne_m2=None):
+    """Every patch-Z file of the hero, and the server's three DBCs written into out_dir; with the
+    night elf male's model, the double jump's front flip is ported onto the hero first (port_flip)."""
     os.makedirs(out_dir, exist_ok=True)
+    if ne_m2:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tools'))
+        import port_flip
+        flipped = os.path.join(out_dir, 'HumanMale-flip.m2')
+        port_flip.port(stock_m2, ne_m2, flipped)
+        stock_m2 = flipped
     sounds, mapping, files = sound_entries(dbc_dir)
     model_data = patch_model_data(os.path.join(dbc_dir, 'CreatureModelData.dbc'))
     display = patch_display_info(os.path.join(dbc_dir, 'CreatureDisplayInfo.dbc'))
@@ -400,5 +442,5 @@ FROM `creature_model_info` WHERE `modelid` = %(stock)d;
 
 if __name__ == '__main__':
     write_sql()
-    if len(sys.argv) == 6:
+    if len(sys.argv) in (6, 7):
         build_files(*sys.argv[1:])

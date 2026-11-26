@@ -253,7 +253,7 @@ pub(super) fn run(
                 // Zelda of Warcraft: the dodge roll's own clip plays out over the dash's start and
                 // a turn or strafe key (player::zelda_roll); its end re-picks the gait as any does
                 || (mv.flags != drv.gait_flags
-                    && !matches!(id, crate::creature_anim::ROLL_CLIP | crate::creature_anim::BACKFLIP_CLIP))
+                    && !matches!(id, crate::creature_anim::ROLL_CLIP | crate::creature_anim::BACKFLIP_CLIP | crate::creature_anim::FLIP_CLIP))
             {
                 // A finished one-shot recomputes the base, fire clips too: bow ids reach the
                 // dispatcher `0x5fc3f0` through its deferred site (`0x7194f5`, `0x7074b0`), and

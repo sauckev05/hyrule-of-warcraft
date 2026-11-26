@@ -315,6 +315,13 @@ pub(crate) struct Player {
     /// Zelda of Warcraft: the forward roll in progress, a dash along the ground the controller runs
     /// in place of the keys ([`super::zelda_roll`]).
     pub(super) zelda_dash: Option<ZeldaDash>,
+    /// Zelda of Warcraft: a jump press in the air asked for the double jump, which the mover takes
+    /// on its next airborne frame ([`super::mover::step`]).
+    pub(super) zelda_double_jump: bool,
+    /// The double jump was used in this flight; landing gives it back.
+    pub(super) zelda_double_used: bool,
+    /// The moment the double jump launched, for its front flip ([`super::zelda_roll`]).
+    pub(super) zelda_flip_at: Option<f32>,
     /// Free-fly (`F`): the camera moves on its own and the avatar/server position is frozen.
     pub(crate) detached: bool,
     /// `SMSG_CLIENT_CONTROL_UPDATE` with `allowMove = 0` named the unit we drive: us, while someone

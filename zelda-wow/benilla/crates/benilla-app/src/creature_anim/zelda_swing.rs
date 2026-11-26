@@ -45,6 +45,9 @@ pub(crate) struct ZeldaGuard {
 /// patch-Z); a model without them tumbles by turning its whole body instead (player::zelda_roll).
 pub(crate) const ROLL_CLIP: u16 = 153;
 pub(crate) const BACKFLIP_CLIP: u16 = 154;
+/// The double jump's front flip (Custom2, the night elf male's flipping JumpStart that patch-Z ports
+/// onto the human male: solo-wow/tools/port_flip.py).
+pub(crate) const FLIP_CLIP: u16 = 155;
 /// The dodge roll's clip is one whole turn of the tumble (333 ms); it plays this many times over
 /// the roll, each one complete, sped up to fit (two in the forward roll's 0.65 s: about its own pace).
 pub(crate) const ROLL_SPINS: u32 = 2;
@@ -108,6 +111,7 @@ pub(super) fn combo_clip(step: u8, main: Option<(u8, u8)>, race: u8, gender: u8)
         // adds to the human male (solo-wow/tools/port_roll.py)
         5 => return (ROLL_CLIP, 0),
         6 => return (BACKFLIP_CLIP, 0),
+        7 => return (FLIP_CLIP, 0),
         s if s >= 4 => return (58, 0), // the leaping two-handed strike, even with a one-hander
         _ => {}
     }

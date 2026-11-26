@@ -557,6 +557,20 @@ pub(super) fn control(
             (0.0, 0.0)
         };
 
+        // Zelda of Warcraft: the double jump. A second press in the air, once a flight, on foot and
+        // out of the water, launches again (the mover takes it), with the night elf's front flip.
+        if want_jump && !swimming && player.airborne_since.is_some() && !player.zelda_double_used
+            && !player.modes.hover && !player.server_riding && knock_launch.is_none()
+        {
+            let mounted = match body.single() {
+                Ok((_, .., store, _, _, _, _, _)) => store.is_some_and(|s| s.0.unit_mount_display_id() != 0),
+                Err(_) => false,
+            };
+            if !mounted {
+                player.zelda_double_jump = true;
+            }
+        }
+
         // The mounted Space flourish, the jump-key handler `0x60dea0`: mounted, still and grounded
         // plays MountSpecial (94) locally, then sends `CMSG_MOUNTSPECIAL_ANIM`; moving jumps;
         // turning in place eats the press. Airborne, the press falls through and the mover drops

@@ -155,6 +155,8 @@ pub(super) fn step(
         player.knock_arc = true;
     } else if grounded {
         player.vel_y = 0.0;
+        player.zelda_double_jump = false;
+        player.zelda_double_used = false;
         // Hover refuses the keyboard jump silently, the first test in `CMovement::Jump`
         // (`0x7c623a`): the key's replay passes `Jump(1)` (`0x615eba`) and drops a refusal
         // (`0x615ec5`), so no `MSG_MOVE_JUMP` and no retry. `wire_jump` is `Jump(0)`, which skips
@@ -169,6 +171,20 @@ pub(super) fn step(
             // A moving jump is locked to its momentum; a standing one may steer once.
             player.arc_dirs_set = moving;
         }
+    } else if player.zelda_double_jump {
+        // Zelda of Warcraft: the double jump, a second take-off at jump speed from wherever the body
+        // is, steered by the keys held (none: the old drift keeps going); the jump packet goes out
+        // as for any take-off, so the server's fall restarts here.
+        player.zelda_double_jump = false;
+        player.zelda_double_used = true;
+        player.vel_y = JUMP_SPEED;
+        player.launch_vz = JUMP_SPEED;
+        if moving {
+            player.horiz_vel = input_horiz;
+        }
+        player.arc_dirs_set = true;
+        player.zelda_flip_at = Some(time.elapsed_secs());
+        jumped = true;
     } else if !player.airborne_prev {
         // A step-off: `StartFalling(0)` launches at exactly 0, which the wire tail sends and the
         // FALLINGFAR legs split on; the nibble seeds from the keys.

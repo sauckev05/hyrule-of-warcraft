@@ -40,6 +40,8 @@ const ROLL_SOUNDS: [&str; 4] = [
 ];
 /// The forward roll's reach along the ground (yd), over its [`ROLL_SECS`].
 const FORWARD_ROLL_YARDS: f32 = 14.0;
+/// The double jump's front flip clip length (s): port_flip.py's 733 ms.
+const FLIP_SECS: f32 = 0.733;
 /// The rolls' shared cooldown, a little over the server's 0.9 s (`DODGE_COOLDOWN_MS`), so a roll the
 /// client runs is one the server grants the dodge for.
 const DODGE_COOLDOWN_SECS: f32 = 0.95;
@@ -165,6 +167,17 @@ fn tumble(
         } else if state.rolling.is_none() {
             state.armed = Some((kind, now));
         }
+    }
+    // the double jump's front flip (the mover launched it): the model's own clip when it has one
+    if player.zelda_flip_at.take().is_some() {
+        let has_clip = body.single().ok().flatten().is_some_and(|a| {
+            a.clips.iter().any(|c| c.anim_id == crate::creature_anim::FLIP_CLIP)
+        });
+        if let (true, Some(swings)) = (has_clip, swings.as_deref_mut()) {
+            swings.0.push((7, FLIP_SECS));
+        }
+        sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[0]));
+        trace(|| format!("double jump flip own_clip={has_clip}"));
     }
     // the server's push for the asked roll: the turn starts with it
     let pushed = knocks.read().count() > 0;
