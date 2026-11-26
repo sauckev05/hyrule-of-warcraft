@@ -127,6 +127,12 @@ NO_CAPE = 1501                 # the upper back's no-cape piece
 TABARD_LONG = dict(front_bottom=0.2, back_bottom=0.24, flare=0.3, gap=(0.008, 0.03),   # L2
                    leg_share=1.0, top_share=0.35, calm=True)
 TABARD = 1202
+# or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
+# tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
+# over a robe, and is slit up the front from slit_z with the halves gap apart (at the slit's top, at
+# the hem); hem_z cuts it shorter (0: the robe's own length, to the ankles)
+TABARD_SKIRT = None
+ROBE = 1302
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
@@ -656,6 +662,67 @@ def _tabard_geometry(m, d, recs):
     return out
 
 
+def _tabard_skirt(m, d, recs):
+    """The tabard as a long surcoat (TABARD_SKIRT): a copy of the robe skirt's mesh (with its leg
+    weights, so it moves as a robe does), pushed out a little to sit over a robe, textured from the
+    tabard's lower part as the stock flaps are (front and back mirrored round the legs, top to hem
+    down the flaps' strip), and slit up the front. Returns the tabard's triangles (global ids)."""
+    import math
+    t = TABARD_SKIRT
+    o_v = struct.unpack_from('<I', d, 0x48)[0]
+    tris = []
+    for sm in m.subs:
+        if sm['id'] == ROBE:
+            tris += [[m.vlookup[m.tris[i + k]] for k in range(3)] for i in range(sm['st'], sm['st'] + sm['nt'], 3)]
+    def p_of(g):
+        return struct.unpack_from('<3f', d, o_v + g * 48)
+    if t.get('hem_z'):                              # shorter: only the bands above the cut
+        tris = [tri for tri in tris if min(p_of(g)[2] for g in tri) >= t['hem_z'] - 0.02]
+    verts = sorted({g for tri in tris for g in tri})
+    top = max(p_of(g)[2] for g in verts)
+    low = min(p_of(g)[2] for g in verts)
+    cx = t.get('axis_x', 0.02)
+    (u_mid, u_side), (v_top, v_hem) = t.get('u', (0.727, 0.895)), t.get('v', (0.371, 0.172))
+    new_of, twin = {}, {}
+    def place(g, dy=0.0):
+        x, y, z = p_of(g)
+        ang = math.atan2(y, x - cx)
+        rad = math.hypot(x - cx, y) or 1.0
+        # a little more out over the hips (below the belt, above the thighs part), where the legs'
+        # own upper part (1301, which a robe would hide) is as wide as the skirt
+        hz = t.get('hip_z', (1.1, 0.97, 0.75))
+        hip = (top - z) / (top - hz[1]) if z > hz[1] else max(0.0, (z - hz[2]) / (hz[1] - hz[2]))
+        push = t['push'] + t.get('hip_push', 0.0) * max(0.0, min(1.0, hip))
+        x2 = x + push * (x - cx) / rad
+        y2 = y + push * y / rad + dy
+        a = abs(math.degrees(ang))
+        f = a / 90.0 if a <= 90 else (180.0 - a) / 90.0
+        rec = bytearray(d[o_v + g * 48:o_v + g * 48 + 48])
+        struct.pack_into('<3f', rec, 0, x2, y2, z)
+        struct.pack_into('<2f', rec, 32, u_mid + (u_side - u_mid) * f, v_top + (v_hem - v_top) * (top - z) / (top - low))
+        recs.extend(rec)
+        return len(recs) // 48 - 1
+    for g in verts:
+        x, y, z = p_of(g)
+        front = abs(math.degrees(math.atan2(y, x - cx))) < 5.0 and x > cx
+        if front and z < t['slit_z']:
+            frac = (t['slit_z'] - z) / (t['slit_z'] - low)
+            gap = t['gap'][0] + (t['gap'][1] - t['gap'][0]) * frac
+            new_of[g] = place(g, gap)
+            twin[g] = place(g, -gap)
+        else:
+            new_of[g] = place(g)
+    out = []
+    for tri in tris:
+        pick = new_of
+        if any(g in twin for g in tri):
+            others = [p_of(g)[1] for g in tri if g not in twin]
+            if others and sum(others) / len(others) < 0:
+                pick = {g: twin.get(g, new_of[g]) for g in tri}
+        out.append([pick[g] for g in tri])
+    return out
+
+
 def _cape_extras(m, d, pos):
     """Add the worn hem and the scarf to the full cloak's submesh (1502, the big one): the new
     vertices go on the end of the vertex list; every view shares the one index and triangle list,
@@ -664,7 +731,7 @@ def _cape_extras(m, d, pos):
     recs = bytearray(d[o_v:o_v + n_v * 48])
     hem_faces = _hem_geometry(m, d, pos, recs) if CAPE_TATTER else []
     cowl_faces = _cowl_geometry(m, d, recs, pos) if CAPE_COWL else []
-    tabard_tris = _tabard_geometry(m, d, recs) if TABARD_LONG else None
+    tabard_tris = _tabard_skirt(m, d, recs) if TABARD_SKIRT else (_tabard_geometry(m, d, recs) if TABARD_LONG else None)
     drop = set(HEM) if CAPE_TATTER else set()
     n_new = len(recs) // 48
     while len(d) % 16:
@@ -818,7 +885,7 @@ def build_model(stock, sound_map):
     _bulk_armour(m, pos)
     m.write_positions(pos)
     d = m.data
-    if CAPE_STYLE == 'full' and (CAPE_TATTER or CAPE_COWL or TABARD_LONG):
+    if CAPE_STYLE == 'full' and (CAPE_TATTER or CAPE_COWL or TABARD_LONG or TABARD_SKIRT):
         _cape_extras(m, d, pos)
     # every cloak shape draws the split cape: each other cape submesh takes the split cape's ranges
     # (its own id stays, so the cloak's geoset group still picks it), in every level of detail
