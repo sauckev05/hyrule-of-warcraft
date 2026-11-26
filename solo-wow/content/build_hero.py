@@ -416,7 +416,12 @@ def _mound_geometry(m, d, recs, pos, c):
             struct.pack_into('<4B', rec, 12, *q)
             struct.pack_into('<4B', rec, 16, *bones)
             tu = c['u'][0] + (c['u'][1] - c['u'][0]) * ((1 - math.cos(th)) / 2) ** c.get('u_curve', 1.0) if c.get('u_curve') else c['u'][0] + (c['u'][1] - c['u'][0]) * (1 - abs(th / math.pi - 1))
-            tv = c['v'][0] + (c['v'][1] - c['v'][0]) * max(0.0, min(1.0, t))
+            tt = max(0.0, min(1.0, t))
+            tv = c['v'][0] + (c['v'][1] - c['v'][0]) * tt
+            if c.get('v_bands'):                   # in front each wrap runs the texture over and back, as a roll does
+                rolled = c['v'][0] + (c['v'][1] - c['v'][0]) * math.sin(math.pi * min(0.999, tt * c['v_bands'] % 1.0))
+                rw = ((1 + math.cos(th)) / 2) ** c.get('ridge_spread', 1.0)
+                tv += (rolled - tv) * rw
             struct.pack_into('<2f', rec, 32, tu, tv)
             line.append(len(recs) // 48)
             recs += rec
