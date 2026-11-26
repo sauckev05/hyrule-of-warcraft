@@ -740,8 +740,121 @@ def _tabard_skirt(m, d, recs):
             if others and sum(others) / len(others) < 0:
                 pick = {g: twin.get(g, new_of[g]) for g in tri}
         out.append([pick[g] for g in tri])
+    if t.get('worn'):
+        def uv_of(x, y, z):
+            a = abs(math.degrees(math.atan2(y, x - cx)))
+            f = a / 90.0 if a <= 90 else (180.0 - a) / 90.0
+            return u_mid + (u_side - u_mid) * f, v_top + (v_hem - v_top) * min(1.0, (top - z) / (top - low))
+        out = _worn_front(out, recs, t['worn'], cx, uv_of)
     return out
 
+
+def _worn_front(tris, recs, w, cx, uv_of):
+    """Tear the tabard skirt's front hem (TABARD_SKIRT worn): a ragged fringe hangs from the
+    front's whole bottom edge (each half's hem, from the slit's corner down the cut to the side),
+    tips and tears in turn as the cloak's worn hem, shortening to nothing at the side where the
+    back's hem goes on. Its top row is the hem's own vertices and points on its edges (weights
+    blended), so it joins the skirt; the skirt keeps its shape above."""
+    import math, random
+    rnd = random.Random(w.get('seed', 3))
+    def pos(g):
+        return struct.unpack_from('<3f', recs, g * 48)
+    def ang(g):
+        x, y, _ = pos(g)
+        return abs(math.degrees(math.atan2(y, x - cx)))
+    # the boundary edges low on the front, less the slit's own edges
+    count = {}
+    for tri in tris:
+        for e in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])):
+            k = tuple(sorted(e))
+            count[k] = count.get(k, 0) + 1
+    hem = [e for e, c in count.items() if c == 1 and min(pos(e[0])[2], pos(e[1])[2]) < w.get('below', 0.62)
+           and max(ang(e[0]), ang(e[1])) <= 112 and not (ang(e[0]) < 25 and ang(e[1]) < 25)]
+    def weights(g):
+        wv = struct.unpack_from('<4B', recs, g * 48 + 12)
+        bi = struct.unpack_from('<4B', recs, g * 48 + 16)
+        return {b: x / 255.0 for b, x in zip(bi, wv) if x}
+    def mix(parts):
+        acc = {}
+        for wt, dct in parts:
+            for b, x in dct.items():
+                acc[b] = acc.get(b, 0.0) + wt * x
+        top4 = sorted(acc.items(), key=lambda kv: -kv[1])[:4]
+        tot = sum(x for _, x in top4) or 1.0
+        q = [int(round(255 * x / tot)) for _, x in top4]
+        q[0] += 255 - sum(q)
+        return q + [0] * (4 - len(q)), [b for b, _ in top4] + [0] * (4 - len(top4))
+    new_tris = []
+    for sgn in (1, -1):
+        edges = [e for e in hem if (pos(e[0])[1] + pos(e[1])[1]) * sgn > 0]
+        if not edges:
+            continue
+        # chain them from the slit's corner (the least angle) to the side
+        adj = {}
+        for a_, b_ in edges:
+            adj.setdefault(a_, []).append(b_)
+            adj.setdefault(b_, []).append(a_)
+        start = min(adj, key=ang)
+        chain, prev = [start], None
+        while True:
+            nxt = [g for g in adj[chain[-1]] if g != prev and g not in chain]
+            if not nxt:
+                break
+            prev = chain[-1]
+            chain.append(nxt[0])
+        pts = [pos(g) for g in chain]
+        segs = [math.dist(a_, b_) for a_, b_ in zip(pts, pts[1:])]
+        total = sum(segs) or 1.0
+        # the top row: every hem vertex, and points between them, cols in all
+        n = w.get('cols', 14)
+        top = []                                   # (position, weights parts, source vertex, t)
+        acc = 0.0
+        for k, sl in enumerate(segs):
+            steps = max(1, round(n * sl / total))
+            for j in range(steps):
+                f = j / steps
+                p = tuple(pts[k][i] + (pts[k + 1][i] - pts[k][i]) * f for i in range(3))
+                top.append((p, [(1 - f, weights(chain[k])), (f, weights(chain[k + 1]))], chain[k] if f < 0.5 else chain[k + 1],
+                            (acc + sl * f) / total, chain[k] if j == 0 else None))
+            acc += sl
+        top.append((pts[-1], [(1.0, weights(chain[-1]))], chain[-1], 1.0, chain[-1]))
+        rows = w.get('rows', 3)
+        grid = []
+        lengths = []
+        for k, item in enumerate(top):
+            tip = k % 2 == 0
+            ln = w['length'] * (rnd.uniform(1.0 - w['tip_wear'], 1.0) if tip else rnd.uniform(0.0, 1.0 - w['tear_min']))
+            fade = min(1.0, (1.0 - item[3]) / w.get('fade', 0.25))   # shortening to nothing at the side
+            lengths.append(ln * fade)
+        for r in range(rows + 1):
+            line = []
+            for (p, parts, src, _t, own), ln in zip(top, lengths):
+                if r == 0 and own is not None:
+                    line.append(own)                   # the hem's own vertex: the fringe joins it
+                    continue
+                q = r / rows
+                pz = (p[0], p[1], p[2] - ln * q)
+                rec = bytearray(recs[src * 48:src * 48 + 48])
+                struct.pack_into('<3f', rec, 0, *pz)
+                qw, qb = mix(parts)
+                struct.pack_into('<4B', rec, 12, *qw)
+                struct.pack_into('<4B', rec, 16, *qb)
+                struct.pack_into('<2f', rec, 32, *uv_of(*pz))
+                line.append(len(recs) // 48)
+                recs.extend(rec)
+            grid.append(line)
+        for r in range(rows):
+            for c in range(len(top) - 1):
+                a_, b_, e_, f_ = grid[r][c], grid[r][c + 1], grid[r + 1][c], grid[r + 1][c + 1]
+                for tri in ([a_, b_, e_], [b_, f_, e_]):
+                    # wound as the skirt is (its vertex normals face out), though the material is two-sided
+                    p0, p1, p2 = (pos(g) for g in tri)
+                    nx = [(p1[1]-p0[1])*(p2[2]-p0[2]) - (p1[2]-p0[2])*(p2[1]-p0[1]),
+                          (p1[2]-p0[2])*(p2[0]-p0[0]) - (p1[0]-p0[0])*(p2[2]-p0[2]),
+                          (p1[0]-p0[0])*(p2[1]-p0[1]) - (p1[1]-p0[1])*(p2[0]-p0[0])]
+                    vn = struct.unpack_from('<3f', recs, tri[0] * 48 + 20)
+                    new_tris.append(tri if sum(nx[i] * vn[i] for i in range(3)) >= 0 else [tri[0], tri[2], tri[1]])
+    return tris + new_tris
 
 def _cape_extras(m, d, pos):
     """Add the worn hem and the scarf to the full cloak's submesh (1502, the big one): the new
