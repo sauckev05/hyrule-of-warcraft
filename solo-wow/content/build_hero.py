@@ -278,14 +278,159 @@ def _hem_geometry(m, d, pos, recs):
     return faces
 
 
-def _cowl_geometry(m, d, recs):
+def _cowl_geometry(m, d, recs, pos):
     """The scarf (CAPE_COWL): a thick roll of the cape's cloth wound round the base of the neck,
     resting on the shoulders under any helm, bunched in folds and drooping lower in front. A closed
     tube: around the neck (theta, 0 at the front) and round its own cross-section (phi). Weighted to
     the chest (bone 22) and, toward its top, partly the neck (48). Returns faces, outward-facing."""
+    if CAPE_COWL.get('shape') == 'mound':
+        return _mound_geometry(m, d, recs, pos, CAPE_COWL)
     faces = []
     for layer in CAPE_COWL.get('layers', [{}]):
         faces += _cowl_layer(d, recs, dict(CAPE_COWL, **layer))
+    return faces
+
+
+def _mound_geometry(m, d, recs, pos, c):
+    """The scarf as a mound: from a lip tucked round the neck just under the helm, the cloth falls
+    outward and down in a rounded slope to rest on the body (the chest, the shoulder tops, and the
+    cloak's yoke behind), like a mountain round the neck rather than a ring standing off it. Where it
+    meets the body is found by casting, for each way round the neck, a line in toward the neck from
+    outside (the outermost surface it meets); the cloth there takes that surface's own bone weights,
+    so it stays on the chest and shoulders as they move, blending to the chest and neck at the top."""
+    import math, random
+    import numpy as np
+    rnd = random.Random(c.get('seed', 5))
+    ph = [rnd.uniform(0, 2 * math.pi) for _ in range(4)]
+    # the surfaces it can rest on: the body (0) and the cloak (its yoke)
+    tri_v = []
+    for sm in m.subs:
+        if sm['id'] in (0, FULL_CAPE):
+            tri_v += [[m.vlookup[m.tris[t + k]] for k in range(3)] for t in range(sm['st'], sm['st'] + sm['nt'], 3)]
+    tri_v = np.array(tri_v)
+    P = np.array(pos, dtype=float)
+    A, B, C = P[tri_v[:, 0]], P[tri_v[:, 1]], P[tri_v[:, 2]]
+    E1, E2 = B - A, C - A
+    def cast(o, dr):
+        """The first surface along o + t dr (t > 0): (point, triangle index, barycentric) or None."""
+        h = np.cross(dr, E2); det = (E1 * h).sum(1)
+        ok = np.abs(det) > 1e-9
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        sv = o - A; u = (sv * h).sum(1) * inv
+        q = np.cross(sv, E1); v = (q * dr).sum(1) * inv
+        t = (q * E2).sum(1) * inv
+        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 1e-6)
+        if not hit.any():
+            return None
+        k = int(np.argmin(np.where(hit, t, np.inf)))
+        return o + t[k] * dr, k, (1 - u[k] - v[k], u[k], v[k])
+    def weights_of(k, bary):
+        w = {}
+        for vi, bw in zip(tri_v[k], bary):
+            vv = m.verts[int(vi)]
+            for bone, ww in zip(vv['bi'], vv['w']):
+                if ww:
+                    w[bone] = w.get(bone, 0.0) + bw * ww / 255.0
+        return w
+    def crease(th):
+        k = c['fold_count']
+        return (math.sin(k * th / 2 + ph[0]) ** 2 + 0.01) ** 0.25 * (0.75 + 0.25 * math.sin(3 * th + ph[1])) - 0.6
+    nt = c.get('around', 64)
+    rows = c.get('rows', 10)
+    top_w = {22: 1.0 - c.get('neck_share', 0.5), 48: c.get('neck_share', 0.5)}
+    o_v = struct.unpack_from('<I', d, 0x48)[0]
+    base = bytearray(d[o_v + HEM[2] * 48:o_v + HEM[2] * 48 + 48])
+    cols = []                                       # per way round: [(point, weights, t)]
+    for i in range(nt):
+        th = 2 * math.pi * i / nt
+        cs, sn = math.cos(th), math.sin(th)
+        front, back = max(0.0, cs) ** 2, max(0.0, -cs) ** 2
+        # where it rests: a ring round the neck (front, side, back reach), dropped onto the surface
+        # below from just under the chin, leaning in a little
+        reach = c['foot'][1] + (c['foot'][0] - c['foot'][1]) * front + (c['foot'][2] - c['foot'][1]) * back
+        ring = np.array([c['x'] + reach * cs, reach * sn, c['top_z'] - 0.01])
+        dr = np.array([-c.get('lean_in', 0.15) * cs, -c.get('lean_in', 0.15) * sn, -1.0]); dr /= np.linalg.norm(dr)
+        got = cast(ring, dr)
+        low = c.get('foot_min_z', 0.0)
+        if got is None or got[0][2] < low:              # off the chest's front: rest on it at that height
+            got = cast(np.array([c['x'] + (reach + 0.15) * cs, (reach + 0.15) * sn, low]), np.array([-cs, -sn, 0.0]))
+        if got is None:
+            foot, fw = ring + dr * 0.15, dict(top_w)
+        else:
+            foot, k, bary = got
+            nrm = np.cross(E1[k], E2[k]); nrm /= (np.linalg.norm(nrm) or 1.0)
+            if np.dot(nrm, dr) < 0:
+                nrm = -nrm
+            foot = foot + nrm * c.get('lift', 0.006)
+            fw = weights_of(k, bary)
+        zt = c['top_z'] - c['front_dip'] * front
+        top = np.array([c['x'] + c['neck'][0] * cs, c['neck'][1] * sn, zt])
+        rr = np.array([cs, sn, 0.0])
+        ch = foot - top
+        d_r, d_z = float(np.dot(ch, rr)), float(ch[2])
+        n_out = -d_z * rr + np.array([0.0, 0.0, d_r]); n_out /= (np.linalg.norm(n_out) or 1.0)
+        bulge = c['bulge'] * (1 + c['folds'] * crease(th)) * (1 + c.get('front_bulge', 0.0) * front)
+        col = [(top - rr * c.get('tuck', 0.02) - np.array([0, 0, 0.03]), top_w, -0.15)]     # the lip, tucked in
+        for r in range(rows + 1):
+            t = r / rows
+            hump = math.sin(math.pi * t ** c.get('peak', 0.75))
+            pt = top + ch * t + n_out * bulge * hump
+            col.append((pt, None, t))
+        col.append((foot - (foot - top) * 0.0 - n_out * 0.012, fw, 1.05))                  # tucked onto the body
+        # weights down the slope: the top's, then the body's under it
+        col = [(p, w if w is not None else None, t) for p, w, t in col]
+        cols.append((col, fw, th))
+    grid = []
+    for col, fw, th in cols:
+        line = []
+        for p, w, t in col:
+            s_ = max(0.0, min(1.0, t))
+            if w is None:
+                w = {}
+                for bone, ww in top_w.items():
+                    w[bone] = w.get(bone, 0.0) + (1 - s_) * ww
+                for bone, ww in fw.items():
+                    w[bone] = w.get(bone, 0.0) + s_ * ww
+            top4 = sorted(w.items(), key=lambda kv: -kv[1])[:4]
+            tot = sum(ww for _, ww in top4) or 1.0
+            q = [int(round(255 * ww / tot)) for _, ww in top4]
+            q[0] += 255 - sum(q)
+            bones = [bone for bone, _ in top4] + [0] * (4 - len(top4))
+            q += [0] * (4 - len(q))
+            rec = bytearray(base)
+            struct.pack_into('<3f', rec, 0, *map(float, p))
+            struct.pack_into('<4B', rec, 12, *q)
+            struct.pack_into('<4B', rec, 16, *bones)
+            tu = c['u'][0] + (c['u'][1] - c['u'][0]) * (1 - abs(th / math.pi - 1))
+            tv = c['v'][0] + (c['v'][1] - c['v'][0]) * max(0.0, min(1.0, t))
+            struct.pack_into('<2f', rec, 32, tu, tv)
+            line.append(len(recs) // 48)
+            recs += rec
+        grid.append(line)
+    # normals from the neighbours, facing out (away from the neck, up the slope)
+    def wp(g):
+        return np.array(struct.unpack_from('<3f', recs, g * 48))
+    n_rows = len(grid[0])
+    for i in range(nt):
+        th = 2 * math.pi * i / nt
+        for j in range(n_rows):
+            a_ = wp(grid[(i + 1) % nt][j]) - wp(grid[i - 1][j])
+            b_ = wp(grid[i][min(j + 1, n_rows - 1)]) - wp(grid[i][max(j - 1, 0)])
+            n = np.cross(a_, b_)
+            out = np.array([math.cos(th), math.sin(th), 0.6])
+            if np.dot(n, out) < 0:
+                n = -n
+            n /= (np.linalg.norm(n) or 1.0)
+            struct.pack_into('<3f', recs, grid[i][j] * 48 + 20, *map(float, n))
+    faces = []
+    for i in range(nt):
+        for j in range(n_rows - 1):
+            a_, b_ = grid[i][j], grid[(i + 1) % nt][j]
+            e_, f_ = grid[i][j + 1], grid[(i + 1) % nt][j + 1]
+            for tri in ((a_, b_, e_), (b_, f_, e_)):
+                p0, p1, p2 = (wp(g) for g in tri)
+                vn = np.array(struct.unpack_from('<3f', recs, tri[0] * 48 + 20))
+                faces.append(tri if np.dot(np.cross(p1 - p0, p2 - p0), vn) >= 0 else (tri[0], tri[2], tri[1]))
     return faces
 
 
@@ -370,7 +515,7 @@ def _cape_extras(m, d, pos):
     n_v, o_v = struct.unpack_from('<II', d, 0x44)
     recs = bytearray(d[o_v:o_v + n_v * 48])
     hem_faces = _hem_geometry(m, d, pos, recs) if CAPE_TATTER else []
-    cowl_faces = _cowl_geometry(m, d, recs) if CAPE_COWL else []
+    cowl_faces = _cowl_geometry(m, d, recs, pos) if CAPE_COWL else []
     drop = set(HEM) if CAPE_TATTER else set()
     n_new = len(recs) // 48
     while len(d) % 16:
