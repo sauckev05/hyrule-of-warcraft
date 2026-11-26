@@ -376,3 +376,5 @@ installed on the PC with models in `E:\.ollama` (unused).
   - The fringe tips (length 0.1) reach the boot tops (~0.61-0.67).
   - Preview tip: cowl_render.py takes BOOTS=504 to show knee boots.
   - patch-Z md5 2684a097…; backup: patch-Z.before-B2.MPQ.bak (W3, e521b662…).
+- Now (installed 2026-11-26, df8aab0a): the tabard front lowered to front_hem 0.65 (was 0.73; 0.69 was
+  tried). The user is happy with this length. patch-Z md5 5b2011e0…; backup: patch-Z.before-lower.MPQ.bak (0.73, 2684a097…).
