@@ -73,14 +73,14 @@ NOSE = dict(top=(1.905, 0.165), tip=(1.852, 0.176), base=(1.838, 0.150), plane=0
 # edges coming round the legs (CAPE_FULL_BOTTOM: where it ends)
 CAPE_STYLE = 'full'
 CAPE_FULL_BOTTOM = 0.10            # W3: the worn hem's longest tips, down by the ankles (straight hem was 0.40)
-CAPE_SHOULDER = 0.235              # how far out over the backs of the shoulders the full cloak spreads
+CAPE_SHOULDER = 0.26               # how far out over the backs of the shoulders the full cloak spreads
 CAPE_ARM_GAP_HALF = 0.27           # under the shoulders, the cloak's half width (0: as wide as CAPE_SHOULDER)
 CAPE_HEM_HALF = 0.40               # the hem's half width
 CAPE_EDGE_X = -0.17                # the edges' depth under the shoulders (more negative: further back)
 CAPE_EDGE_FORWARD = 0.10           # how far forward the edges come by the hem
 # the half width down the cloak, (0 under the shoulders .. 1 at the hem, half width): narrow at the
 # waist with the body, wider going down; None: straight from CAPE_ARM_GAP_HALF to CAPE_HEM_HALF
-CAPE_PROFILE = [(0, 0.17), (0.19, 0.155), (0.41, 0.22), (0.63, 0.30), (0.82, 0.38), (1, 0.46)]   # T2, N3 shoulders (N1: 0.29 / 0.20, 0.165)
+CAPE_PROFILE = [(0, 0.185), (0.19, 0.16), (0.41, 0.22), (0.63, 0.30), (0.82, 0.38), (1, 0.46)]   # T2, N2 shoulders (N1: 0.29 / 0.20, 0.165; N3: 0.235 / 0.17, 0.155)
 # the full cloak's worn hem: None for a straight hem; else teeth (tips across), depth (how far up the
 # tears reach, model units), uneven (spacing jitter), tip_wear / tear_min (tips' and tears' share of
 # the depth), seed; CAPE_FULL_BOTTOM is then where the longest tips end
@@ -95,8 +95,8 @@ CAPE_COWL = dict(  # F3: the scarf rests on the body like a mound, S1's two roll
     neck_share=0.5,
     lean=0.0,
     shape='mound',
-    neck=dict(front=(0.09, 0.08), back=(0.09, 0.08)),
-    top_z=dict(front=1.765, back=1.77),
+    neck=dict(front=(0.09, 0.08), back=(0.10, 0.085)),       # behind: up under the helm's back edge (F3 had 0.09, 0.08)
+    top_z=dict(front=1.765, back=1.82),                    # (F3 had 1.77, which left a gap under some helms)
     front_dip=0.03,
     foot=(0.165, 0.19, 0.2),
     lean_in=dict(front=0.15, back=0.1),
