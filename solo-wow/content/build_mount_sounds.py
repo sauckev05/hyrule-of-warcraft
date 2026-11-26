@@ -119,7 +119,7 @@ def build(dbc_dir, spell_dbc, world_dump):
              "  `display_id` int unsigned NOT NULL,",
              "  `sound_id` int unsigned NOT NULL,",
              "  PRIMARY KEY (`display_id`)",
-             ") ENGINE=MyISAM DEFAULT CHARSET=utf8mb3;",
+             ") ENGINE=MyISAM DEFAULT CHARSET=utf8;",
              "DELETE FROM `zelda_mount_sound`;",
              "INSERT INTO `zelda_mount_sound` (`display_id`, `sound_id`) VALUES"]
     lines.append(',\n'.join("(%d, %d)" % (d, s) for d, s, _ in rows) + ';')
