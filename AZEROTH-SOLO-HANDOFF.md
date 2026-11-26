@@ -276,3 +276,8 @@ installed on the PC with models in `E:\.ollama` (unused).
   backups in data\dbc-before-hero). NPC humans are unchanged. Benilla's roll grunt uses the new voice.
 - Each new spur stack plays the mount's idle call (`zelda_mount_sound`, 025, `build_mount_sounds.py`).
 - Journeyman Riding (200% mounts, spell 33392) costs 2000 gold (016).
+- Tuned (installed 2026-11-25 evening): the voice is dry (no reverb); facial hair style 0 for human
+  male players is a bare face (see-through FacialLower/UpperHairHeroNone.blp); attachment points
+  follow the slim skin, shoulder pads at 0.78 and the helm at 1.08 (one-key global-sequence scale
+  tracks on bones 83/84/87); display 17560 scale 0.93 (shorter). Backups: patch-Z.before-herotune.MPQ.bak,
+  data\dbc-before-hero\CreatureDisplayInfo.before-herotune.dbc.
