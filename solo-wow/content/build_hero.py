@@ -124,14 +124,13 @@ NO_CAPE = 1501                 # the upper back's no-cape piece
 # down to front_bottom / back_bottom (model units; stock 0.53 / 0.66), widening by flare at the hem;
 # the front is slit up the middle from its second row, each half following its own thigh more the
 # lower it hangs (leg_share at the hem), the halves gap apart by gap (at the slit's top, at the hem)
-TABARD_LONG = dict(front_bottom=0.2, back_bottom=0.24, flare=0.3, gap=(0.008, 0.03),   # L2
-                   leg_share=1.0, top_share=0.35, calm=True)
+TABARD_LONG = None     # L2 (tried): dict(front_bottom=0.2, back_bottom=0.24, flare=0.3, gap=(0.008, 0.03), leg_share=1.0, top_share=0.35, calm=True)
 TABARD = 1202
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
 # over a robe, and is slit up the front from slit_z with the halves gap apart (at the slit's top, at
 # the hem); hem_z cuts it shorter (0: the robe's own length, to the ankles)
-TABARD_SKIRT = None
+TABARD_SKIRT = dict(push=0.03, hip_push=0.03, slit_z=0.9, gap=(0.008, 0.05), hem_z=0.3)   # K3
 ROBE = 1302
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
