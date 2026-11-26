@@ -286,3 +286,5 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Then (installed): shoulder pads at 0.90 (SHOULDER_PAD_SCALE; 0.86 before). Backups: patch-Z.before-shoulders.MPQ.bak, patch-Z.before-shoulders15.MPQ.bak.
 - Then (installed): shoulder pads back to 1.0 (normal size); gauntlet cuffs 402-404 and boot tops 502-504
   pushed out 15% from the limb axis (ARMOUR_BULK; 25% before). Backups: patch-Z.before-armour.MPQ.bak, patch-Z.before-armour15.MPQ.bak.
+- Then (installed): the cuff/boot bulk undone (ARMOUR_BULK 1.0); shoulder pads stay at 1.0.
+  Backup of the 15% version: patch-Z.before-armourback.MPQ.bak.
