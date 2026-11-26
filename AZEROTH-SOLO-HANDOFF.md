@@ -284,3 +284,5 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Then (installed): display scale 0.90 and the head, hair and helm at 0.97 (HERO_SCALE / HERO_HEAD in
   build_hero.py). Backups: patch-Z.before-herohead.MPQ.bak, CreatureDisplayInfo.before-herohead.dbc.
 - Then (installed): shoulder pads at 0.90 (SHOULDER_PAD_SCALE; 0.86 before). Backups: patch-Z.before-shoulders.MPQ.bak, patch-Z.before-shoulders15.MPQ.bak.
+- Then (installed): shoulder pads back to 1.0 (normal size); gauntlet cuffs 402-404 and boot tops 502-504
+  pushed out 25% from the limb axis (ARMOUR_BULK). Backup: patch-Z.before-armour.MPQ.bak.
