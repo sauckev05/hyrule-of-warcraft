@@ -3,6 +3,6 @@
 -- the stock human male's. Applied by the server at startup; safe to apply again.
 DELETE FROM `creature_model_info` WHERE `modelid` = 17560;
 INSERT INTO `creature_model_info` (`modelid`, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`,
-    `modelid_other_gender`, `modelid_other_team`)
-SELECT 17560, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`, 50, `modelid_other_team`
+    `modelid_other_gender`)
+SELECT 17560, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`, 50
 FROM `creature_model_info` WHERE `modelid` = 49;

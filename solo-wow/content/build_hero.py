@@ -300,8 +300,8 @@ def write_sql():
 -- the stock human male's. Applied by the server at startup; safe to apply again.
 DELETE FROM `creature_model_info` WHERE `modelid` = %(display)d;
 INSERT INTO `creature_model_info` (`modelid`, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`,
-    `modelid_other_gender`, `modelid_other_team`)
-SELECT %(display)d, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`, %(female)d, `modelid_other_team`
+    `modelid_other_gender`)
+SELECT %(display)d, `bounding_radius`, `combat_reach`, `SpeedWalk`, `SpeedRun`, `gender`, %(female)d
 FROM `creature_model_info` WHERE `modelid` = %(stock)d;
 """ % dict(display=HERO_DISPLAY, female=STOCK_FEMALE_DISPLAY, stock=STOCK_MODEL_ID)
     with open(SQL_OUT, 'w', newline='\n') as fh:
