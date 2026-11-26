@@ -131,7 +131,9 @@ TABARD = 1202
 # over a robe, and is slit up the front from slit_z with the halves gap apart (at the slit's top, at
 # the hem), and up the back from back_slit_z (back_gap) if given; hem_z cuts it shorter (0: the
 # robe's own length, to the ankles)
-TABARD_SKIRT = dict(push=0.03, hip_push=0.03, slit_z=0.9, gap=(0.008, 0.05), hem_z=0.3)   # K3
+# W3: J3's openings front and back, fitted like J2 (as close as the robe), a fine frayed front hem
+# (K3 was push=0.03, hip_push=0.03, slit_z=0.9, gap=(0.008, 0.05), hem_z=0.3, front opening only)
+TABARD_SKIRT = dict(push=0.006, slit_z=0.9, gap=(0.01, 0.08), hem_z=0.3, hip_push=0.036, back_slit_z=0.9, back_gap=(0.01, 0.08), hip_z=(1.1, 0.9, 0.45), worn=dict(length=0.05, tip_wear=0.3, tear_min=0.4, cols=20, rows=2, seed=7))
 ROBE = 1302
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
