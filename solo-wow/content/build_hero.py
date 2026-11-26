@@ -55,11 +55,12 @@ HERO_HEAD = 0.97              # the head (and hair and helm) a touch under stock
 # with the bigger head, and every attachment point moves with the skin around it
 SHOULDER_ATTACH = (5, 6)
 SHOULDER_PAD_SCALE = 1.0       # the stock shoulder pads, their normal size
-# the worn gauntlet cuffs (forearm geosets 402-404) and boot tops (shin geosets 502-504) bulk out 15%
+# the worn gauntlet cuffs (forearm geosets 402-404) and boot tops (shin geosets 502-504) can bulk out;
+# 1.0 keeps them as the slim body has them (1.25 and 1.15 were tried and set aside)
 # around the limb, like armour over a slim arm or leg (the bare forearm 401 and leg 501 stay slim)
 ARMOUR_GEOSETS = {402: (78, 95, 79, 97), 403: (78, 95, 79, 97), 404: (78, 95, 79, 97),
                   502: (53, 68, 54, 70), 503: (53, 68, 54, 70), 504: (53, 68, 54, 70)}
-ARMOUR_BULK = 1.15
+ARMOUR_BULK = 1.0
 HELM_ATTACH = 11
 HEAD_BONE = 64
 # the cape: every cloak wears the split cape (1504), stretched from the shoulder blades down
