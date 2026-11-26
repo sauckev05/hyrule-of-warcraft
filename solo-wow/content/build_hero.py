@@ -73,11 +73,14 @@ NOSE = dict(top=(1.905, 0.165), tip=(1.852, 0.176), base=(1.838, 0.150), plane=0
 # edges coming round the legs (CAPE_FULL_BOTTOM: where it ends)
 CAPE_STYLE = 'full'
 CAPE_FULL_BOTTOM = 0.40            # the split cape's own length (CAPE_BOTTOM_Z)
-CAPE_SHOULDER = 0.36               # how far out over the backs of the shoulders the full cloak spreads
+CAPE_SHOULDER = 0.34               # how far out over the backs of the shoulders the full cloak spreads
 CAPE_ARM_GAP_HALF = 0.27           # under the shoulders, the cloak's half width (0: as wide as CAPE_SHOULDER)
 CAPE_HEM_HALF = 0.40               # the hem's half width
 CAPE_EDGE_X = -0.17                # the edges' depth under the shoulders (more negative: further back)
 CAPE_EDGE_FORWARD = 0.10           # how far forward the edges come by the hem
+# the half width down the cloak, (0 under the shoulders .. 1 at the hem, half width): narrow at the
+# waist with the body, wider going down; None: straight from CAPE_ARM_GAP_HALF to CAPE_HEM_HALF
+CAPE_PROFILE = [(0, 0.25), (0.19, 0.205), (0.41, 0.25), (0.63, 0.31), (0.82, 0.37), (1, 0.42)]   # T1
 FULL_CAPE = 1502
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
@@ -146,8 +149,16 @@ def _full_cape(m, pos):
         u = max(0.0, min(1.0, (top - z0) / (top - stock_bottom)))      # 0 at the back, 1 at the hem
         row_half = 0.176 + (0.367 - 0.176) * u
         s_ = min(1.0, abs(y0) / row_half)                             # 0 middle .. 1 edge
-        top_half = CAPE_ARM_GAP_HALF if CAPE_ARM_GAP_HALF else w + 0.01
-        half = top_half + (CAPE_HEM_HALF - top_half) * u              # the new half width
+        if CAPE_PROFILE:                                              # the half width down its length
+            pts = CAPE_PROFILE
+            k = next(i for i in range(len(pts) - 1) if u <= pts[i + 1][0] or i == len(pts) - 2)
+            (u0, h0), (u1, h1) = pts[k], pts[k + 1]
+            t = max(0.0, min(1.0, (u - u0) / ((u1 - u0) or 1.0)))
+            t = t * t * (3 - 2 * t)                                   # eased, so the curve is smooth
+            half = h0 + (h1 - h0) * t
+        else:
+            top_half = CAPE_ARM_GAP_HALF if CAPE_ARM_GAP_HALF else w + 0.01
+            half = top_half + (CAPE_HEM_HALF - top_half) * u          # the new half width
         x_mid = -0.20 - 0.10 * u                                      # the middle hangs behind
         x_edge = CAPE_EDGE_X + CAPE_EDGE_FORWARD * u                  # the edges come round the legs
         nz = top - u * (top - CAPE_FULL_BOTTOM)
