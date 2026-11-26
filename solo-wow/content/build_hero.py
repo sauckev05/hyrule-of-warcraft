@@ -102,17 +102,17 @@ CAPE_COWL = dict(  # R2 (from F3): the scarf rests on the body like a mound, two
     foot=(0.165, 0.19, 0.2),
     lean_in=dict(front=0.15, back=0.1),
     foot_min_z=1.56,
-    bulge=dict(front=0.06, back=0.065),
+    bulge=dict(front=0.04, back=0.065),                   # front thinner (R2 had 0.06), same width
     folds=dict(front=0.2, back=0.15),
     fold_count=11,
-    front_bulge=0.25,
+    front_bulge=0.15,
     peak=dict(front=0.55, back=0.6),
     round=dict(front=0.7, back=1.0),                       # R2: the front rounded
     lift=0.006,
     tuck=0.02,
     v_bands=2,
     rows=20,
-    ridges=((0.3, 0.02, 0.16), (0.72, 0.022, 0.18)),        # R2: two soft round rolls (F3's were pointed)
+    ridges=((0.3, 0.014, 0.16), (0.72, 0.016, 0.18)),       # R2's two soft round rolls, thinner (0.02, 0.022)
     ridge_spread=1.5,
 )
 CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape ends (T2 was drawn to 0.40)
@@ -124,7 +124,8 @@ NO_CAPE = 1501                 # the upper back's no-cape piece
 # down to front_bottom / back_bottom (model units; stock 0.53 / 0.66), widening by flare at the hem;
 # the front is slit up the middle from its second row, each half following its own thigh more the
 # lower it hangs (leg_share at the hem), the halves gap apart by gap (at the slit's top, at the hem)
-TABARD_LONG = None
+TABARD_LONG = dict(front_bottom=0.2, back_bottom=0.24, flare=0.3, gap=(0.008, 0.03),   # L2
+                   leg_share=1.0, top_share=0.35, calm=True)
 TABARD = 1202
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
