@@ -328,3 +328,6 @@ installed on the PC with models in `E:\.ollama` (unused).
     the back is wide like M3. The old roll shape is still in the code ('layers', _cowl_layer).
   - N3 shoulders: CAPE_SHOULDER 0.235; CAPE_PROFILE starts 0.17, waist 0.155.
   - patch-Z md5 79522d14…; backup: patch-Z.before-F3.MPQ.bak (N1 + S1, fbe89d32…).
+- Now (installed 2026-11-25, 4ed799a4): N2 shoulders (CAPE_SHOULDER 0.26; CAPE_PROFILE starts 0.185, waist 0.16).
+  The scarf's back now rises to top_z 1.82, neck (0.10, 0.085), up under the helm's back edge; F3's 1.77
+  left the neck showing under some helms. patch-Z md5 6ff083fa…; backup: patch-Z.before-N2.MPQ.bak (N3 + F3, 79522d14…).
