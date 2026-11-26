@@ -2036,10 +2036,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..a694326bd
+index 000000000..2891d3787
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6429 @@
+@@ -0,0 +1,6475 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -4589,7 +4589,7 @@ index 000000000..a694326bd
 +{
 +    // "Name:item" once, or "Name:item:tag" once more for each new tag; the gift is marked given only
 +    // once it is in the bags or the mail, and each step goes to the server log
-+    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Kale:6975 Kale:191140 Kale:20608:again");
++    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Galahad:6975 Galahad:191140 Galahad:20608:again");
 +    std::istringstream in(gifts);
 +    std::string word;
 +    while (in >> word)
@@ -4646,7 +4646,7 @@ index 000000000..a694326bd
 +// Zelda.Gifts before it could be earned (build_sulthraze.py), goes back so the quest can be tried.
 +static void ZeldaTakeBack(Player* player)
 +{
-+    static std::string const items = sConfig.GetStringDefault("Zelda.TakeBack", "Kale:9372");
++    static std::string const items = sConfig.GetStringDefault("Zelda.TakeBack", "Galahad:9372");
 +    std::istringstream in(items);
 +    std::string word;
 +    while (in >> word)
@@ -4679,7 +4679,7 @@ index 000000000..a694326bd
 +{
 +    // "Name:map" once, or "Name:map:tag" once more for each new tag (Zul'Farrak again, for Gahz'rilla's
 +    // gong after an earlier build had him waiting on the shore)
-+    static std::string const resets = sConfig.GetStringDefault("Zelda.ResetOnce", "Kale:209 Kale:209:gong");
++    static std::string const resets = sConfig.GetStringDefault("Zelda.ResetOnce", "Galahad:209 Galahad:209:gong");
 +    std::istringstream in(resets);
 +    std::string word;
 +    while (in >> word)
@@ -4919,11 +4919,11 @@ index 000000000..a694326bd
 +
 +// Zelda.DoneQuests "Name:quest,quest,... Name2:..." - quests a hero has already done (a dungeon
 +// cleared before its story quest came along): once taken, their objectives fill and they are ready
-+// to hand in. Kale has Faelin's four dungeon quests (Wailing Caverns, Blackfathom Deeps, Razorfen
++// to hand in. Galahad (Kale) has Faelin's four dungeon quests (Wailing Caverns, Blackfathom Deeps, Razorfen
 +// Kraul, Gnomeregan).
 +static void ZeldaDoneQuests(Player* player)
 +{
-+    static std::string const list = sConfig.GetStringDefault("Zelda.DoneQuests", "Kale:90208,90203,90209,90210");
++    static std::string const list = sConfig.GetStringDefault("Zelda.DoneQuests", "Galahad:90208,90203,90209,90210");
 +    std::istringstream in(list);
 +    std::string word;
 +    while (in >> word)
@@ -6988,11 +6988,40 @@ index 000000000..a694326bd
 +}
 +
 +// key 5 in the saddle: a spur (ZELDA_SPUR) - the mount runs 20% faster for each, up to five
++// the mount's own call (its idle snort, whinny or growl) by mount display, from zelda_mount_sound
++// (build_mount_sounds.py); read once, on the first spur
++static uint32 MountCall(uint32 mountDisplay)
++{
++    static std::unordered_map<uint32, uint32> const calls = []
++    {
++        std::unordered_map<uint32, uint32> m;
++        if (auto result = WorldDatabase.Query("SELECT `display_id`, `sound_id` FROM `zelda_mount_sound`"))
++        {
++            do
++            {
++                Field* f = result->Fetch();
++                m[f[0].GetUInt32()] = f[1].GetUInt32();
++            }
++            while (result->NextRow());
++        }
++        sLog.outString("Zelda: %u mount calls loaded", uint32(m.size()));
++        return m;
++    }();
++    auto it = calls.find(mountDisplay);
++    return it == calls.end() ? 0 : it->second;
++}
++
 +static void ZeldaSpur(Player* player)
 +{
 +    if (!player->IsAlive() || player->IsTaxiFlying() || !player->IsMoving())
 +        return;                             // a spur wants a mount on the move
++    SpellAuraHolder const* before = player->GetSpellAuraHolder(ZELDA_SPUR);
++    uint32 const stacksBefore = before ? before->GetStackAmount() : 0;
 +    player->CastSpell(player, ZELDA_SPUR, TRIGGERED_OLD_TRIGGERED);
++    SpellAuraHolder const* after = player->GetSpellAuraHolder(ZELDA_SPUR);
++    if (after && after->GetStackAmount() > stacksBefore)
++        if (uint32 call = MountCall(player->GetMountID()))
++            player->PlayDistanceSound(call);    // each new speed stack: the mount calls out
 +    StateFor(player).spurDecayAt = (WorldTimer::getMSTime() + ZELDA_SPUR_DECAY_MS) | 1;
 +    player->UpdateSpeed(MOVE_RUN, true);
 +}
@@ -7928,6 +7957,23 @@ index 000000000..a694326bd
 +            CharacterDatabase.DirectExecute("DELETE FROM `character_inventory` WHERE `item_template` = 190716 AND NOT (`bag` = 0 AND `slot` < 19)");
 +            CharacterDatabase.DirectExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (0, 'zelda', 'once:zora-treads-bfd', '1')");
 +            sLog.outString("Zelda: took the Zora Treads out of the bags (they now drop in Blackfathom Deeps)");
++        }
++
++        // the hero becomes Galahad: Kale's new name, with the young hero's look (face 0; hair style 6,
++        // the swept jaw-length cut, in golden blond 6; clean shaven); his skin colour stays
++        if (!CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = 0 AND `preset` = 'zelda' AND `key` = 'once:galahad'"))
++        {
++            if (CharacterDatabase.PQuery("SELECT 1 FROM `characters` WHERE `name` = 'Galahad'"))
++                sLog.outError("Zelda: a character is already named Galahad; Kale keeps his name");
++            else
++            {
++                CharacterDatabase.DirectExecute("UPDATE `characters` SET `name` = 'Galahad', "
++                                                "`playerBytes` = (`playerBytes` & 255) | (6 << 16) | (6 << 24), "
++                                                "`playerBytes2` = (`playerBytes2` & 4294967040) "
++                                                "WHERE `name` = 'Kale' AND `race` = 1 AND `gender` = 0");
++                sLog.outString("Zelda: Kale is now Galahad, with the young hero's face and hair");
++            }
++            CharacterDatabase.DirectExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES (0, 'zelda', 'once:galahad', '1')");
 +        }
 +    }
 +}

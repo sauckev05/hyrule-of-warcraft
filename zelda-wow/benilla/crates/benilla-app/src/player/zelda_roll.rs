@@ -30,12 +30,13 @@ const ROLL_SECS: [f32; 4] = [0.65, 0.36, 0.36, 0.726];
 /// plays at the pace the whole 600 ms had over the arc, and the arc's last moment is the fall pose.
 const BACKFLIP_CLIP_SHARE: f32 = 500.0 / 600.0;
 /// The hero's grunt as each roll leaves the ground, by kind: the forward roll, the side rolls and
-/// the backflip (the human male's attack exertions, `SoundEntries` 2941).
+/// the backflip (the young hero's attack exertions, patch-Z's copy of `SoundEntries` 2941 in his
+/// own voice, build_hero.py).
 const ROLL_SOUNDS: [&str; 4] = [
-    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackC.wav",
-    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackB.wav",
-    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackB.wav",
-    "Sound\\Character\\PlayerExertions\\HumanMaleFinal\\HumanMaleMainAttackA.wav",
+    "Sound\\Character\\ZeldaHero\\HumanMaleFinal\\HumanMaleMainAttackC.wav",
+    "Sound\\Character\\ZeldaHero\\HumanMaleFinal\\HumanMaleMainAttackB.wav",
+    "Sound\\Character\\ZeldaHero\\HumanMaleFinal\\HumanMaleMainAttackB.wav",
+    "Sound\\Character\\ZeldaHero\\HumanMaleFinal\\HumanMaleMainAttackA.wav",
 ];
 /// The forward roll's reach along the ground (yd), over its [`ROLL_SECS`].
 const FORWARD_ROLL_YARDS: f32 = 14.0;
