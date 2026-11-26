@@ -293,3 +293,6 @@ installed on the PC with models in `E:\.ollama` (unused).
   spur circles sit just above the enemy charge-up bar (spur.lua, anchored to ZeldaTargetAnchor);
   one spur drops every 3 sec (ZELDA_SPUR_DECAY_MS 3000). Backups: mangosd.before-spurfix.exe,
   benilla.before-spurfix.exe, spur.lua.before-spurfix.bak.
+- Key 5 (installed 2026-11-25 night, bf5f3f22): ZeldaControls tracks the held movement keys; key 5
+  rolls that way (back = .zflip 5, left/right = .zroll l|r 5, else .zroll f 5); in the saddle any
+  key-5 press spurs; one spur every 1.5 s at most (ZELDA_SPUR_COOLDOWN_MS).
