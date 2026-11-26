@@ -72,21 +72,27 @@ NOSE = dict(top=(1.905, 0.165), tip=(1.852, 0.176), base=(1.838, 0.150), plane=0
 # blades down, 'full' the long cape (1502) made a wide cloak hanging from over the shoulders, its
 # edges coming round the legs (CAPE_FULL_BOTTOM: where it ends)
 CAPE_STYLE = 'full'
-CAPE_FULL_BOTTOM = 0.40            # the split cape's own length (CAPE_BOTTOM_Z)
-CAPE_SHOULDER = 0.32               # how far out over the backs of the shoulders the full cloak spreads
+CAPE_FULL_BOTTOM = 0.10            # W3: the worn hem's longest tips, down by the ankles (straight hem was 0.40)
+CAPE_SHOULDER = 0.29               # how far out over the backs of the shoulders the full cloak spreads
 CAPE_ARM_GAP_HALF = 0.27           # under the shoulders, the cloak's half width (0: as wide as CAPE_SHOULDER)
 CAPE_HEM_HALF = 0.40               # the hem's half width
 CAPE_EDGE_X = -0.17                # the edges' depth under the shoulders (more negative: further back)
 CAPE_EDGE_FORWARD = 0.10           # how far forward the edges come by the hem
 # the half width down the cloak, (0 under the shoulders .. 1 at the hem, half width): narrow at the
 # waist with the body, wider going down; None: straight from CAPE_ARM_GAP_HALF to CAPE_HEM_HALF
-CAPE_PROFILE = [(0, 0.22), (0.19, 0.17), (0.41, 0.22), (0.63, 0.30), (0.82, 0.38), (1, 0.46)]   # T2
+CAPE_PROFILE = [(0, 0.20), (0.19, 0.165), (0.41, 0.22), (0.63, 0.30), (0.82, 0.38), (1, 0.46)]   # T2, N1 shoulders
 # the full cloak's worn hem: None for a straight hem; else teeth (tips across), depth (how far up the
 # tears reach, model units), uneven (spacing jitter), tip_wear / tear_min (tips' and tears' share of
 # the depth), seed; CAPE_FULL_BOTTOM is then where the longest tips end
-CAPE_TATTER = None
+CAPE_TATTER = dict(teeth=6, depth=0.17, uneven=0.5, tip_wear=0.3, tear_min=0.6, seed=11)   # W3
 # the scarf every cape wears round the neck (None: none): a thick roll on the shoulders under the helm
-CAPE_COWL = None
+CAPE_COWL = dict(x=0.015, u=(0.35, 0.95), v=(0.30, 0.60), seed=5, neck_share=0.5, lean=0.0,      # S1
+                 neck=(0.08, 0.07), base=(0.12, 0.15), z=1.70, height=0.05, bulk=0.035, folds=0.3,
+                 fold_count=11, front_bulk=0.2, front_drop=0.3, droop=0.03, sag=0.3, fold_sag=0.01,
+                 back_bulk=0.5, back_out=0.05,
+                 layers=[dict(z=1.725, height=0.042, bulk=0.03, droop=0.02, seed=2),
+                         dict(z=1.665, height=0.05, bulk=0.042, droop=0.05, front_bulk=0.35, seed=9,
+                              neck=(0.095, 0.085))])
 CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape ends (T2 was drawn to 0.40)
 CAPE_BORDER_V = 0.90               # with a worn hem: the texture v above which the hem's border is drawn to scale
 CAPE_FLARE = 0.22                  # below that, how fast the half width keeps widening (per profile length)
@@ -293,7 +299,7 @@ def _cowl_layer(d, recs, c):
     ph = [rnd.uniform(0, 2 * math.pi) for _ in range(4)]
     def crease(th):                                                  # soft bulges between sharp creases, -0.6 .. 0.4
         k = c['fold_count']
-        f = abs(math.sin(k * th / 2 + ph[0])) ** 0.5 * (0.75 + 0.25 * math.sin(3 * th + ph[1]))
+        f = (math.sin(k * th / 2 + ph[0]) ** 2 + 0.01) ** 0.25 * (0.75 + 0.25 * math.sin(3 * th + ph[1]))   # rounded creases
         return f - 0.6
     def point(th, phi):
         front = ((1 + math.cos(th)) / 2) ** 3                       # 1 at the front, 0 behind
