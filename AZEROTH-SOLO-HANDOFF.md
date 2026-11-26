@@ -331,3 +331,16 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Now (installed 2026-11-25, 4ed799a4): N2 shoulders (CAPE_SHOULDER 0.26; CAPE_PROFILE starts 0.185, waist 0.16).
   The scarf's back now rises to top_z 1.82, neck (0.10, 0.085), up under the helm's back edge; F3's 1.77
   left the neck showing under some helms. patch-Z md5 6ff083fa…; backup: patch-Z.before-N2.MPQ.bak (N3 + F3, 79522d14…).
+- Now (installed 2026-11-26, 7b0b17c0): spur sounds, the R2 scarf front, and the upper back kept under the cloak.
+  - Spur sounds: each new red circle plays two sounds, both picked by circle number.
+    - The mount's next attack sound: zelda_mount_attack in 025, from build_mount_sounds.py. Each file
+      is its own single-file SoundEntries row (20200+) in patch-Z (mount_attack_sounds.json).
+      Mounts with no attack sounds fall back to their zelda_mount_sound call.
+    - The hero's grunt: ZELDA_SPUR_VOICES 20190-20192 (roll C, backflip A, side roll B).
+  - Scarf front: R2, two soft round rolls (round 0.7, ridges 0.02).
+  - Upper back: CAPE_COVER_BACK adds 1501's triangles to submesh 0. With a cape on, 1501 is hidden,
+    and the cloak's yoke no longer covered that spot (a see-through gap).
+  - Getting builds: the artifact blob host is blocked from both the cloud box and the PC. Take
+    mangosd.exe from the azeroth-solo-latest release asset (gh api .../releases/assets/<id>, octet-stream).
+  - md5s: patch-Z 733fcd19…, mangosd 6d1b6cf3…, 023 2f897425…, 025 3c79023e….
+  - Backups: *.before-spursounds.* (patch-Z, mangosd.exe, 023/025 .sql.bak).

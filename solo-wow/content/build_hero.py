@@ -120,6 +120,12 @@ CAPE_BORDER_V = 0.90               # with a worn hem: the texture v above which 
 CAPE_FLARE = 0.22                  # below that, how fast the half width keeps widening (per profile length)
 FULL_CAPE = 1502
 NO_CAPE = 1501                 # the upper back's no-cape piece
+# the tabard's lower part (1202) as a long surcoat (None: as stock): the front and back flaps hang
+# down to front_bottom / back_bottom (model units; stock 0.53 / 0.66), widening by flare at the hem;
+# the front is slit up the middle from its second row, each half following its own thigh more the
+# lower it hangs (leg_share at the hem), the halves gap apart by gap (at the slit's top, at the hem)
+TABARD_LONG = None
+TABARD = 1202
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
@@ -556,6 +562,84 @@ def _cowl_layer(d, recs, c):
 
 
 
+# the tabard's flaps, stock vertex ids by row (left, middle, right; y > 0 is the left)
+TABARD_FRONT = [(2631, 2621, 2632), (2627, 2626, 2625), (2629, 2630, 2628), (2615, 2617, 2616)]
+TABARD_BACK = [(2611, 2610, 2609), (2620, 2618, 2619), (2622, 2623, 2624), (2612, 2613, 2614)]
+TABARD_SLIT_ROWS = (2, 3)                       # the front rows split down the middle
+THIGHS = (25, 26)                               # the left and right thigh bones
+
+
+def _tabard_shape(m, pos):
+    """Lengthen the tabard's flaps (TABARD_LONG): every row below the top is pushed down so the
+    hem reaches its bottom, and the flap widens toward the hem."""
+    t = TABARD_LONG
+    for rows, bottom in ((TABARD_FRONT, t['front_bottom']), (TABARD_BACK, t['back_bottom'])):
+        top = sum(pos[v][2] for v in rows[0]) / 3
+        low = sum(pos[v][2] for v in rows[-1]) / 3
+        k = (top - bottom) / (top - low)
+        for row in rows[1:]:
+            for v in row:
+                x, y, z = pos[v]
+                f = (top - z) / (top - low)            # 0 at the top .. 1 at the stock hem
+                pos[v] = (x, y * (1 + t['flare'] * f * f), top - (top - z) * k)
+
+
+def _tabard_geometry(m, d, recs):
+    """The front of the long tabard slit up the middle: the slit rows' middle vertices get a twin
+    for the right half (the triangles right of the middle take it), the two moved apart; each
+    half's slit rows lean to their own thigh. Returns the tabard's triangles (global ids)."""
+    t = TABARD_LONG
+    o_v = struct.unpack_from('<I', d, 0x48)[0]
+    tris = []
+    for sm in m.subs:
+        if sm['id'] == TABARD:
+            tris += [[m.vlookup[m.tris[i + k]] for k in range(3)] for i in range(sm['st'], sm['st'] + sm['nt'], 3)]
+            break
+    def rec_pos(g):
+        return struct.unpack_from('<3f', recs, g * 48)
+    twin = {}
+    n_slit = len(TABARD_SLIT_ROWS)
+    for k, r in enumerate(TABARD_SLIT_ROWS):
+        mid = TABARD_FRONT[r][1]
+        frac = (k + 1) / n_slit                         # down the slit
+        gap = t['gap'][0] + (t['gap'][1] - t['gap'][0]) * frac
+        x, y, z = rec_pos(mid)
+        new = len(recs) // 48
+        recs += bytes(recs[mid * 48:mid * 48 + 48])
+        struct.pack_into('<3f', recs, mid * 48, x, gap, z)
+        struct.pack_into('<3f', recs, new * 48, x, -gap, z)
+        twin[mid] = new
+    def lean(g, side, share):
+        """Blend vertex g's weights toward its side's thigh by share."""
+        w = list(struct.unpack_from('<4B', recs, g * 48 + 12))
+        bi = list(struct.unpack_from('<4B', recs, g * 48 + 16))
+        acc = {}
+        for b_, w_ in zip(bi, w):
+            if w_:
+                acc[b_] = acc.get(b_, 0.0) + w_ / 255.0 * (1 - share)
+        thigh = THIGHS[0] if side > 0 else THIGHS[1]
+        acc[thigh] = acc.get(thigh, 0.0) + share
+        top4 = sorted(acc.items(), key=lambda kv: -kv[1])[:4]
+        tot = sum(v for _, v in top4)
+        q = [int(round(255 * v / tot)) for _, v in top4]
+        q[0] += 255 - sum(q)
+        struct.pack_into('<4B', recs, g * 48 + 12, *(q + [0] * (4 - len(q))))
+        struct.pack_into('<4B', recs, g * 48 + 16, *([b_ for b_, _ in top4] + [0] * (4 - len(top4))))
+    for k, r in enumerate(TABARD_SLIT_ROWS):
+        share = t['leg_share'] * (k + 1) / n_slit
+        left, mid, right = TABARD_FRONT[r]
+        lean(left, 1, share); lean(mid, 1, share)
+        lean(right, -1, share); lean(twin[mid], -1, share)
+    out = []
+    for tri in tris:
+        if any(v in twin for v in tri):
+            others = [rec_pos(v)[1] for v in tri if v not in twin]
+            if others and sum(others) / len(others) < 0:
+                tri = [twin.get(v, v) for v in tri]
+        out.append(tri)
+    return out
+
+
 def _cape_extras(m, d, pos):
     """Add the worn hem and the scarf to the full cloak's submesh (1502, the big one): the new
     vertices go on the end of the vertex list; every view shares the one index and triangle list,
@@ -564,6 +648,7 @@ def _cape_extras(m, d, pos):
     recs = bytearray(d[o_v:o_v + n_v * 48])
     hem_faces = _hem_geometry(m, d, pos, recs) if CAPE_TATTER else []
     cowl_faces = _cowl_geometry(m, d, recs, pos) if CAPE_COWL else []
+    tabard_tris = _tabard_geometry(m, d, recs) if TABARD_LONG else None
     drop = set(HEM) if CAPE_TATTER else set()
     n_new = len(recs) // 48
     while len(d) % 16:
@@ -623,21 +708,31 @@ def _cape_extras(m, d, pos):
                     top = max(body) + 1
                     body_rec = (min(sv0, min(body)), top - min(sv0, min(body)), len(tris) + len(new_tris), len(body))
                     new_tris += body
+            tab_rec, tab_k = None, None
+            if tabard_tris is not None:
+                ids = [struct.unpack_from('<H', d, o_sub + k * 32)[0] for k in range(n_sub)]
+                if TABARD in ids:
+                    tab_k = ids.index(TABARD)
+                    tl = [local[g] for tri in tabard_tris for g in tri]
+                    tab_rec = (min(tl), max(tl) + 1 - min(tl), len(tris) + len(new_tris), len(tl))
+                    new_tris += tl
             arrs = []
             for data in (struct.pack('<%dH' % len(idx), *idx), struct.pack('<%dH' % (len(tris) + len(new_tris)), *(tris + new_tris)), props):
                 while len(d) % 16:
                     d.append(0)
                 arrs.append(len(d)); d += data
-            cape_n = len(new_tris) - (body_rec[3] if body_rec else 0)
+            cape_n = len(new_tris) - (body_rec[3] if body_rec else 0) - (tab_rec[3] if tab_rec else 0)
             done[(o_i, o_t)] = (len(idx), arrs[0], len(tris) + len(new_tris), arrs[1], len(props) // 4, arrs[2],
-                                (sv, len(idx) - sv, len(tris), cape_n), cape, body_rec, body_k)
-        ni, oi, nt_, ot, np_, op, rec, cape, body_rec, body_k = done[(o_i, o_t)]
+                                (sv, len(idx) - sv, len(tris), cape_n), cape, body_rec, body_k, tab_rec, tab_k)
+        ni, oi, nt_, ot, np_, op, rec, cape, body_rec, body_k, tab_rec, tab_k = done[(o_i, o_t)]
         struct.pack_into('<IIIIII', d, view, ni, oi, nt_, ot, np_, op)
         for k in range(n_sub):
             if struct.unpack_from('<H', d, o_sub + k * 32)[0] == FULL_CAPE and k == cape:
                 struct.pack_into('<4H', d, o_sub + k * 32 + 4, *rec)
         if body_rec is not None:
             struct.pack_into('<4H', d, o_sub + body_k * 32 + 4, *body_rec)
+        if tab_rec is not None:
+            struct.pack_into('<4H', d, o_sub + tab_k * 32 + 4, *tab_rec)
 
 
 
@@ -702,10 +797,12 @@ def build_model(stock, sound_map):
             z = CAPE_ANCHOR_Z - (CAPE_ANCHOR_Z - z) * k
             x = anchor_x + (x - anchor_x) * (1 + (k - 1) * CAPE_BACK_SHARE)
             pos[v] = (x, y, z)
+    if TABARD_LONG:
+        _tabard_shape(m, pos)
     _bulk_armour(m, pos)
     m.write_positions(pos)
     d = m.data
-    if CAPE_STYLE == 'full' and (CAPE_TATTER or CAPE_COWL):
+    if CAPE_STYLE == 'full' and (CAPE_TATTER or CAPE_COWL or TABARD_LONG):
         _cape_extras(m, d, pos)
     # every cloak shape draws the split cape: each other cape submesh takes the split cape's ranges
     # (its own id stays, so the cloak's geoset group still picks it), in every level of detail
