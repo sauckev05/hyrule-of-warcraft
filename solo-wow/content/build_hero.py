@@ -73,14 +73,14 @@ NOSE = dict(top=(1.905, 0.165), tip=(1.852, 0.176), base=(1.838, 0.150), plane=0
 # edges coming round the legs (CAPE_FULL_BOTTOM: where it ends)
 CAPE_STYLE = 'full'
 CAPE_FULL_BOTTOM = 0.40            # the split cape's own length (CAPE_BOTTOM_Z)
-CAPE_SHOULDER = 0.34               # how far out over the backs of the shoulders the full cloak spreads
+CAPE_SHOULDER = 0.32               # how far out over the backs of the shoulders the full cloak spreads
 CAPE_ARM_GAP_HALF = 0.27           # under the shoulders, the cloak's half width (0: as wide as CAPE_SHOULDER)
 CAPE_HEM_HALF = 0.40               # the hem's half width
 CAPE_EDGE_X = -0.17                # the edges' depth under the shoulders (more negative: further back)
 CAPE_EDGE_FORWARD = 0.10           # how far forward the edges come by the hem
 # the half width down the cloak, (0 under the shoulders .. 1 at the hem, half width): narrow at the
 # waist with the body, wider going down; None: straight from CAPE_ARM_GAP_HALF to CAPE_HEM_HALF
-CAPE_PROFILE = [(0, 0.25), (0.19, 0.205), (0.41, 0.25), (0.63, 0.31), (0.82, 0.37), (1, 0.42)]   # T1
+CAPE_PROFILE = [(0, 0.22), (0.19, 0.17), (0.41, 0.22), (0.63, 0.30), (0.82, 0.38), (1, 0.46)]   # T2
 FULL_CAPE = 1502
 SPLIT_CAPE = 1504
 CAPE_ANCHOR_Z = 1.40          # model units; the cape keeps its shape above this
