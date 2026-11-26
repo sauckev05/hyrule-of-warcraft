@@ -263,3 +263,16 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Lag / distorted view while running and turning the camera in Benilla: never diagnosed.
 - Ideas discussed, not started: a custom raid built on an existing map (e.g. a Zelda-style
   temple on a copied dungeon map), and recolored item looks via patch-Z.MPQ.
+
+## Update 2026-11-25: Galahad, the young hero (installed)
+
+- Kale was renamed **Galahad** once at startup (core `once:galahad`): face 0, hair style 6 (geoset 7)
+  in golden blond 6, clean shaven, same skin. Config name lists (Zelda.Gifts etc.) say Galahad.
+- Human male *players* wear display 17560 (`build_hero.py`): HumanMaleHero.m2 (slimmer/younger body B
+  on the same skeleton; every cloak draws the split cape 1504, lengthened to mid-calf), CreatureModelData
+  2400, CreatureSoundData 2300, SoundEntries 20000-20088 = the voice sped up 26% with reverb under
+  Sound\Character\ZeldaHero; young face 0 in all skins (CharSections). ChrRaces human male -> 17560
+  (client patch-Z and the server's data\dbc ChrRaces/CreatureDisplayInfo/CreatureModelData;
+  backups in data\dbc-before-hero). NPC humans are unchanged. Benilla's roll grunt uses the new voice.
+- Each new spur stack plays the mount's idle call (`zelda_mount_sound`, 025, `build_mount_sounds.py`).
+- Journeyman Riding (200% mounts, spell 33392) costs 2000 gold (016).
