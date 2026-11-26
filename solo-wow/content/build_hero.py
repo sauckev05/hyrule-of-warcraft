@@ -567,6 +567,8 @@ TABARD_FRONT = [(2631, 2621, 2632), (2627, 2626, 2625), (2629, 2630, 2628), (261
 TABARD_BACK = [(2611, 2610, 2609), (2620, 2618, 2619), (2622, 2623, 2624), (2612, 2613, 2614)]
 TABARD_SLIT_ROWS = (2, 3)                       # the front rows split down the middle
 THIGHS = (25, 26)                               # the left and right thigh bones
+PELVIS = 21
+FRONT_FLAP_BONES = (24, 52, 67)                 # the stock front flap's own chain, which swings on the run
 
 
 def _tabard_shape(m, pos):
@@ -609,13 +611,16 @@ def _tabard_geometry(m, d, recs):
         struct.pack_into('<3f', recs, mid * 48, x, gap, z)
         struct.pack_into('<3f', recs, new * 48, x, -gap, z)
         twin[mid] = new
+    calm = {b_: PELVIS for b_ in FRONT_FLAP_BONES} if t.get('calm') else {}
     def lean(g, side, share):
-        """Blend vertex g's weights toward its side's thigh by share."""
+        """Blend vertex g's weights toward its side's thigh by share (with calm, the front flap's
+        own swinging bones give way to the pelvis first)."""
         w = list(struct.unpack_from('<4B', recs, g * 48 + 12))
         bi = list(struct.unpack_from('<4B', recs, g * 48 + 16))
         acc = {}
         for b_, w_ in zip(bi, w):
             if w_:
+                b_ = calm.get(b_, b_)
                 acc[b_] = acc.get(b_, 0.0) + w_ / 255.0 * (1 - share)
         thigh = THIGHS[0] if side > 0 else THIGHS[1]
         acc[thigh] = acc.get(thigh, 0.0) + share
@@ -630,6 +635,16 @@ def _tabard_geometry(m, d, recs):
         left, mid, right = TABARD_FRONT[r]
         lean(left, 1, share); lean(mid, 1, share)
         lean(right, -1, share); lean(twin[mid], -1, share)
+    # the rows above the slit: their sides lean a little too, so the halves turn with the legs
+    # from there; with calm, the whole front hangs from the pelvis rather than its swinging bones
+    top_share = t.get('top_share', 0.0)
+    for r in range(TABARD_SLIT_ROWS[0]):
+        left, mid, right = TABARD_FRONT[r]
+        share = top_share if r == TABARD_SLIT_ROWS[0] - 1 else 0.0
+        if share or calm:
+            lean(left, 1, share); lean(right, -1, share)
+            if calm:
+                lean(mid, 1, 0.0)
     out = []
     for tri in tris:
         if any(v in twin for v in tri):
