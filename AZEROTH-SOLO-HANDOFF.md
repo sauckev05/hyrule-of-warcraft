@@ -283,4 +283,4 @@ installed on the PC with models in `E:\.ollama` (unused).
   data\dbc-before-hero\CreatureDisplayInfo.before-herotune.dbc.
 - Then (installed): display scale 0.90 and the head, hair and helm at 0.97 (HERO_SCALE / HERO_HEAD in
   build_hero.py). Backups: patch-Z.before-herohead.MPQ.bak, CreatureDisplayInfo.before-herohead.dbc.
-- Then (installed): shoulder pads at 0.86 (SHOULDER_PAD_SCALE). Backup: patch-Z.before-shoulders.MPQ.bak.
+- Then (installed): shoulder pads at 0.90 (SHOULDER_PAD_SCALE; 0.86 before). Backups: patch-Z.before-shoulders.MPQ.bak, patch-Z.before-shoulders15.MPQ.bak.
