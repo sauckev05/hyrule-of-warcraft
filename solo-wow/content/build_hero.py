@@ -49,7 +49,8 @@ FACE_FILE = 'Character\\Human\\Male\\HumanMaleFace%sHero%02d_%02d.blp'
 # style 0 is a bare face (see-through facial hair textures)
 CLEAN_FACIAL_STYLE = 0
 NO_FACIAL_HAIR = ('Character\\Human\\FacialLowerHairHeroNone.blp', 'Character\\Human\\FacialUpperHairHeroNone.blp')
-HERO_SCALE = 0.93             # the whole hero, a little shorter: a 17-year-old beside grown men
+HERO_SCALE = 0.90             # the whole hero, a little shorter: a 17-year-old beside grown men
+HERO_HEAD = 0.97              # the head (and hair and helm) a touch under stock, to suit the slim body
 # worn pieces on the young body: the shoulder pads shrink with the narrower shoulders, the helm grows
 # with the bigger head, and every attachment point moves with the skin around it
 SHOULDER_ATTACH = (5, 6)
@@ -80,7 +81,8 @@ def build_model(stock, sound_map):
         fh.write(stock)
     m = M2(fh.name)
     os.unlink(fh.name)
-    pos = deform.deform(m, deform.VARIANTS['B'])
+    shape = dict(deform.VARIANTS['B'], head=HERO_HEAD)
+    pos = deform.deform(m, shape)
     # the split cape, longer: everything below the anchor is stretched down (and a little back)
     cape = set()
     for s in m.subs:
@@ -147,7 +149,7 @@ def _fit_attachments(m, d, pos, deform):
         bone_rec = m.o_bone + bone * 0x6c
         if aid == HELM_ATTACH:
             # the head bone's pivot with the head's own scale: the helm grows exactly as the head did
-            head = deform.VARIANTS['B']['head']
+            head = HERO_HEAD
             struct.pack_into('<3f', d, bone_rec + 0x60, *m.bones[HEAD_BONE]['pivot'])
             _const_scale(d, bone_rec, head)
             continue
