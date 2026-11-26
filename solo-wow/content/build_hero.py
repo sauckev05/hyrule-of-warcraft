@@ -133,7 +133,7 @@ TABARD = 1202
 # robe's own length, to the ankles)
 # W2's tatters, B2's back (a wide V from just under the belt to the hem's corners, torn as the
 # front), the front drawn up to end just on top of the boots (front_hem; W3 was the first tried)
-TABARD_SKIRT = dict(push=0.006, slit_z=0.9, gap=(0.01, 0.08), hem_z=0.3, hip_push=0.036, hip_z=(1.1, 0.9, 0.45), worn=dict(length=0.1, tip_wear=0.35, tear_min=0.6, cols=10, rows=3, seed=11, below=0.9), back_v=dict(top_z=1.0, angle=48), worn_back=dict(length=0.12, tip_wear=0.35, tear_min=0.6, cols=10, rows=3, seed=29, below=1.0), front_hem=0.65)
+TABARD_SKIRT = dict(push=0.006, slit_z=0.9, gap=(0.01, 0.08), hem_z=0.3, hip_push=0.036, hip_z=(1.1, 0.9, 0.45), worn=dict(length=0.1, tip_wear=0.35, tear_min=0.6, cols=10, rows=3, seed=11, below=0.9), back_v=dict(top_z=1.0, angle=48), worn_back=dict(length=0.12, tip_wear=0.35, tear_min=0.6, cols=10, rows=3, seed=29, below=1.0), front_hem=0.65, front_span=(118.0, 134.0))
 ROBE = 1302
 CAPE_COVER_BACK = True         # keep that piece on the body under the cloak (the yoke no longer covers it)
 SPLIT_CAPE = 1504
@@ -738,7 +738,8 @@ def _tabard_skirt(m, d, recs):
         fh = t.get('front_hem')
         if fh and z < t['slit_z']:                  # the front shorter: its rows below the slit's top
             a_ = abs(math.degrees(math.atan2(y, x - cx)))    # drawn up, the back left as it is
-            k = max(0.0, min(1.0, (130.0 - a_) / 35.0))
+            k0, k1 = t.get('front_span', (95.0, 130.0))           # fully drawn up to k0, the back's from k1
+            k = max(0.0, min(1.0, (k1 - a_) / (k1 - k0)))
             zf = fh + (z - low) * (t['slit_z'] - fh) / (t['slit_z'] - low)
             z_new = z + (zf - z) * k
             # and drawn in to the skirt's own width at that height (the robe flares to its hem)
