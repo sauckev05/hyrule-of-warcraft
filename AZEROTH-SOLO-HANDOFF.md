@@ -369,3 +369,10 @@ installed on the PC with models in `E:\.ollama` (unused).
     fading out at the sides.
   - Expect some thigh to show through when running; a robe would hide 1301, a tabard can't.
   - patch-Z md5 e521b662…; backup: patch-Z.before-W3.MPQ.bak (K3, f1055d90…).
+- Now (installed 2026-11-26, 9b25b22d): tabard with B2's back, W2's tatters, and the front cut to the boot tops.
+  - back_v: the back's middle twins are turned apart round the legs, a V from z 1.0 to 48° at the hem.
+  - worn_back: tatters along the V's edges and the back hem.
+  - front_hem 0.73: front rows below the slit drawn up; the back is untouched past 130°.
+  - The fringe tips (length 0.1) reach the boot tops (~0.61-0.67).
+  - Preview tip: cowl_render.py takes BOOTS=504 to show knee boots.
+  - patch-Z md5 2684a097…; backup: patch-Z.before-B2.MPQ.bak (W3, e521b662…).
