@@ -306,3 +306,5 @@ installed on the PC with models in `E:\.ollama` (unused).
   CAPE_STYLE 'full': 1502 over the backs of the shoulders, narrower under them, to 0.40); the nose
   reshape skips the eyes (only uv u<0.1, v<0.9); key 5 + A/D side-rolls only with the right mouse
   button held (IsMouselooking). Backups: patch-Z.before-cloak.MPQ.bak, ZeldaControls.lua.before-cloak.bak.
+- Then (installed): cloak T1 (CAPE_SHOULDER 0.34, CAPE_PROFILE: a gentle waist taper widening to the
+  hem; T2 was the stronger hourglass). Backup: patch-Z.before-T1.MPQ.bak.
