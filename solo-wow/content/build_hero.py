@@ -335,6 +335,16 @@ def _mound_geometry(m, d, recs, pos, c):
     def crease(th):
         k = c['fold_count']
         return (math.sin(k * th / 2 + ph[0]) ** 2 + 0.01) ** 0.25 * (0.75 + 0.25 * math.sin(3 * th + ph[1])) - 0.6
+    def par(name, th, default=None):
+        """A setting, or one blended round the neck from its 'front' to its 'back' value."""
+        val = c.get(name, default)
+        if isinstance(val, dict):
+            wb = (1 - math.cos(th)) / 2
+            wb = wb * wb * (3 - 2 * wb)
+            if isinstance(val['front'], (list, tuple)):
+                return [f + (b_ - f) * wb for f, b_ in zip(val['front'], val['back'])]
+            return val['front'] + (val['back'] - val['front']) * wb
+        return val
     nt = c.get('around', 64)
     rows = c.get('rows', 10)
     top_w = {22: 1.0 - c.get('neck_share', 0.5), 48: c.get('neck_share', 0.5)}
@@ -348,8 +358,9 @@ def _mound_geometry(m, d, recs, pos, c):
         # where it rests: a ring round the neck (front, side, back reach), dropped onto the surface
         # below from just under the chin, leaning in a little
         reach = c['foot'][1] + (c['foot'][0] - c['foot'][1]) * front + (c['foot'][2] - c['foot'][1]) * back
-        ring = np.array([c['x'] + reach * cs, reach * sn, c['top_z'] - 0.01])
-        dr = np.array([-c.get('lean_in', 0.15) * cs, -c.get('lean_in', 0.15) * sn, -1.0]); dr /= np.linalg.norm(dr)
+        ring = np.array([c['x'] + reach * cs, reach * sn, par('top_z', th) - 0.01])
+        li = par('lean_in', th, 0.15)
+        dr = np.array([-li * cs, -li * sn, -1.0]); dr /= np.linalg.norm(dr)
         got = cast(ring, dr)
         low = c.get('foot_min_z', 0.0)
         if got is None or got[0][2] < low:              # off the chest's front: rest on it at that height
@@ -363,18 +374,21 @@ def _mound_geometry(m, d, recs, pos, c):
                 nrm = -nrm
             foot = foot + nrm * c.get('lift', 0.006)
             fw = weights_of(k, bary)
-        zt = c['top_z'] - c['front_dip'] * front
-        top = np.array([c['x'] + c['neck'][0] * cs, c['neck'][1] * sn, zt])
+        zt = par('top_z', th) - c['front_dip'] * front
+        nk = par('neck', th)
+        top = np.array([c['x'] + nk[0] * cs, nk[1] * sn, zt])
         rr = np.array([cs, sn, 0.0])
         ch = foot - top
         d_r, d_z = float(np.dot(ch, rr)), float(ch[2])
         n_out = -d_z * rr + np.array([0.0, 0.0, d_r]); n_out /= (np.linalg.norm(n_out) or 1.0)
-        bulge = c['bulge'] * (1 + c['folds'] * crease(th)) * (1 + c.get('front_bulge', 0.0) * front)
+        bulge = par('bulge', th) * (1 + par('folds', th) * crease(th)) * (1 + c.get('front_bulge', 0.0) * front)
+        ridge_w = ((1 + cs) / 2) ** c.get('ridge_spread', 1.0)          # the wraps show in front, fading behind
         col = [(top - rr * c.get('tuck', 0.02) - np.array([0, 0, 0.03]), top_w, -0.15)]     # the lip, tucked in
         for r in range(rows + 1):
             t = r / rows
-            hump = math.sin(math.pi * t ** c.get('peak', 0.75))
-            pt = top + ch * t + n_out * bulge * hump
+            hump = math.sin(math.pi * t ** par('peak', th, 0.75))
+            wraps = sum(hh * math.exp(-((t - tc) / ww) ** 2) for tc, hh, ww in c.get('ridges', ())) * ridge_w
+            pt = top + ch * t + n_out * (bulge * hump + wraps)
             col.append((pt, None, t))
         col.append((foot - (foot - top) * 0.0 - n_out * 0.012, fw, 1.05))                  # tucked onto the body
         # weights down the slope: the top's, then the body's under it
@@ -401,7 +415,7 @@ def _mound_geometry(m, d, recs, pos, c):
             struct.pack_into('<3f', rec, 0, *map(float, p))
             struct.pack_into('<4B', rec, 12, *q)
             struct.pack_into('<4B', rec, 16, *bones)
-            tu = c['u'][0] + (c['u'][1] - c['u'][0]) * (1 - abs(th / math.pi - 1))
+            tu = c['u'][0] + (c['u'][1] - c['u'][0]) * ((1 - math.cos(th)) / 2) ** c.get('u_curve', 1.0) if c.get('u_curve') else c['u'][0] + (c['u'][1] - c['u'][0]) * (1 - abs(th / math.pi - 1))
             tv = c['v'][0] + (c['v'][1] - c['v'][0]) * max(0.0, min(1.0, t))
             struct.pack_into('<2f', rec, 32, tu, tv)
             line.append(len(recs) // 48)
