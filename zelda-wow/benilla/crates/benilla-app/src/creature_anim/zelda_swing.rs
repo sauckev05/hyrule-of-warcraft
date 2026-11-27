@@ -8,7 +8,8 @@
 //! 3. the special strike, Heroic Strike's Special1H (Special2H with a two-hander);
 //! 4. Berserker Stance's charged attack: the two-hander's leaping Special2H, whatever is held;
 //! 5. the dodge roll and 6. the backflip, on a model that has their clips (player::zelda_roll);
-//! 7. the double jump's front flip; 8. the rider's fist on the mount as key 5 spurs it.
+//! 7. the double jump's front flip; 8. the rider's fist on the mount as key 5 spurs it;
+//! 9. the plunge, a sword swing in the air: the hero dives sword first and slams the ground.
 //!
 //! Which variation crosses which way differs by model, so [`VARIATIONS`] names them per race and
 //! gender, measured from the 1.12 character models (the right hand's sideways travel over the
@@ -17,9 +18,16 @@
 use bevy::prelude::*;
 
 /// The swings the addon asked for since the driver last ran, `(step, seconds)`; the last wins.
-/// The second field is the guard key: the shield raised, or the weapon held up to parry.
+/// The second field is the guard key: the shield raised, or the weapon held up to parry. The third
+/// is whether the hero is in the air (player::zelda_roll keeps it), where a sword swing becomes the
+/// plunge (step 9); the fourth, a plunge asked for that the mover has not yet dropped the hero into.
 #[derive(Resource, Default)]
-pub(crate) struct ZeldaSwingRequests(pub(crate) Vec<(u8, f32)>, pub(crate) ZeldaGuard);
+pub(crate) struct ZeldaSwingRequests(
+    pub(crate) Vec<(u8, f32)>,
+    pub(crate) ZeldaGuard,
+    pub(crate) bool,
+    pub(crate) bool,
+);
 
 /// Zelda of Warcraft: the guard key, from `ZeldaGuardAnim(kind, held)`. Pressing it plays the
 /// guard clip once - ShieldBlock (24) with a shield (`kind` 1), the wielded weapon's parry (20-23)
@@ -56,6 +64,10 @@ pub(crate) const ROLL_SPINS: u32 = 2;
 /// variation, played on the upper body over the riding pose (a mounted rider's CLASS_A clips are
 /// masked above the spine). Attack1H's downward swing with an empty fist: a hammer-fist.
 pub(crate) const MOUNT_PUNCH: (u16, usize) = (17, 0);
+/// The plunge (step 9): the clip and its variation, and how long it plays (s) - the dive from a
+/// jump lasts a moment, so the strike lands about as the hero does.
+pub(crate) const PLUNGE_CLIP: (u16, usize) = (58, 0); // Special2H: both arms up, then down into the ground
+pub(crate) const PLUNGE_SECS: f32 = 0.5;
 
 /// Where in the ranged Load clip the full draw holds (kind 3): near its end, short of the frame
 /// that would finish the one-shot.
@@ -118,6 +130,7 @@ pub(super) fn combo_clip(step: u8, main: Option<(u8, u8)>, race: u8, gender: u8)
         6 => return (BACKFLIP_CLIP, 0),
         7 => return (FLIP_CLIP, 0),
         8 => return MOUNT_PUNCH,
+        9 => return PLUNGE_CLIP,
         s if s >= 4 => return (58, 0), // the leaping two-handed strike, even with a one-hander
         _ => {}
     }

@@ -37,7 +37,8 @@ function ZeldaControls_Command(cmd)
 	local base, key5 = string.gsub(cmd, " 5$", "")  -- key 5's rolls carry a " 5" for the server
 	if ROLL_KINDS[base] and ZeldaRollAnim then
 		-- key 5 also tells the client, which strikes the mount as the press spurs it in the saddle
-		ZeldaRollAnim(ROLL_KINDS[base], key5 > 0)
+		-- at five red circles the server takes no more spurs, so the rider does not strike the mount
+		ZeldaRollAnim(ROLL_KINDS[base], key5 > 0 and not (ZeldaSpurCount and ZeldaSpurCount >= 5))
 	end
 	SendChatMessage(cmd, "SAY")
 end
@@ -285,7 +286,22 @@ end
 -- The bow key: a tap fires at once when it is let go, and the hero keeps walking or running; held
 -- past BOW_DRAW_DELAY the hero stops to draw (spinWatch), and held until the bar is full it lets fly a
 -- Charged Shot with double damage that always strikes critically (".zbow 1"). Works from the saddle too.
+local function Riding()
+	return ZeldaSpurCount and ZeldaSpurCount >= 0      -- ZeldaHUD's spur circles show while he rides
+end
+
 function ZeldaControls_Bow(state)
+	-- in the saddle the bow only shoots, on the key's release: no draw, no Charged Shot
+	if Riding() then
+		if state ~= "down" and not bowDownAt and not attackDownAt then
+			ZeldaControls_Command(".zbow")
+			return
+		end
+		if state == "down" then
+			bowDownAt = nil
+			return
+		end
+	end
 	if state == "down" then
 		if not attackDownAt then
 			bowDownAt = GetTime()
@@ -497,4 +513,22 @@ shieldText:Hide()
 SLASH_ZELDA1 = "/zelda"
 SlashCmdList["ZELDA"] = function()
 	DEFAULT_CHAT_FRAME:AddMessage(HELP)
+end
+
+-- The sword pressed in the air is the plunge (the server's ".zslash" makes it one, and says
+-- "ZPLUNGE"): its hold charges nothing, so the charge bar goes and the key's release does nothing.
+local plungeEvents = CreateFrame("Frame")
+plungeEvents:RegisterEvent("CHAT_MSG_SYSTEM")
+plungeEvents:SetScript("OnEvent", function()
+	if arg1 == "ZPLUNGE" then
+		attackDownAt = nil
+		spinBar:Hide()
+	end
+end)
+local origPlungeChat = ChatFrame_OnEvent
+ChatFrame_OnEvent = function(event)
+	if event == "CHAT_MSG_SYSTEM" and arg1 == "ZPLUNGE" then
+		return
+	end
+	origPlungeChat(event)
 end

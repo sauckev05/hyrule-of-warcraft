@@ -163,6 +163,17 @@ fn tumble(
     let mut forward_now = false;
     // key 5 in the saddle spurs the mount (the server's ZeldaSpur, which wants it on the move): the
     // rider strikes it with his fist, on the upper body over the riding pose, and the blow lands
+    // the sword in the air is the plunge: script_calls turns the swing into it while this says the
+    // hero is airborne, and asks here for the dive, which the mover runs to the ground
+    if let Some(sw) = swings.as_deref_mut() {
+        let airborne = player.airborne_since.is_some() && !player.swimming && !mounted && !player.server_riding;
+        sw.2 = airborne;
+        if std::mem::take(&mut sw.3) && airborne {
+            player.zelda_plunge = true;
+            sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[3], 1.0));
+            trace(|| "plunge".to_string());
+        }
+    }
     let key5 = std::mem::take(&mut request.key5);
     if key5 && mounted && !player.server_riding {
         use crate::creature_anim::move_flags as f;

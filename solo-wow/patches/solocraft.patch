@@ -2036,10 +2036,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..0efc00a77
+index 000000000..7140dae86
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6525 @@
+@@ -0,0 +1,6607 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2118,6 +2118,8 @@ index 000000000..0efc00a77
 +        uint32 lastSlash = 0;
 +        uint32 comboCount = 0;
 +        uint32 slashReadyAt = 0;                        // the sword swing playing now ends here
++        uint32 plungeAt = 0;                            // the sword press in the air: the plunge falls, its slam lands with the hero
++        bool slashAirborne = false;                     // the last sword press came in the air: its hold charges nothing
 +        uint32 spinReadyAt = 0;
 +        uint32 dodgeReadyAt = 0;
 +        uint32 invulnerableUntil = 0;
@@ -2434,6 +2436,8 @@ index 000000000..0efc00a77
 +static const float ZELDA_SPUR_SHARE = 0.2f;
 +static const uint32 ZELDA_SPUR_DECAY_MS = 3000;
 +static const uint32 ZELDA_SPUR_COOLDOWN_MS = 1500;      // one spur (one red circle) every 1.5 sec at most
++static const uint32 ZELDA_SPUR_MAX = 5;                 // five red circles at most
++static const uint32 ZELDA_SPUR_TOP_MS = 5000;           // the fifth lasts 5 sec, key 5 or not; then the spurs go on from four
 +
 +float ZeldaSpeedFactor(Player* player, uint32 moveType)
 +{
@@ -3549,6 +3553,55 @@ index 000000000..0efc00a77
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
 +static void ZeldaFrostBreath(Unit* azuregos);
 +
++// The plunge's slam: the sword pressed in the air (HandleZeldaSlashCommand) lands with the hero,
++// striking every enemy around him for one and a half swings each, and the ground shakes under it
++// (War Stomp's shockwave and thunder, which plays no animation of its own on the hero).
++static const float PLUNGE_RANGE = 5.0f;
++static const float PLUNGE_DAMAGE_MULTIPLIER = 1.5f;
++static const uint32 PLUNGE_GROUND_SPELL = 45;           // War Stomp: SpellVisual 2355, the ground ring
++static const uint32 PLUNGE_TIMEOUT_MS = 5000;           // a plunge that never lands (water, a long fall) is dropped
++
++static void ZeldaPlungeLand(Player* player, ZeldaState& state)
++{
++    if (!state.plungeAt)
++        return;
++    uint32 const now = WorldTimer::getMSTime();
++    bool const airborne = player->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR));
++    bool const expired = int32(now - state.plungeAt) >= int32(PLUNGE_TIMEOUT_MS);
++    if (!player->IsAlive() || player->IsInWater() || expired)
++    {
++        state.plungeAt = 0;
++        return;
++    }
++    if (airborne)
++        return;
++    state.plungeAt = 0;
++    state.slashReadyAt = now + 250;     // a beat to get the sword up again
++    if (!player->IsInWorld())
++        return;
++
++    std::list<Unit*> enemies;
++    CollectEnemies(player, PLUNGE_RANGE + 8.0f, enemies);
++    std::vector<Unit*> victims;
++    for (Unit* unit : enemies)
++        if (player->IsWithinDistInMap(unit, PLUNGE_RANGE + unit->GetCombatReach()))
++            victims.push_back(unit);
++    PlaySpellVisual(player, PLUNGE_GROUND_SPELL, {});
++    t_meleeMultiplier = PLUNGE_DAMAGE_MULTIPLIER;
++    t_noSwingAnim = true;               // the Zelda client plays the plunge itself
++    bool const dualWield = player->hasOffhandWeaponForAttack();
++    for (Unit* unit : victims)
++    {
++        if (!unit->IsAlive())
++            continue;
++        player->AttackerStateUpdate(unit, BASE_ATTACK, true);
++        if (dualWield && unit->IsAlive())
++            player->AttackerStateUpdate(unit, OFF_ATTACK, true);
++    }
++    t_noSwingAnim = false;
++    t_meleeMultiplier = 1.0f;
++}
++
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
 +{
 +    if (!player)
@@ -3668,6 +3721,8 @@ index 000000000..0efc00a77
 +            ChatHandler(player).PSendSysMessage("ZSPUR:%d", shown);
 +        }
 +    }
++    // the sword's plunge from the air: its slam when the hero lands
++    ZeldaPlungeLand(player, state);
 +    if (SpellAuraHolder* spur = player->GetSpellAuraHolder(ZELDA_SPUR))
 +    {
 +        uint32 const now = WorldTimer::getMSTime();
@@ -6509,6 +6564,7 @@ index 000000000..0efc00a77
 +bool ChatHandler::HandleZeldaSlashCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    bool const wasMounted = player->IsMounted();     // a mount's jump: the hero gets off and swings, no plunge
 +    DismountToFight(player);
 +    if (!CanAct(player))
 +        return true;
@@ -6528,8 +6584,20 @@ index 000000000..0efc00a77
 +    StyleStats stats = StatsFor(style);
 +    uint32 now = WorldTimer::getMSTime();
 +    // mid-swing presses do nothing, quietly
-+    if (now + SLASH_LOCK_TOLERANCE_MS < state.slashReadyAt)
++    if (now + SLASH_LOCK_TOLERANCE_MS < state.slashReadyAt || state.plungeAt)
 +        return true;
++
++    // in the air the sword plunges, as Link's: the hero dives (the Zelda client drops him and plays
++    // the strike), and the slam lands with him (ZeldaPlungeLand); the key's hold charges nothing
++    state.slashAirborne = player->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)) &&
++                          !player->IsInWater() && !wasMounted;
++    if (state.slashAirborne)
++    {
++        state.plungeAt = now | 1;
++        state.comboCount = 0;
++        PSendSysMessage("ZPLUNGE");     // ZeldaControls drops the charge bar
++        return true;
++    }
 +
 +    if (step < 1 || step > COMBO_STEPS)
 +    {
@@ -6708,11 +6776,15 @@ index 000000000..0efc00a77
 +bool ChatHandler::HandleZeldaSpinCommand(char* args)
 +{
 +    Player* player = m_session->GetPlayer();
++    ZeldaState& state = StateFor(player);
++    // no charged attack from a press in the air (that was a plunge), nor while still airborne
++    if (state.slashAirborne || state.plungeAt ||
++        player->m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_JUMPING | MOVEFLAG_FALLINGFAR)))
++        return true;
 +    DismountToFight(player);
 +    if (!CanAct(player))
 +        return true;
 +
-+    ZeldaState& state = StateFor(player);
 +    uint32 now = WorldTimer::getMSTime();
 +    // only the Leaping Strike and the Shield Slam rest between uses; the Spin Attack itself has no
 +    // cooldown, so a spin can follow a spin as soon as the sword is charged again
@@ -7048,9 +7120,11 @@ index 000000000..0efc00a77
 +    uint32 const now = WorldTimer::getMSTime();
 +    if (StateFor(player).spurReadyAt && int32(now - StateFor(player).spurReadyAt) < 0)
 +        return;                             // the last spur is still cooling down
-+    StateFor(player).spurReadyAt = (now + ZELDA_SPUR_COOLDOWN_MS) | 1;
 +    SpellAuraHolder const* before = player->GetSpellAuraHolder(ZELDA_SPUR);
 +    uint32 const stacksBefore = before ? before->GetStackAmount() : 0;
++    if (stacksBefore >= ZELDA_SPUR_MAX)
++        return;                             // five red circles: no more spurring (nor keeping them) until one drops
++    StateFor(player).spurReadyAt = (now + ZELDA_SPUR_COOLDOWN_MS) | 1;
 +    player->CastSpell(player, ZELDA_SPUR, TRIGGERED_OLD_TRIGGERED);
 +    SpellAuraHolder const* after = player->GetSpellAuraHolder(ZELDA_SPUR);
 +    if (after && after->GetStackAmount() > stacksBefore)
@@ -7064,7 +7138,9 @@ index 000000000..0efc00a77
 +            player->PlayDistanceSound(call);
 +        player->PlayDistanceSound(ZELDA_SPUR_VOICES[circle % 3]);
 +    }
-+    StateFor(player).spurDecayAt = (WorldTimer::getMSTime() + ZELDA_SPUR_DECAY_MS) | 1;
++    SpellAuraHolder const* spurNow = player->GetSpellAuraHolder(ZELDA_SPUR);
++    bool const top = spurNow && spurNow->GetStackAmount() >= ZELDA_SPUR_MAX;
++    StateFor(player).spurDecayAt = (WorldTimer::getMSTime() + (top ? ZELDA_SPUR_TOP_MS : ZELDA_SPUR_DECAY_MS)) | 1;
 +    player->UpdateSpeed(MOVE_RUN, true);
 +}
 +
@@ -7823,6 +7899,10 @@ index 000000000..0efc00a77
 +    // ".zbow draw": the key went down for a Charged Shot - the ranged weapon comes to hand, so the
 +    // client's slow draw (ZeldaGuardAnim kind 3) has the bow in it
 +    ZeldaState& state = StateFor(player);
++    // in the saddle the bow only shoots: no draw (it would root the mount) and no Charged Shot
++    bool const riding = player->IsMounted();
++    if (draw && riding)
++        return true;
 +    if (draw)
 +    {
 +        if (player->GetSheath() != SHEATH_STATE_RANGED)
@@ -7851,6 +7931,8 @@ index 000000000..0efc00a77
 +    uint32 charged = 0;
 +    if (args && *args)
 +        ExtractUInt32(&args, charged);
++    if (riding)
++        charged = 0;
 +    if (charged)
 +    {
 +        state.chargedShotSpell = spellId;

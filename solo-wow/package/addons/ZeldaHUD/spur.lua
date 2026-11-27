@@ -30,6 +30,8 @@ for i = 1, COUNT do
 end
 
 local function Show(n)
+	-- for ZeldaControls: riding (0..5 spurs) or not (-1)
+	ZeldaSpurCount = n
 	if not n or n < 0 then
 		frame:Hide()
 		return

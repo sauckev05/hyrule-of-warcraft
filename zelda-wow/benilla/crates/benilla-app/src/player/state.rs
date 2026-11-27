@@ -75,6 +75,8 @@ pub(super) const STEP_SNAP_SLACK: f32 = 0.027_777_8;
 /// ratio `max(SCALE_X / CreatureModelScale, 1)`, which is 1.0 for the local player. Zelda of
 /// Warcraft: 1.25, so the stair steps the reference's 1.0 just misses (about 10% short) climb.
 pub(crate) const STEP_UP_HEIGHT: f32 = 1.25;
+/// Zelda of Warcraft: the plunge's dive (yd/s), straight down ([`Player::zelda_plunge`]).
+pub(super) const PLUNGE_SPEED: f32 = 24.0;
 /// The rise ceiling of a body the reference does not treat as player-controlled, `[0x801628]` on
 /// `0x5fa550`'s false leg of `0x617430`: a creature, a pet, or a charmed, possessed, feared,
 /// confused or rooted player.
@@ -323,6 +325,9 @@ pub(crate) struct Player {
     pub(super) zelda_double_used: bool,
     /// The moment the double jump launched, for its front flip ([`super::zelda_roll`]).
     pub(super) zelda_flip_at: Option<f32>,
+    /// Zelda of Warcraft: the sword's plunge from the air - the body drops straight down at
+    /// [`PLUNGE_SPEED`] until it lands ([`super::zelda_roll`] starts it).
+    pub(super) zelda_plunge: bool,
     /// Free-fly (`F`): the camera moves on its own and the avatar/server position is frozen.
     pub(crate) detached: bool,
     /// `SMSG_CLIENT_CONTROL_UPDATE` with `allowMove = 0` named the unit we drive: us, while someone

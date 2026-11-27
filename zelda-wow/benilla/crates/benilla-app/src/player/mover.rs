@@ -207,6 +207,17 @@ pub(super) fn step(
         player.vel_y = end_vy;
         fall_mean_vy = mean_vy;
     }
+    // Zelda of Warcraft: the plunge - straight down, fast, no drift, until the ground takes the body
+    if player.zelda_plunge {
+        if held || anchored || player.swimming || (grounded && !jumped) || knocked {
+            player.zelda_plunge = false;
+        } else if !jumped {
+            player.vel_y = -super::state::PLUNGE_SPEED;
+            fall_mean_vy = -super::state::PLUNGE_SPEED;
+            player.horiz_vel = Vec3::ZERO;
+            player.arc_dirs_set = true;
+        }
+    }
     let mut air_nudged = false;
     // The `!anchored` terms keep a body rooted mid-jump stopped dead instead of coasting.
     if knocked {
