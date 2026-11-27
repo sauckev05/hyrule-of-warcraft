@@ -64,6 +64,7 @@ MATHREDIS, LIBRAM_QUEST_SOURCE = 9836, 4481
 QUESTS = [90560, 90561, 90562, 90563]
 
 RELIC_COFFER, RELIC_COFFER_LOOT, DARK_COFFER, DARK_COFFER_LOOT = 160836, 11105, 160845, 11103
+SECRET_SAFE = 161495
 DARK_KEEPER_KEY, WATCHMAN_DOOMGRIP = 11197, 9476
 DARK_KEEPERS = (9437, 9438, 9439, 9441, 9442, 9443)
 # our coffers: one each for the five stock librams, then Ferocity and the Bulwark; entry = loot id
@@ -137,6 +138,9 @@ def loot_sql():
         maxcount=1, condition_id=0, comments='Zelda: the Dark Coffer')]))
     # the Dark Coffer: openable (no GO_FLAG_NO_INTERACT; the key is checked by the core), the fire shirt always
     out.append('UPDATE `gameobject_template` SET `flags` = 0 WHERE `entry` = %d;\n' % DARK_COFFER)
+    # the Secret Safe the Dark Coffer sits over: usable too (the vault's end cleared its NO_INTERACT only
+    # for that moment, and a restart brought it back), so it never stands between the cursor and the coffer
+    out.append('UPDATE `gameobject_template` SET `flags` = 0 WHERE `entry` = %d;\n' % SECRET_SAFE)
     out.append('DELETE FROM `gameobject_loot_template` WHERE `entry` = %d AND `item` = %d;\n'
                % (DARK_COFFER_LOOT, FIRE_SHIRT))
     out.append(insert('gameobject_loot_template', [dict(
