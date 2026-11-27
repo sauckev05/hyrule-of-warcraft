@@ -64,10 +64,15 @@ pub(crate) const ROLL_SPINS: u32 = 2;
 /// variation, played on the upper body over the riding pose (a mounted rider's CLASS_A clips are
 /// masked above the spine). Attack1H's downward swing with an empty fist: a hammer-fist.
 pub(crate) const MOUNT_PUNCH: (u16, usize) = (17, 0);
-/// The plunge (step 9): the clip and its variation, and how long it plays (s) - the dive from a
-/// jump lasts a moment, so the strike lands about as the hero does.
-pub(crate) const PLUNGE_CLIP: (u16, usize) = (58, 0); // Special2H: both arms up, then down into the ground
-pub(crate) const PLUNGE_SECS: f32 = 0.5;
+/// The plunge: Special2H, both arms up, then down, sword first. It plays as the guard key's clips do
+/// (kind 4): on to [`PLUNGE_POSE`] - crouched over the sword pointing down - in [`PLUNGE_DRAW_SECS`],
+/// and holds there all the way down; landing plays [`PLUNGE_LANDING`] (step 10) instead of the rest.
+pub(crate) const PLUNGE_CLIP: (u16, usize) = (58, 0);
+pub(crate) const PLUNGE_POSE: f32 = 0.7;
+pub(crate) const PLUNGE_DRAW_SECS: f32 = 0.25;
+/// The plunge's landing (step 10), as the ground's thunder rings out: the clip and how long it plays (s).
+pub(crate) const PLUNGE_LANDING: (u16, usize) = (116, 0); // KneelEnd: down on one knee, then up
+pub(crate) const PLUNGE_LANDING_SECS: f32 = 0.75;
 
 /// Where in the ranged Load clip the full draw holds (kind 3): near its end, short of the frame
 /// that would finish the one-shot.
@@ -75,10 +80,10 @@ pub(super) const DRAW_POSE: f32 = 0.95;
 
 /// The pose fraction the held key stops at, by kind.
 pub(super) fn hold_pose(kind: u8) -> f32 {
-    if kind == 3 {
-        DRAW_POSE
-    } else {
-        GUARD_POSE
+    match kind {
+        3 => DRAW_POSE,
+        4 => PLUNGE_POSE,
+        _ => GUARD_POSE,
     }
 }
 
@@ -94,6 +99,9 @@ pub(super) fn guard_clip(kind: u8, main: Option<(u8, u8)>, ranged: Option<(u8, u
     }
     if kind == 3 {
         return super::select::ranged_load_anim(ranged);
+    }
+    if kind == 4 {
+        return PLUNGE_CLIP.0;
     }
     super::select::defense_anim(3, main).unwrap_or(21)
 }
@@ -131,6 +139,7 @@ pub(super) fn combo_clip(step: u8, main: Option<(u8, u8)>, race: u8, gender: u8)
         7 => return (FLIP_CLIP, 0),
         8 => return MOUNT_PUNCH,
         9 => return PLUNGE_CLIP,
+        10 => return PLUNGE_LANDING,
         s if s >= 4 => return (58, 0), // the leaping two-handed strike, even with a one-hander
         _ => {}
     }

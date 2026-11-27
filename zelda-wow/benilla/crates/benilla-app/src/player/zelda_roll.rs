@@ -51,9 +51,9 @@ const SPUR_COOLDOWN_SECS: f32 = 1.5;
 /// How long the rider's blow on the mount plays (s): AttackUnarmed's 1 s, a little quicker.
 const MOUNT_PUNCH_SECS: f32 = 0.7;
 /// The fist's loudness: the mount's moan beside it (its own attack file, e.g. mHorseAttack at
-/// SoundEntries volume 0.7) peaks near -13 dB, the unarmed hit files near -4 dB at full volume, so
-/// the hit plays about 9 dB down to sit at the moan's level.
-const MOUNT_PUNCH_GAIN: f32 = 0.35;
+/// SoundEntries volume 0.7) peaks near -13 dB and plays in the world, a little way from the camera;
+/// the unarmed hit files peak near -4 dB, so the hit plays about 16 dB down (0.35 was still loud).
+const MOUNT_PUNCH_GAIN: f32 = 0.15;
 /// The fist landing on the mount with each spur, in turn (`SoundEntries` 1014 "Unarmed_Generic").
 const MOUNT_PUNCH_SOUNDS: [&str; 3] = [
     "Sound\\Item\\Weapons\\Unarmed\\UnarmedAttackMediumA.wav",
@@ -87,6 +87,8 @@ pub(super) struct ZeldaRollState {
     /// sound comes next).
     last_spur: Option<f32>,
     spurs: usize,
+    /// The plunge is diving: its landing is still to play.
+    plunging: bool,
 }
 
 fn trace(msg: impl FnOnce() -> String) {
@@ -170,8 +172,20 @@ fn tumble(
         sw.2 = airborne;
         if std::mem::take(&mut sw.3) && airborne {
             player.zelda_plunge = true;
+            state.plunging = true;
             sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[3], 1.0));
             trace(|| "plunge".to_string());
+        }
+        // down: the held crouch lets go, and the landing plays (the server's slam rings out with it)
+        if state.plunging && !player.zelda_plunge {
+            state.plunging = false;
+            if sw.1.kind == 4 {
+                sw.1.held = false;
+            }
+            if player.airborne_since.is_none() && !player.swimming {
+                sw.0.push((10, crate::creature_anim::PLUNGE_LANDING_SECS));
+            }
+            trace(|| "plunge landed".to_string());
         }
     }
     let key5 = std::mem::take(&mut request.key5);

@@ -1064,7 +1064,7 @@ pub(super) fn drive_animations(
                             }
                             // the bow's draw in slow motion, reaching full draw as the charge
                             // bar fills
-                            if guard.kind == 3
+                            if matches!(guard.kind, 3 | 4)
                                 && guard.draw_secs > 0.0
                                 && active.seek_time() < pose
                             {

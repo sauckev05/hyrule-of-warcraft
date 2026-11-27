@@ -2036,10 +2036,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..7140dae86
+index 000000000..b1d2e08ac
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6607 @@
+@@ -0,0 +1,6617 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -2119,6 +2119,7 @@ index 000000000..7140dae86
 +        uint32 comboCount = 0;
 +        uint32 slashReadyAt = 0;                        // the sword swing playing now ends here
 +        uint32 plungeAt = 0;                            // the sword press in the air: the plunge falls, its slam lands with the hero
++        float plungeZ = 0.0f;                           // and the height it fell from
 +        bool slashAirborne = false;                     // the last sword press came in the air: its hold charges nothing
 +        uint32 spinReadyAt = 0;
 +        uint32 dodgeReadyAt = 0;
@@ -3553,13 +3554,27 @@ index 000000000..7140dae86
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
 +static void ZeldaFrostBreath(Unit* azuregos);
 +
-+// The plunge's slam: the sword pressed in the air (HandleZeldaSlashCommand) lands with the hero,
-+// striking every enemy around him for one and a half swings each, and the ground shakes under it
-+// (War Stomp's shockwave and thunder, which plays no animation of its own on the hero).
++// The plunge's slam: the sword pressed in the air (HandleZeldaSlashCommand) lands with the hero. The
++// ground shakes under him (Plunge Slam: Thunder Clap's ring and thunder, no cast of the hero's own) and
++// every enemy around takes the Plunge (40038): Thunder Clap's strike on each, a share of the attack
++// power by the height fallen, and 20% slower movement for 10 sec. A jump's height is about 1.64 yd
++// (7.96 yd/s up against 19.29 yd/s/s): up to two jumps' height (a jump, a double jump) strikes for
++// 50%, three to six for 100%, seven and more for 150%.
 +static const float PLUNGE_RANGE = 5.0f;
-+static const float PLUNGE_DAMAGE_MULTIPLIER = 1.5f;
-+static const uint32 PLUNGE_GROUND_SPELL = 45;           // War Stomp: SpellVisual 2355, the ground ring
++static const uint32 PLUNGE_SPELL = 40038;               // the strike and the slow (build_mastery.py)
++static const uint32 PLUNGE_GROUND_SPELL = 40039;        // the ground's ring and thunder, visual only
++static const float PLUNGE_JUMP_HEIGHT = 1.64f;
 +static const uint32 PLUNGE_TIMEOUT_MS = 5000;           // a plunge that never lands (water, a long fall) is dropped
++
++static float PlungeShare(float fallen)
++{
++    float const jumps = fallen / PLUNGE_JUMP_HEIGHT;
++    if (jumps < 2.5f)
++        return 0.5f;
++    if (jumps < 6.5f)
++        return 1.0f;
++    return 1.5f;
++}
 +
 +static void ZeldaPlungeLand(Player* player, ZeldaState& state)
 +{
@@ -3580,6 +3595,9 @@ index 000000000..7140dae86
 +    if (!player->IsInWorld())
 +        return;
 +
++    float const fallen = std::max(0.0f, state.plungeZ - player->GetPositionZ());
++    int32 const damage = std::max<int32>(1, int32(player->GetTotalAttackPowerValue(BASE_ATTACK) * PlungeShare(fallen)));
++
 +    std::list<Unit*> enemies;
 +    CollectEnemies(player, PLUNGE_RANGE + 8.0f, enemies);
 +    std::vector<Unit*> victims;
@@ -3587,19 +3605,10 @@ index 000000000..7140dae86
 +        if (player->IsWithinDistInMap(unit, PLUNGE_RANGE + unit->GetCombatReach()))
 +            victims.push_back(unit);
 +    PlaySpellVisual(player, PLUNGE_GROUND_SPELL, {});
-+    t_meleeMultiplier = PLUNGE_DAMAGE_MULTIPLIER;
-+    t_noSwingAnim = true;               // the Zelda client plays the plunge itself
-+    bool const dualWield = player->hasOffhandWeaponForAttack();
 +    for (Unit* unit : victims)
-+    {
-+        if (!unit->IsAlive())
-+            continue;
-+        player->AttackerStateUpdate(unit, BASE_ATTACK, true);
-+        if (dualWield && unit->IsAlive())
-+            player->AttackerStateUpdate(unit, OFF_ATTACK, true);
-+    }
-+    t_noSwingAnim = false;
-+    t_meleeMultiplier = 1.0f;
++        if (unit->IsAlive())
++            player->CastCustomSpell(unit, PLUNGE_SPELL, &damage, nullptr, nullptr,
++                                    TriggerCastFlags(TRIGGERED_OLD_TRIGGERED | TRIGGERED_IGNORE_COSTS));
 +}
 +
 +void ZeldaPlayerUpdate(Player* player, uint32 diff)
@@ -6594,8 +6603,9 @@ index 000000000..7140dae86
 +    if (state.slashAirborne)
 +    {
 +        state.plungeAt = now | 1;
++        state.plungeZ = player->GetPositionZ();
 +        state.comboCount = 0;
-+        PSendSysMessage("ZPLUNGE");     // ZeldaControls drops the charge bar
++        PSendSysMessage("ZPLUNGE:1");   // hidden (ZeldaHUD's chat): ZeldaControls drops the charge bar
 +        return true;
 +    }
 +

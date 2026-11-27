@@ -87,7 +87,13 @@ pub(crate) fn apply_script_calls(
                     // in the air a sword swing is the plunge (the server's HandleZeldaSlashCommand
                     // makes it one too): the hero dives (player::zelda_roll) and strikes
                     if swings.2 && (1..=3).contains(&step) {
-                        swings.0.push((9, crate::creature_anim::PLUNGE_SECS));
+                        // the strike goes to its crouch over the sword and holds there, as a held
+                        // guard does (kind 4), until the landing
+                        let guard = &mut swings.1;
+                        guard.kind = 4;
+                        guard.held = true;
+                        guard.start = true;
+                        guard.draw_secs = crate::creature_anim::PLUNGE_DRAW_SECS;
                         swings.3 = true;
                     } else {
                         swings.0.push((step, seconds));

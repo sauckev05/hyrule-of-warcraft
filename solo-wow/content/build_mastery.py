@@ -56,8 +56,17 @@ SMITE_IMPACT_VISUAL = 7892          # SpellVisual, after the stock 7891
 # the light as if by a priest instead of playing a cast while lying dead
 RESURRECTION_VISUAL, REVIVED_VISUAL = 41, 7893
 # SpellVisuals of our own: {new id: the stock visual it is, without its precast and cast kits}
+# the plunge (ZeldaCommands.cpp, ZeldaPlungeLand): Thunder Clap's strike on each enemy hit, without its cast
+THUNDER_CLAP, THUNDER_CLAP_VISUAL, PLUNGE_HIT_VISUAL = 6343, 145, 7895
 IMPACT_ONLY_VISUALS = {SMITE_IMPACT_VISUAL: HOLY_SMITE_VISUAL, REVIVED_VISUAL: RESURRECTION_VISUAL,
-                       7894: 4599}         # Berserker's Fury (FURY_VISUAL: DEATH_WISH_VISUAL)
+                       7894: 4599,          # Berserker's Fury (FURY_VISUAL: DEATH_WISH_VISUAL)
+                       PLUNGE_HIT_VISUAL: THUNDER_CLAP_VISUAL}
+# SpellVisuals of our own with only a cast kit: {new id: (stock visual, cast kit)}. The plunge's ground:
+# War Stomp's visual (2355), whose 1.12.1 cast kit 356 stomps (DragonStomp) with lightning in the hands,
+# given kit 659 instead - Thunder Clap's ring at the feet and its thunder, and no animation - without
+# the stun swirl
+WAR_STOMP_VISUAL, PLUNGE_GROUND_VISUAL, RING_ONLY_KIT = 2355, 7896, 659
+CAST_ONLY_VISUALS = {PLUNGE_GROUND_VISUAL: (WAR_STOMP_VISUAL, RING_ONLY_KIT)}
 # Reforged in the Black Anvil (story.py): using the anvil starts a 30-second blacksmithing cast - Copper
 # Bracers' hammering at the anvil (SpellVisual 395), without its hammer, anvil, bars or bracers - and
 # its end completes the quest (ZeldaCommands.cpp, ZeldaGameObjectUse / ZeldaSpellFinished)
@@ -378,6 +387,25 @@ SPELLS += [
           PowerType=0, SpellVisual=0, CastingTimeIndex=1, tooltip='Mount speed increased by $s1% per spur.')),
 ]
 
+# the plunge (ZeldaCommands.cpp, ZeldaPlungeLand): the sword pressed in the air dives the hero into the
+# ground. 40038 strikes each enemy around for the share of attack power the core sets (Thunder Clap's
+# strike on them, Thunder Clap's slow at their feet) and slows them 20% for 10 sec; 40039 is only the
+# ground's ring and thunder, the core's visual (no effects)
+PLUNGE, PLUNGE_GROUND, THUNDER_CLAP_ICON = 40038, 40039, 199
+_PLUNGE_BASE = dict(Stances=0, PowerType=1, ManaCost=0, RangeIndex=3, SpellFamilyName=0, SpellFamilyFlags=0,
+                    EffectImplicitTargetA1=6, EffectImplicitTargetA2=6, EffectImplicitTargetB1=0,
+                    EffectImplicitTargetB2=0, EffectRadiusIndex1=0, EffectRadiusIndex2=0, SpellIconID=THUNDER_CLAP_ICON)
+SPELLS += [
+    (PLUNGE, THUNDER_CLAP, 'Plunge',
+     'Plunges from the air into the ground, striking every enemy within 5 yards for a share of your attack '
+     'power that grows with the height of the fall and slowing their movement by 20% for 10 sec.',
+     dict(_PLUNGE_BASE, EffectBasePoints1=0, EffectApplyAuraName2=33, EffectBasePoints2=-21, EffectMechanic2=11,
+          DmgClass=2, DurationIndex=1, SpellVisual=PLUNGE_HIT_VISUAL, tooltip='Movement slowed by 20%.')),
+    (PLUNGE_GROUND, THUNDER_CLAP, 'Plunge', '',
+     dict(_PLUNGE_BASE, Effect1=0, Effect2=0, EffectBasePoints1=0, EffectBasePoints2=0, EffectApplyAuraName2=0,
+          DurationIndex=0, SpellVisual=PLUNGE_GROUND_VISUAL)),
+]
+
 # Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
 # instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc
 BLOOD_CRAZE = (16487, 16489, 16492)
@@ -682,12 +710,18 @@ def patch_spell_visual(path):
     precast and cast kits, so the caster plays nothing and only the target lights up."""
     f, rows, strings = read_dbc(path)
     assert f == 16, f
-    rows = [r for r in rows if r[0] not in IMPACT_ONLY_VISUALS]
+    rows = [r for r in rows if r[0] not in IMPACT_ONLY_VISUALS and r[0] not in CAST_ONLY_VISUALS]
     byid = {r[0]: r for r in rows}
     for new_id, source in IMPACT_ONLY_VISUALS.items():
         row = list(byid[source])
         row[0] = new_id
         row[1] = row[2] = 0                                 # PrecastKit, CastKit: the caster's casting
+        rows.append(row)
+    for new_id, (source, cast_kit) in CAST_ONLY_VISUALS.items():
+        row = list(byid[source])
+        row[0] = new_id
+        row[1], row[2] = 0, cast_kit                        # PrecastKit, CastKit
+        row[3:7] = [0, 0, 0, 0]                             # ImpactKit, StateKit, StateDoneKit, ChannelKit
         rows.append(row)
     rows.sort(key=lambda r: r[0])
     return write_dbc(f, rows, strings)

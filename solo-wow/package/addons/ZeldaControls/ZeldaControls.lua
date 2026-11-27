@@ -515,20 +515,14 @@ SlashCmdList["ZELDA"] = function()
 	DEFAULT_CHAT_FRAME:AddMessage(HELP)
 end
 
--- The sword pressed in the air is the plunge (the server's ".zslash" makes it one, and says
--- "ZPLUNGE"): its hold charges nothing, so the charge bar goes and the key's release does nothing.
+-- The sword pressed in the air is the plunge (the server's ".zslash" makes it one, and says so in a
+-- hidden "ZPLUNGE:1" line, which ZeldaHUD keeps off the screen): its hold charges nothing, so the
+-- charge bar goes and the key's release does nothing.
 local plungeEvents = CreateFrame("Frame")
 plungeEvents:RegisterEvent("CHAT_MSG_SYSTEM")
 plungeEvents:SetScript("OnEvent", function()
-	if arg1 == "ZPLUNGE" then
+	if arg1 and string.sub(arg1, 1, 8) == "ZPLUNGE:" then
 		attackDownAt = nil
 		spinBar:Hide()
 	end
 end)
-local origPlungeChat = ChatFrame_OnEvent
-ChatFrame_OnEvent = function(event)
-	if event == "CHAT_MSG_SYSTEM" and arg1 == "ZPLUNGE" then
-		return
-	end
-	origPlungeChat(event)
-end
