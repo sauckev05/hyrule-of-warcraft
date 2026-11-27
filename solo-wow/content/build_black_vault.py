@@ -271,6 +271,16 @@ def patch_display(dbc_bytes, names):
     return write_dbc(f, rows, strings)
 
 
+# the head and leg arcanums Mathredis Firestar makes, changed in their stock enchantment rows (so a helm or
+# legs already enchanted change too): {enchantment: (equip spells, name)}; texts: build_mastery.py
+LESSER_ARCANA = [
+    (1483, (7597,), 'Critical Hit +1%'),                    # Rumination: +150 mana -> +1% crit
+    (1503, (15464,), '+1% Hit'),                            # Constitution: +100 health -> +1% hit
+    (1504, (21469, 13669), '+1% Block and +1% Dodge'),      # Tenacity: +125 armor -> +1% block and dodge
+    (1505, (18691,), '+20 All Resistances'),                # Resilience: +20 fire -> +20 every school
+]
+
+
 def patch_enchantments(path):
     """SpellItemEnchantment with ENCHANT_HIT_1: +1% hit (Increased Hit Chance 1, 15464), like 195's +1% crit."""
     f, rows, strings = read_dbc(path)
@@ -280,6 +290,13 @@ def patch_enchantments(path):
     row[10] = 15464
     row[13] = add_string(strings, '+1% Hit')
     rows.append(row)
+    for enchant, spells, name in LESSER_ARCANA:
+        row = next(r for r in rows if r[0] == enchant)
+        for k in range(3):
+            row[1 + k] = 3 if k < len(spells) else 0
+            row[4 + k] = row[7 + k] = 0
+            row[10 + k] = spells[k] if k < len(spells) else 0
+        row[13] = add_string(strings, name)
     rows.sort(key=lambda r: r[0])
     return write_dbc(f, rows, strings)
 

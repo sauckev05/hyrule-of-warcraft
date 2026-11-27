@@ -424,6 +424,13 @@ for _sid, _name, _text, _enchant in BELT_ARCANA:
                    dict(EffectMiscValue1=_enchant, EquippedItemClass=4, EquippedItemSubClassMask=ARMOR_SUBCLASSES,
                         EquippedItemInventoryTypeMask=BELT_MASK)))
 
+# the head and leg arcanums: their enchantments change in build_black_vault.py (LESSER_ARCANA); the use texts
+_ARCANUM_TAIL = ' to a leg or head slot item. Does not stack with other enchantments for the selected equipment slot.'
+DESCRIPTION_EDITS[15340] = 'Permanently adds 1% chance to get a critical strike' + _ARCANUM_TAIL      # Rumination
+DESCRIPTION_EDITS[15389] = 'Permanently adds 1% chance to hit' + _ARCANUM_TAIL                        # Constitution
+DESCRIPTION_EDITS[15391] = 'Permanently adds 1% chance to block and 1% chance to dodge' + _ARCANUM_TAIL  # Tenacity
+DESCRIPTION_EDITS[15394] = 'Permanently adds 20 to all resistances' + _ARCANUM_TAIL                   # Resilience
+
 # Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
 # instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc
 BLOOD_CRAZE = (16487, 16489, 16492)
