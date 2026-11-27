@@ -136,6 +136,9 @@ def loot_sql():
     out.append(insert('creature_loot_template', [dict(
         entry=WATCHMAN_DOOMGRIP, item=DARK_KEEPER_KEY, ChanceOrQuestChance=100, groupid=0, mincountOrRef=1,
         maxcount=1, condition_id=0, comments='Zelda: the Dark Coffer')]))
+    # the key is kept: stock it is spent (charges -1) on the vault's last door (174565, lock 659), and the
+    # Dark Coffer behind that door asks for it again (ZeldaDoorKeyHeld)
+    out.append('UPDATE `item_template` SET `spellcharges_1` = 0 WHERE `entry` = %d;\n' % DARK_KEEPER_KEY)
     # the Dark Coffer: openable (no GO_FLAG_NO_INTERACT; the key is checked by the core), the fire shirt always
     out.append('UPDATE `gameobject_template` SET `flags` = 0 WHERE `entry` = %d;\n' % DARK_COFFER)
     # the Secret Safe the Dark Coffer sits over: usable too (the vault's end cleared its NO_INTERACT only

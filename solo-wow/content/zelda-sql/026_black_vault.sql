@@ -35,6 +35,7 @@ UPDATE `item_template` SET `name` = 'Arcanum of Evasion', `spellid_1` = 40043 WH
 DELETE FROM `creature_loot_template` WHERE `item` = 11197 AND `entry` IN (9437, 9438, 9439, 9441, 9442, 9443, 9476);
 INSERT INTO `creature_loot_template` (`entry`,`item`,`ChanceOrQuestChance`,`groupid`,`mincountOrRef`,`maxcount`,`condition_id`,`comments`) VALUES
 (9476,11197,100,0,1,1,0,'Zelda: the Dark Coffer');
+UPDATE `item_template` SET `spellcharges_1` = 0 WHERE `entry` = 11197;
 UPDATE `gameobject_template` SET `flags` = 0 WHERE `entry` = 160845;
 UPDATE `gameobject_template` SET `flags` = 0 WHERE `entry` = 161495;
 DELETE FROM `gameobject_loot_template` WHERE `entry` = 11103 AND `item` = 191400;
