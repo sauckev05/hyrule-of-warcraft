@@ -454,3 +454,34 @@ installed on the PC with models in `E:\.ollama` (unused).
   - md5s: benilla a4761f9b…, mangosd cd409606…, ZeldaControls.lua 44f20ca7…, spur.lua 6b932695….
   - Backups: benilla.before-plunge.exe (1ca8830b…), mangosd.before-plunge.exe (6d1b6cf3…),
     ZeldaControls.lua.before-plunge.bak, spur.lua.before-plunge.bak.
+- Now (installed 2026-11-26; client 6db69990, server e1d20508): plunge v2, the mount fixes, the
+  double jump in water, and the Subscreen order.
+  - Plunge, client:
+    - In the air a sword swing becomes guard kind 4 (script_calls): clip 58 runs to PLUNGE_POSE 0.7
+      in PLUNGE_DRAW_SECS 0.25 and holds there, masked over the fall.
+    - On landing, tumble releases the hold and the strike's rest plays (L4, upper body).
+      PLUNGE_LANDING (116 KneelEnd, step 10) is kept but unused.
+  - Plunge, server (ZeldaPlungeLand):
+    - The fall height is plungeZ at the press minus z at landing. With a jump about 1.64 yd: under
+      2.5 jumps gives 50% AP, under 6.5 gives 100%, else 150%.
+    - CastCustomSpell 40038 "Plunge" on each enemy within 5 yd (+ reach), bp0 = the damage. It is
+      Thunder Clap-based: physical, melee class, plus aura 33 at -20% (snare) for 10 s. Its visual
+      is 7895 = 145 impact-only: lightning impact plus the Slow_Impact_Base state.
+    - The ground: PlaySpellVisual of 40039, visual 7896 = cast kit 659 only (Thunder Clap ring and
+      sound 3090, anim -1).
+    - The stomp the hero did came from War Stomp's 1.12.1 cast kit 356 (anim 181 DragonStomp,
+      lightning hands). The 2355 data in dbc.MPQ is 1.12.0; patch.MPQ is the one that counts.
+    - The hidden line is now "ZPLUNGE:1", which chat.lua hides with ^Z%u+:.
+  - Spells: in build_mastery.py SPELLS (006_mastery.sql) and in patch-Z's Spell/SpellVisual.dbc.
+    Refresh patch-Z with /home/claude/work/rebuild_spells.py (copied to
+    solo-wow/tools/rebuild_spells_local.py), which re-runs patch_spells/patch_spell_visual on the
+    existing patch-Z.
+  - Mount: key 5 in the saddle drops any pending roll tumble (a slope or cliff lifted the mount and
+    read as the roll's push). The hit gain is 0.15.
+  - Double jump: controller.rs resets zelda_double_used while swimming.
+  - Subscreen (key 9): Quest Log, Talents, Spellbook & Abilities, Main Menu. The installed copy
+    still had the old Spellbook-first order.
+  - md5s: benilla b1c7dc4e…, mangosd 7f0772f1…, patch-Z 39869e72…, 006_mastery.sql e0b303c2…,
+    ZeldaControls.lua ca3f03b1…, subscreen.lua 3521503e….
+  - Backups (*.before-plunge2*; subscreen.lua.before-order.bak): benilla a4761f9b…, mangosd cd409606…,
+    patch-Z e62ad1cb…, 006 99f735b1….
