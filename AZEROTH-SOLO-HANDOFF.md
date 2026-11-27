@@ -543,3 +543,12 @@ installed on the PC with models in `E:\.ollama` (unused).
   12 Relic Coffer Keys (11078) are gifted to Galahad: Zelda.Gifts has Galahad:11078:k1…k12, in the
   code default and the PC conf (backup mangosd.before-relickeys.conf).
   mangosd 83b139c4…; backup mangosd.before-relickeys.exe (df155e6b…).
+- Now (installed 2026-11-27, c30fcd51): clicking objects through open doors.
+  - Benilla target/hover.rs update_hovered_object, pass 1: picks the nearest hit that is
+    highlightable and is not an open door (type 0, state 0); the nearest hit only when none
+    qualifies.
+  - An opened Relic Coffer Door kept its closed pick geometry in front of its chest, so the chest
+    was clickable only from behind.
+  - Second set of keys gifted: Galahad:11197:r2 and Galahad:11078:r1…r12, in the PC conf (backup
+    mangosd.before-keys2.conf) and the code default.
+  - benilla 313d5ad8…; backup benilla.before-pickfix.exe (49af505d…).
