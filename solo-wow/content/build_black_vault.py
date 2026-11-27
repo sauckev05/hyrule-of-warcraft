@@ -277,7 +277,7 @@ LESSER_ARCANA = [
     (1483, (7597,), 'Critical Hit +1%'),                    # Rumination: +150 mana -> +1% crit
     (1503, (15464,), '+1% Hit'),                            # Constitution: +100 health -> +1% hit
     (1504, (21469, 13669), '+1% Block and +1% Dodge'),      # Tenacity: +125 armor -> +1% block and dodge
-    (1505, (18691,), '+20 All Resistances'),                # Resilience: +20 fire -> +20 every school
+    (1505, (823,), '+50 All Resistances'),                  # Resilience: +20 fire -> +50 every school
 ]
 
 

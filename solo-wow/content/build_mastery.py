@@ -429,7 +429,7 @@ _ARCANUM_TAIL = ' to a leg or head slot item. Does not stack with other enchantm
 DESCRIPTION_EDITS[15340] = 'Permanently adds 1% chance to get a critical strike' + _ARCANUM_TAIL      # Rumination
 DESCRIPTION_EDITS[15389] = 'Permanently adds 1% chance to hit' + _ARCANUM_TAIL                        # Constitution
 DESCRIPTION_EDITS[15391] = 'Permanently adds 1% chance to block and 1% chance to dodge' + _ARCANUM_TAIL  # Tenacity
-DESCRIPTION_EDITS[15394] = 'Permanently adds 20 to all resistances' + _ARCANUM_TAIL                   # Resilience
+DESCRIPTION_EDITS[15394] = 'Permanently adds 50 to all resistances' + _ARCANUM_TAIL                   # Resilience
 
 # Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
 # instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc

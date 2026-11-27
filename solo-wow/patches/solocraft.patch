@@ -2055,10 +2055,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..769456bf3
+index 000000000..967bceb20
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6618 @@
+@@ -0,0 +1,6631 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -8418,6 +8418,19 @@ index 000000000..769456bf3
 +    uint8 const mask = HostileMask(creature->GetFaction());
 +    if (!mask)
 +        return;
++    // one standing in lava (Blackrock Depths' Fireguard Destroyers down in the magma) can't be fought
++    // there, so it never counts towards a clear
++    if (d)
++    {
++        GridMapLiquidData liquid;
++        GridMapLiquidStatus const status = map->GetTerrain()->getLiquidStatus(d->posX, d->posY, d->posZ, MAP_LIQUID_TYPE_MAGMA, &liquid);
++        if ((status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER) && (liquid.type_flags & MAP_LIQUID_TYPE_MAGMA))
++        {
++            it->second.counted.erase(creature->GetDbGuid());
++            sLog.outString("Zelda clear: %s (spawn %u) is in lava, not counted", creature->GetName(), creature->GetDbGuid());
++            return;
++        }
++    }
 +    it->second.counted[creature->GetDbGuid()] = { uint16(section), mask, false };
 +}
 +
@@ -9939,7 +9952,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..abdf6bf3f 100644
+index 00986af9e..f5a4e3fee 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -10213,7 +10226,7 @@ index 00986af9e..abdf6bf3f 100644
          // Pre-3.0: multiplied by 0.75
          percent *= 0.75f;
 +        // Zelda of Warcraft: the hero's resistances take off twice as much up to 100 points (54% against a
-+        // level 55-56 enemy), then each point less, easing into 90% at 350 points
++        // level 55-56 enemy), then each point less, easing into 90% at 300 points
 +        if (GetTypeId() == TYPEID_PLAYER)
 +        {
 +            float const zeldaCap = 90.0f;
@@ -10222,7 +10235,7 @@ index 00986af9e..abdf6bf3f 100644
 +                percent = std::min(percent * 2.0f, zeldaCap);
 +            else
 +            {
-+                float const rest = 1.0f - std::min((resistance - 100) / 250.0f, 1.0f);
++                float const rest = 1.0f - std::min((resistance - 100) / 200.0f, 1.0f);
 +                percent = at100 + (zeldaCap - at100) * (1.0f - rest * rest);
 +            }
 +            return percent;
