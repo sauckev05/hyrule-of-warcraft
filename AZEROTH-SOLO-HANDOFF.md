@@ -401,3 +401,20 @@ installed on the PC with models in `E:\.ollama` (unused).
   - Getting the client: take benilla.exe from the zelda-wow-latest release asset.
   - md5s: patch-Z e566f0ff…, benilla acd6e12a….
   - Backups: patch-Z.before-belt.MPQ.bak (0f6ac447…), ZeldaWoW\benilla.before-belt.exe (2d6bd98f…).
+- Now (installed 2026-11-26, 6d71bb5a): the mounted spur strike, stairs, and leaving a battleground.
+  - Mounted spur (P3, the downward hammer-fist). ZeldaControls calls ZeldaRollAnim(kind, key5);
+    the second argument becomes bit 0x10 of ScriptCall::ZeldaRoll, which sets ZeldaRollRequest.key5.
+    - In zelda_roll.rs tumble(): when mounted, moving and off the 1.5 s spur cooldown (the server's
+      ZELDA_SPUR_COOLDOWN_MS), it pushes swing step 8 for 0.7 s.
+    - It plays UnarmedAttackMedium A/B/C in turn.
+    - zelda_swing.rs MOUNT_PUNCH = (17, 0): Attack1H, right variation. The rider mask plays it on the
+      upper body over Mount (91).
+    - Previews were P1 (16,0), P2 (16,1), P3 (17,0) and P4 (17,1); change the constant to switch.
+  - Stairs: state.rs STEP_UP_HEIGHT is 1.25 (was 1.0, about 10% short on some steps).
+    STEP_UP_ADVANCE_PER_YARD stays tan 50°, and the advance scales with the height.
+  - Leaving a battleground: ZeldaHUD/bgleave.lua wraps WorldStateScoreFrame_Update. It shows
+    WorldStateScoreFrameLeaveButton ("Leave Battleground" → LeaveBattlefield()) while
+    GetBattlefieldStatus is "active", not only after the winner is known.
+  - md5s: benilla 1ca8830b…, ZeldaControls.lua a9d60ab5…, bgleave.lua f560ebad…, ZeldaHUD.toc 69532362….
+  - Backups: ZeldaWoW\benilla.before-mountpunch.exe (acd6e12a…), ZeldaControls.lua.before-mountpunch.bak,
+    ZeldaHUD.toc.before-bgleave.bak.
