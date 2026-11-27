@@ -423,3 +423,34 @@ installed on the PC with models in `E:\.ollama` (unused).
     front_bulge stays 0.15, and the width and back are unchanged.
   - Previews also had T2 (bulge 0.02, ridges ×0.5, front_bulge 0.1) and T3 (0.012, ×0.35, 0).
   - patch-Z md5 facc6c3d…; backup patch-Z.before-T1.MPQ.bak (e566f0ff…).
+- Now (installed 2026-11-26, 15c543ea): mount hit volume, the T2 scarf, the spur cap, the plunge,
+  and charge limits.
+  - Mount hit volume: the hit plays at 0.35 gain (MOUNT_PUNCH_GAIN, kit::play_file_at), matching
+    the moan. Measured: unarmed hit files peak about -4 dB, mHorseAttack about -10 dB at
+    SoundEntries volume 0.7.
+  - Scarf T2: bulge front 0.02, ridges (0.007, 0.008), front_bulge 0.1. patch-Z e62ad1cb…;
+    backup patch-Z.before-T2b.MPQ.bak (facc6c3d…, the T1 build).
+  - Spur cap: ZeldaSpur refuses at ZELDA_SPUR_MAX 5 (no refresh, no cooldown). The 5th circle
+    decays after ZELDA_SPUR_TOP_MS 5000, then the normal 3 s steps apply.
+    - spur.lua sets the global ZeldaSpurCount. ZeldaControls only sends key5=true while fewer than
+      5, so there's no punch at 5.
+  - Plunge, the sword in the air:
+    - Server: .zslash while JUMPING/FALLINGFAR (not in water, not mounted before the press) sets
+      state.plungeAt and sends a hidden "ZPLUNGE". ZeldaPlungeLand in ZeldaPlayerUpdate fires when
+      the flags clear: enemies within 5 yd + combat reach take one swing each at 1.5x (plus the
+      off hand when dual wielding), with t_noSwingAnim set. It sends War Stomp's (45) SPELL_GO
+      visual: SpellVisual 2355, cast kit 659, ThunderClap_Cast_Base ground ring and sound, no anim.
+      A plunge that never lands times out after 5 s.
+    - Client: ZeldaSwingRequests field .2 holds "airborne", set by zelda_roll. script_calls turns
+      swing steps 1-3 into step 9 (PLUNGE_SECS 0.5) and sets .3. tumble then sets
+      player.zelda_plunge. The mover sets vel_y -PLUNGE_SPEED (24) with no horizontal motion until
+      grounded. The clip is PLUNGE_CLIP (58, 0) Special2H (the D2 preview), masked to the upper
+      body while falling.
+  - Charge limits:
+    - .zspin is refused when the last slash was airborne or the hero is in the air.
+    - ZeldaControls drops the charge bar on ZPLUNGE (and hides the line from chat).
+    - In the saddle: .zbow draw is ignored and charged is forced to 0. The addon fires a plain
+      ".zbow" on release while ZeldaSpurCount >= 0.
+  - md5s: benilla a4761f9b…, mangosd cd409606…, ZeldaControls.lua 44f20ca7…, spur.lua 6b932695….
+  - Backups: benilla.before-plunge.exe (1ca8830b…), mangosd.before-plunge.exe (6d1b6cf3…),
+    ZeldaControls.lua.before-plunge.bak, spur.lua.before-plunge.bak.
