@@ -485,3 +485,36 @@ installed on the PC with models in `E:\.ollama` (unused).
     ZeldaControls.lua ca3f03b1…, subscreen.lua 3521503e….
   - Backups (*.before-plunge2*; subscreen.lua.before-order.bak): benilla a4761f9b…, mangosd cd409606…,
     patch-Z e62ad1cb…, 006 99f735b1….
+- Now (installed 2026-11-26, 5c174de8): the Black Vault, the martial shirts, and the belt arcanums
+  (build_black_vault.py, 026_black_vault.sql).
+  - Relic Coffers:
+    - The stock 160836 and 160845 carry GO_FLAG_NO_INTERACT (16), which nothing cleared.
+    - New chests 191420–191426 are 160836 with flags 0, each with its own loot (11105's trinkets
+      plus one libram).
+    - The 12 spawns (guids 2300076–87) are re-pointed. Per side, from the way in: Constitution,
+      Resilience, Rumination, Tenacity, Voracity, then a custom libram beside the safe: Ferocity on
+      the left (wall C: 2300077…79), Bulwark on the right (wall B: 2300081…76).
+  - Dark Coffer:
+    - flags 0; still lock 93 (OpenTinkering, 6477), and the core's ZeldaDoorKeyHeld gates 160845
+      on item 11197.
+    - Dark Keeper Key: 100% from Watchman Doomgrip 9476, removed from Dark Keepers 9437–9443.
+    - Loot 11103 + the Crimson Martial Shirt at 100%.
+    - Key gift: Zelda.Gifts adds Galahad:11197, in the code default and in the PC conf (conf
+      backup mangosd.before-vault.conf).
+  - Shirts:
+    - Items 191400–191404 (fire, frost, nature, shadow, arcane), cloned from 10052: rare, BoP,
+      +100 resistance.
+    - Display ids 60400–60404 use textures ZeldaMartial<School>_{AU,AL,TU,TL}. The orange and gold
+      (hue ≤ 55° or ≥ 340°, sat > 0.3) are recolored. Icons are INV_Shirt_<colour>_01.
+  - Librams and arcanums:
+    - Libram of Ferocity 191410 and Libram of the Bulwark 191411.
+    - Arcanums 191412–191415 use spells 40040–40043 (build_mastery BELT_ARCANA: Lesser Arcane
+      Amalgamation aimed at a belt, inventory mask 64).
+    - Enchants: 195 crit, 2722 hit (new: +1% Hit, spell 15464, added to SpellItemEnchantment.dbc in
+      patch-Z and server data\dbc), 1983 block, 2078 dodge.
+    - Quests 90560–90563 at Mathredis 9836 (clones of 4481): book + Black Diamond + 30g +
+      Heart of Fire ×2 / Elemental Fire ×4 (Ferocity) or Core of Earth ×2 / Elemental Earth ×4
+      (Bulwark).
+  - md5s: mangosd 963d52d3…, patch-Z 1be08627…, 006 7ee09490…, 026 646085ba…,
+    server SpellItemEnchantment.dbc 8dca78c2….
+  - Backups (*.before-vault*; data\dbc-before-hero\SpellItemEnchantment.before-vault.dbc).
