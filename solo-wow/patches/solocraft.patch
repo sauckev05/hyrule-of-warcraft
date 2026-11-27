@@ -9939,7 +9939,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..3bed24e11 100644
+index 00986af9e..abdf6bf3f 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -10208,17 +10208,29 @@ index 00986af9e..3bed24e11 100644
  
              // Modify by penetration, but can't go negative with it
              int32 result = (amount - penetration);
-@@ -3945,6 +4073,9 @@ float Unit::CalculateEffectiveMagicResistancePercent(const Unit* attacker, Spell
+@@ -3945,6 +4073,21 @@ float Unit::CalculateEffectiveMagicResistancePercent(const Unit* attacker, Spell
          percent += (float(resistance) / skill) * 100;
          // Pre-3.0: multiplied by 0.75
          percent *= 0.75f;
-+        // Zelda of Warcraft: the hero's resistances take off twice as much (still capped at 75%)
++        // Zelda of Warcraft: the hero's resistances take off twice as much up to 100 points (54% against a
++        // level 55-56 enemy), then each point less, easing into 90% at 350 points
 +        if (GetTypeId() == TYPEID_PLAYER)
-+            percent *= 2.0f;
++        {
++            float const zeldaCap = 90.0f;
++            float const at100 = (100.0f / skill) * 100.0f * 0.75f * 2.0f;
++            if (resistance <= 100 || at100 >= zeldaCap)
++                percent = std::min(percent * 2.0f, zeldaCap);
++            else
++            {
++                float const rest = 1.0f - std::min((resistance - 100) / 250.0f, 1.0f);
++                percent = at100 + (zeldaCap - at100) * (1.0f - rest * rest);
++            }
++            return percent;
++        }
          // Bonus resistance percent by positive level difference when calculating damage hit for NPCs only
          if (!binary && GetTypeId() == TYPEID_UNIT && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
              percent += (0.4f * std::max(int32(GetSkillMaxForLevel(attacker) - skill), 0));
-@@ -4976,6 +5107,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -4976,6 +5119,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -10230,7 +10242,7 @@ index 00986af9e..3bed24e11 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6233,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6245,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -10239,7 +10251,7 @@ index 00986af9e..3bed24e11 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7002,6 +7138,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
+@@ -7002,6 +7150,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
              total += int32(ap_bonus * (GetTotalAttackPowerValue(IsSpellRequiresRangedAP(spellProto) ? RANGED_ATTACK : BASE_ATTACK) + ap_benefit));
          }
      }
@@ -10255,7 +10267,7 @@ index 00986af9e..3bed24e11 100644
  
      if (benefit)
      {
-@@ -7050,7 +7195,9 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7207,9 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -10266,7 +10278,7 @@ index 00986af9e..3bed24e11 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7314,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7326,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -10280,7 +10292,7 @@ index 00986af9e..3bed24e11 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7463,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7475,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -10294,7 +10306,7 @@ index 00986af9e..3bed24e11 100644
      return AdvertisedBenefit;
  }
  
-@@ -7598,6 +7759,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
+@@ -7598,6 +7771,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
      {
          if (Player* modOwner = GetSpellModOwner())
              modOwner->ApplySpellMod(spellInfo->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, tmpDamage);
@@ -10304,7 +10316,7 @@ index 00986af9e..3bed24e11 100644
      }
  
      // bonus result can be negative
-@@ -8095,6 +8259,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8271,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -10318,7 +10330,7 @@ index 00986af9e..3bed24e11 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8575,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8587,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
