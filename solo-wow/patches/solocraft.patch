@@ -2055,7 +2055,7 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..97af2b8a9
+index 000000000..108371bad
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6618 @@
@@ -4675,7 +4675,7 @@ index 000000000..97af2b8a9
 +{
 +    // "Name:item" once, or "Name:item:tag" once more for each new tag; the gift is marked given only
 +    // once it is in the bags or the mail, and each step goes to the server log
-+    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Galahad:6975 Galahad:191140 Galahad:20608:again Galahad:11197 Galahad:11078:k1 Galahad:11078:k2 Galahad:11078:k3 Galahad:11078:k4 Galahad:11078:k5 Galahad:11078:k6 Galahad:11078:k7 Galahad:11078:k8 Galahad:11078:k9 Galahad:11078:k10 Galahad:11078:k11 Galahad:11078:k12");
++    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Galahad:6975 Galahad:191140 Galahad:20608:again Galahad:11197 Galahad:11078:k1 Galahad:11078:k2 Galahad:11078:k3 Galahad:11078:k4 Galahad:11078:k5 Galahad:11078:k6 Galahad:11078:k7 Galahad:11078:k8 Galahad:11078:k9 Galahad:11078:k10 Galahad:11078:k11 Galahad:11078:k12 Galahad:11197:r2 Galahad:11078:r1 Galahad:11078:r2 Galahad:11078:r3 Galahad:11078:r4 Galahad:11078:r5 Galahad:11078:r6 Galahad:11078:r7 Galahad:11078:r8 Galahad:11078:r9 Galahad:11078:r10 Galahad:11078:r11 Galahad:11078:r12");
 +    std::istringstream in(gifts);
 +    std::string word;
 +    while (in >> word)

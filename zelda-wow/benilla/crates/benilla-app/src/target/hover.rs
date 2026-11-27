@@ -644,12 +644,49 @@ pub(super) fn update_hovered_object(
         );
     }
 
-    // Pass 1: the exact resident geometry, nearest wins.
-    let mut best: Option<(f32, Entity)> =
-        benilla_world::interact::cast_pick_ray(ray, pickable, &parts, false)
-            .into_iter()
-            .next()
-            .map(|(e, h)| (h.distance, e));
+    // `0x480c90`'s highlightable, by net entity: a store not yet streamed reads highlightable, the
+    // eligibility gate's own default.
+    let highlightable = |net: Entity| -> bool {
+        stores.get(net).map_or(true, |s| {
+            let reaction = crate::target::cursor_mode::go_reaction(
+                go_gate.factions.as_deref(),
+                s.0.gameobject_faction(),
+                self_store,
+            );
+            let go_guid = guids.get(net).ok().map(|g| g.0);
+            let overrides = crate::target::cursor_mode::GoOverrides {
+                channel_owned: crate::target::cursor_mode::fishing_channel_owned(self_store, go_guid),
+                meeting_stone_queued: crate::target::cursor_mode::meeting_stone_queued(
+                    go_guid
+                        .and_then(|g| go_gate.templates.get(g)?.meeting_stone)
+                        .map(|m| m.area),
+                    go_gate.queued_area(),
+                ),
+            };
+            crate::target::cursor_mode::go_highlightable(s, reaction, overrides)
+        })
+    };
+
+    // Pass 1: the exact resident geometry, nearest wins. Zelda of Warcraft: nearest that can be
+    // used - an object nothing can be done with (an open door, still in its closed pick geometry
+    // in front of the chest it guarded; a NO_INTERACT safe) lets the pick through to the one
+    // behind it, and is the pick only when nothing behind it is usable.
+    // A door standing open (DOOR, state 0) counts as nothing to do too: its pick geometry is the
+    // closed leaf's.
+    let open_door = |net: Entity| -> bool {
+        stores
+            .get(net)
+            .is_ok_and(|s| s.0.gameobject_type_id() == 0 && s.0.gameobject_state() == Some(0))
+    };
+    let hits = benilla_world::interact::cast_pick_ray(ray, pickable, &parts, true);
+    let mut best: Option<(f32, Entity)> = hits
+        .iter()
+        .find(|(e, _)| {
+            let net = resolve_net(*e);
+            highlightable(net) && !open_door(net)
+        })
+        .or_else(|| hits.first())
+        .map(|(e, h)| (h.distance, *e));
 
     // Pass 2, only when nothing hit anywhere, units included (one resolve in the reference): the
     // geometry pushed 1 model unit along its normals, a halo of about a yard that makes a wispy
@@ -667,30 +704,8 @@ pub(super) fn update_hovered_object(
             let prio = if *last_pick == Some(net) {
                 u32::MAX // the sticky-hover cache outranks everything
             } else {
-                // `0x480c90`: highlightable 1, else 0. A store not yet streamed reads
-                // highlightable, the eligibility gate's own default.
-                stores.get(net).map_or(1, |s| {
-                    let reaction = crate::target::cursor_mode::go_reaction(
-                        go_gate.factions.as_deref(),
-                        s.0.gameobject_faction(),
-                        self_store,
-                    );
-                    let go_guid = guids.get(net).ok().map(|g| g.0);
-                    let overrides = crate::target::cursor_mode::GoOverrides {
-                        channel_owned: crate::target::cursor_mode::fishing_channel_owned(
-                            self_store, go_guid,
-                        ),
-                        meeting_stone_queued: crate::target::cursor_mode::meeting_stone_queued(
-                            go_guid
-                                .and_then(|g| go_gate.templates.get(g)?.meeting_stone)
-                                .map(|m| m.area),
-                            go_gate.queued_area(),
-                        ),
-                    };
-                    u32::from(crate::target::cursor_mode::go_highlightable(
-                        s, reaction, overrides,
-                    ))
-                })
+                // `0x480c90`: highlightable 1, else 0
+                u32::from(highlightable(net))
             };
             let wins =
                 best2.is_none_or(|(bt, bp, _)| prio > bp || (prio == bp && hit.distance < bt));
