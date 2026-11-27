@@ -707,12 +707,25 @@ pub(crate) fn play_file(
     path: &str,
     category: SoundCategory,
 ) -> Result<()> {
+    play_file_at(kits, assets, out, config, path, category, 1.0)
+}
+
+/// Zelda of Warcraft: [`play_file`] at `volume` (1.0 the file's own level).
+pub(crate) fn play_file_at(
+    kits: &mut SoundKits,
+    assets: &WorldAssets,
+    out: &mut SoundOutput,
+    config: &SoundConfig,
+    path: &str,
+    category: SoundCategory,
+    volume: f32,
+) -> Result<()> {
     // The loading-screen hold, as in [`play_kit_ext`].
     if config.world_hold {
         return Ok(());
     }
     let data = kits.sfx(assets, path)?;
-    let amp = config.category_amp(category);
+    let amp = config.category_amp(category) * volume.clamp(0.0, 1.0);
     let data = data.volume(mixer::amp_to_db(amp));
     if !claim_voice(out, amp) {
         return Ok(());

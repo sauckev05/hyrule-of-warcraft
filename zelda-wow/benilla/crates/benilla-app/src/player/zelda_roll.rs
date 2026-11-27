@@ -50,6 +50,10 @@ const DODGE_COOLDOWN_SECS: f32 = 0.95;
 const SPUR_COOLDOWN_SECS: f32 = 1.5;
 /// How long the rider's blow on the mount plays (s): AttackUnarmed's 1 s, a little quicker.
 const MOUNT_PUNCH_SECS: f32 = 0.7;
+/// The fist's loudness: the mount's moan beside it (its own attack file, e.g. mHorseAttack at
+/// SoundEntries volume 0.7) peaks near -13 dB, the unarmed hit files near -4 dB at full volume, so
+/// the hit plays about 9 dB down to sit at the moan's level.
+const MOUNT_PUNCH_GAIN: f32 = 0.35;
 /// The fist landing on the mount with each spur, in turn (`SoundEntries` 1014 "Unarmed_Generic").
 const MOUNT_PUNCH_SOUNDS: [&str; 3] = [
     "Sound\\Item\\Weapons\\Unarmed\\UnarmedAttackMediumA.wav",
@@ -169,7 +173,7 @@ fn tumble(
             if let Some(swings) = swings.as_deref_mut() {
                 swings.0.push((8, MOUNT_PUNCH_SECS));
             }
-            sounds.write(crate::sound::ZeldaRollSound(MOUNT_PUNCH_SOUNDS[state.spurs % MOUNT_PUNCH_SOUNDS.len()]));
+            sounds.write(crate::sound::ZeldaRollSound(MOUNT_PUNCH_SOUNDS[state.spurs % MOUNT_PUNCH_SOUNDS.len()], MOUNT_PUNCH_GAIN));
             state.spurs += 1;
         }
         trace(|| format!("spur key5 moving={moving} ready={ready}"));
@@ -210,7 +214,7 @@ fn tumble(
         if let (true, Some(swings)) = (has_clip, swings.as_deref_mut()) {
             swings.0.push((7, FLIP_SECS));
         }
-        sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[0]));
+        sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[0], 1.0));
         trace(|| format!("double jump flip own_clip={has_clip}"));
     }
     // the server's push for the asked roll: the turn starts with it
@@ -226,7 +230,7 @@ fn tumble(
             // the push landed: the arc's time in the air is the turn's
             Some(since) => {
                 let lasts = ROLL_SECS[usize::from(kind.clamp(1, 4) - 1)];
-                sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[usize::from(kind.clamp(1, 4) - 1)]));
+                sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[usize::from(kind.clamp(1, 4) - 1)], 1.0));
                 // a model with the roll's own clip plays it over the arc; the rest turn whole
                 let has_clip = own_clip(kind).is_some_and(|(clip, _)| {
                     body.single()

@@ -102,17 +102,17 @@ CAPE_COWL = dict(  # R2 (from F3): the scarf rests on the body like a mound, two
     foot=(0.165, 0.19, 0.2),
     lean_in=dict(front=0.15, back=0.1),
     foot_min_z=1.56,
-    bulge=dict(front=0.03, back=0.065),                   # T1: front 25% thinner again (R2 0.06, then 0.04), same width
+    bulge=dict(front=0.02, back=0.065),                   # T2: front half as thick (R2 0.06, then 0.04, T1 0.03), same width
     folds=dict(front=0.2, back=0.15),
     fold_count=11,
-    front_bulge=0.15,
+    front_bulge=0.1,                                       # T2 (was 0.15)
     peak=dict(front=0.55, back=0.6),
     round=dict(front=0.7, back=1.0),                       # R2: the front rounded
     lift=0.006,
     tuck=0.02,
     v_bands=2,
     rows=20,
-    ridges=((0.3, 0.0105, 0.16), (0.72, 0.012, 0.18)),      # T1: the two soft rolls 25% lower (R2 0.02/0.022, then 0.014/0.016)
+    ridges=((0.3, 0.007, 0.16), (0.72, 0.008, 0.18)),       # T2: the two soft rolls half as high (R2 0.02/0.022, then 0.014/0.016)
     ridge_spread=1.5,
 )
 CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape ends (T2 was drawn to 0.40)

@@ -341,9 +341,9 @@ fn play_auto_equip_sounds(
 }
 
 /// Zelda of Warcraft: the hero's grunt as a dodge roll leaves the ground (`player::zelda_roll`),
-/// a game file by path, 2D on SFX like `PlaySoundFile`.
+/// a game file by path, 2D on SFX like `PlaySoundFile`, at the given volume (1.0 the file's own).
 #[derive(Message, Clone, Copy)]
-pub(crate) struct ZeldaRollSound(pub(crate) &'static str);
+pub(crate) struct ZeldaRollSound(pub(crate) &'static str, pub(crate) f32);
 
 /// Play each [`ZeldaRollSound`]; with no kit catalog the queue is dropped.
 fn play_zelda_roll_sounds(
@@ -361,7 +361,7 @@ fn play_zelda_roll_sounds(
         return;
     };
     for req in reqs.read() {
-        if let Err(e) = kit::play_file(&mut kits, &assets, &mut out, &config, req.0, kit::SoundCategory::Sfx) {
+        if let Err(e) = kit::play_file_at(&mut kits, &assets, &mut out, &config, req.0, kit::SoundCategory::Sfx, req.1) {
             debug!("sound(zelda roll): {} — {e:#}", req.0);
         }
     }
