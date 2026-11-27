@@ -518,3 +518,23 @@ installed on the PC with models in `E:\.ollama` (unused).
   - md5s: mangosd 963d52d3…, patch-Z 1be08627…, 006 7ee09490…, 026 646085ba…,
     server SpellItemEnchantment.dbc 8dca78c2….
   - Backups (*.before-vault*; data\dbc-before-hero\SpellItemEnchantment.before-vault.dbc).
+- Now (installed 2026-11-26; client 54ba3299, server cda6002e): the vault after a restart, the
+  buckles, and the S2 scarf.
+  - Vault: instance_blackrock_depths OnObjectCreate, when TYPE_VAULT (m_auiEncounter[1]) is DONE,
+    opens GO_SECRET_DOOR and the Relic Coffer Doors 174554–174565 and clears NO_INTERACT on
+    GO_SECRET_SAFE. The vault's end did these only at that moment, so a restart lost them.
+    026 also sets Secret Safe 161495 flags 0, so it never blocks clicks on the Dark Coffer above it.
+  - Buckles (build_hero BELT 'buckles'):
+    - Rounded-rectangle plates in their own geosets: 1653 (normal: ±16°, rise 0.008, corner 0.018)
+      and 1654 (big: ±21°, rise 0.016, thick 0.011, corner 0.022). The band 1652 has no buckle now.
+    - Benilla benilla-formats geosets.rs belt_buckle(region_textures) picks one:
+      - a TorsoLower texture, or an LU texture in TALL_BELTS (≥ 17 painted rows) → Big
+      - THIN_BELTS (≤ 9 rows) → none
+      - anything else → Normal
+    - The lists come from measuring all 579 belt LU textures (rows more than half opaque).
+  - Scarf S2: blend_power 2.5 (the front's values reach further round, so the sides are flat)
+    and foot side reach 0.177 (was 0.19).
+  - PLAY-ZELDA-DEBUG.bat on the PC traces the tag "use" too (clicks on objects), for chest problems.
+  - md5s: benilla 49af505d…, mangosd df155e6b…, patch-Z eb63120a…, 026 8fa349a5….
+  - Backups: benilla.before-buckles.exe, mangosd.before-vaultfix.exe, patch-Z.before-buckles.MPQ.bak,
+    026_black_vault.sql.before-vaultfix.bak.
