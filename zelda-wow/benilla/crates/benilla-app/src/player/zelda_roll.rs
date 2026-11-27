@@ -45,6 +45,17 @@ const FLIP_SECS: f32 = 0.733;
 /// The rolls' shared cooldown, a little over the server's 0.9 s (`DODGE_COOLDOWN_MS`), so a roll the
 /// client runs is one the server grants the dodge for.
 const DODGE_COOLDOWN_SECS: f32 = 0.95;
+/// The spurs' cooldown, the server's `ZELDA_SPUR_COOLDOWN_MS` (one red circle every 1.5 s at most),
+/// so the rider strikes the mount only on a spur the server grants.
+const SPUR_COOLDOWN_SECS: f32 = 1.5;
+/// How long the rider's blow on the mount plays (s): AttackUnarmed's 1 s, a little quicker.
+const MOUNT_PUNCH_SECS: f32 = 0.7;
+/// The fist landing on the mount with each spur, in turn (`SoundEntries` 1014 "Unarmed_Generic").
+const MOUNT_PUNCH_SOUNDS: [&str; 3] = [
+    "Sound\\Item\\Weapons\\Unarmed\\UnarmedAttackMediumA.wav",
+    "Sound\\Item\\Weapons\\Unarmed\\UnarmedAttackMediumB.wav",
+    "Sound\\Item\\Weapons\\Unarmed\\UnarmedAttackMediumC.wav",
+];
 /// The body turns about this share of its head height above the feet, near the middle.
 const PIVOT_SHARE: f32 = 0.5;
 
@@ -52,6 +63,8 @@ const PIVOT_SHARE: f32 = 0.5;
 #[derive(Resource, Default)]
 pub(crate) struct ZeldaRollRequest {
     pub(crate) pending: Option<u8>,
+    /// The press came from key 5: in the saddle it spurs the mount, and the rider strikes it.
+    pub(crate) key5: bool,
 }
 
 /// The tumble in progress, or the one waiting for the push.
@@ -66,6 +79,10 @@ pub(super) struct ZeldaRollState {
     written: Option<(Transform, Transform)>,
     /// When the last roll started (elapsed secs), for the forward roll's own cooldown.
     last_start: f32,
+    /// When the rider last struck the mount (elapsed secs), and how many times so far (which hit
+    /// sound comes next).
+    last_spur: Option<f32>,
+    spurs: usize,
 }
 
 fn trace(msg: impl FnOnce() -> String) {
@@ -140,6 +157,23 @@ fn tumble(
     // would hold the horse to roll speed for the dash's time
     let mounted = own.single().is_ok_and(|s| s.0.unit_mount_display_id() != 0);
     let mut forward_now = false;
+    // key 5 in the saddle spurs the mount (the server's ZeldaSpur, which wants it on the move): the
+    // rider strikes it with his fist, on the upper body over the riding pose, and the blow lands
+    let key5 = std::mem::take(&mut request.key5);
+    if key5 && mounted && !player.server_riding {
+        use crate::creature_anim::move_flags as f;
+        let moving = player.move_flags & (f::FORWARD | f::BACKWARD | f::STRAFE_LEFT | f::STRAFE_RIGHT) != 0;
+        let ready = state.last_spur.is_none_or(|t| now - t >= SPUR_COOLDOWN_SECS);
+        if moving && ready {
+            state.last_spur = Some(now);
+            if let Some(swings) = swings.as_deref_mut() {
+                swings.0.push((8, MOUNT_PUNCH_SECS));
+            }
+            sounds.write(crate::sound::ZeldaRollSound(MOUNT_PUNCH_SOUNDS[state.spurs % MOUNT_PUNCH_SOUNDS.len()]));
+            state.spurs += 1;
+        }
+        trace(|| format!("spur key5 moving={moving} ready={ready}"));
+    }
     if let Some(kind) = request.pending.take() {
         trace(|| format!("asked kind={kind} rolling={}", state.rolling.is_some()));
         if kind == 1 {

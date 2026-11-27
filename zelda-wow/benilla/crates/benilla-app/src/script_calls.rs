@@ -100,7 +100,8 @@ pub(crate) fn apply_script_calls(
             }
             ScriptCall::ZeldaRoll(kind) => {
                 if let Some(roll) = zelda.4.as_deref_mut() {
-                    roll.pending = Some(kind);
+                    roll.pending = Some(kind & 0x0f);
+                    roll.key5 |= kind & 0x10 != 0;
                 }
             }
             ScriptCall::ZeldaCrest(crest) => {

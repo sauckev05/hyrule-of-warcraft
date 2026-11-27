@@ -7,7 +7,8 @@
 //! 2. the left slash: the variation crossing left to right;
 //! 3. the special strike, Heroic Strike's Special1H (Special2H with a two-hander);
 //! 4. Berserker Stance's charged attack: the two-hander's leaping Special2H, whatever is held;
-//! 5. the dodge roll and 6. the backflip, on a model that has their clips (player::zelda_roll).
+//! 5. the dodge roll and 6. the backflip, on a model that has their clips (player::zelda_roll);
+//! 7. the double jump's front flip; 8. the rider's fist on the mount as key 5 spurs it.
 //!
 //! Which variation crosses which way differs by model, so [`VARIATIONS`] names them per race and
 //! gender, measured from the 1.12 character models (the right hand's sideways travel over the
@@ -51,6 +52,10 @@ pub(crate) const FLIP_CLIP: u16 = 155;
 /// The dodge roll's clip is one whole turn of the tumble (333 ms); it plays this many times over
 /// the roll, each one complete, sped up to fit (two in the forward roll's 0.65 s: about its own pace).
 pub(crate) const ROLL_SPINS: u32 = 2;
+/// The rider's blow on the mount as key 5 spurs it (step 8, player::zelda_roll): the clip and its
+/// variation, played on the upper body over the riding pose (a mounted rider's CLASS_A clips are
+/// masked above the spine). Attack1H's downward swing with an empty fist: a hammer-fist.
+pub(crate) const MOUNT_PUNCH: (u16, usize) = (17, 0);
 
 /// Where in the ranged Load clip the full draw holds (kind 3): near its end, short of the frame
 /// that would finish the one-shot.
@@ -112,6 +117,7 @@ pub(super) fn combo_clip(step: u8, main: Option<(u8, u8)>, race: u8, gender: u8)
         5 => return (ROLL_CLIP, 0),
         6 => return (BACKFLIP_CLIP, 0),
         7 => return (FLIP_CLIP, 0),
+        8 => return MOUNT_PUNCH,
         s if s >= 4 => return (58, 0), // the leaping two-handed strike, even with a one-hander
         _ => {}
     }
@@ -151,5 +157,6 @@ mod tests {
         assert_eq!(combo_clip(3, Some((2, 8)), 1, 0), (58, 0)); // two-handed sword
         assert_eq!(combo_clip(1, sword, 2, 0), (17, 1)); // an orc's arcs are the other way round
         assert_eq!(combo_clip(4, sword, 1, 0), (58, 0)); // the leap, one-hander or not
+        assert_eq!(combo_clip(8, sword, 1, 0), MOUNT_PUNCH); // the rider's fist on the mount
     }
 }

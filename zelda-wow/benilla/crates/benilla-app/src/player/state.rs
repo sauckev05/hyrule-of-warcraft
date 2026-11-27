@@ -72,8 +72,9 @@ pub(super) const STEP_SLOPE_RATIO: f32 = 1.849_399;
 /// The snap reach's fixed slack (yd), `[0x7ff9d0]` = 1/36.
 pub(super) const STEP_SNAP_SLACK: f32 = 0.027_777_8;
 /// The step-up rise ceiling (yd), the reference's `H`: `0x617430` returns `CMovement+0xb8`, the
-/// ratio `max(SCALE_X / CreatureModelScale, 1)`, which is 1.0 for the local player.
-pub(crate) const STEP_UP_HEIGHT: f32 = 1.0;
+/// ratio `max(SCALE_X / CreatureModelScale, 1)`, which is 1.0 for the local player. Zelda of
+/// Warcraft: 1.25, so the stair steps the reference's 1.0 just misses (about 10% short) climb.
+pub(crate) const STEP_UP_HEIGHT: f32 = 1.25;
 /// The rise ceiling of a body the reference does not treat as player-controlled, `[0x801628]` on
 /// `0x5fa550`'s false leg of `0x617430`: a creature, a pet, or a charmed, possessed, feared,
 /// confused or rooted player.
@@ -81,10 +82,10 @@ pub(crate) const CREATURE_STEP_UP_HEIGHT: f32 = 2.0;
 /// The step-up certify advance (yd), a floor under the frame's travel: the reference steps
 /// `max(H·tan50°, radius + 1/720)` into the face, 1.1918 yd at `H` = 1.0. The raised forward sweep
 /// is clipped by anything in the way, so the advance reaches only clear air.
-pub(super) const STEP_UP_ADVANCE: f32 = 1.191_753_6;
+pub(super) const STEP_UP_ADVANCE: f32 = STEP_UP_HEIGHT * STEP_UP_ADVANCE_PER_YARD;
 /// The certify reach per yard of rise budget, `tan 50°` (`0x636147`-`0x636190`); a creature's 2.0
 /// reaches 2.38 yd.
-pub(super) const STEP_UP_ADVANCE_PER_YARD: f32 = STEP_UP_ADVANCE / STEP_UP_HEIGHT;
+pub(super) const STEP_UP_ADVANCE_PER_YARD: f32 = 1.191_753_6;
 /// The foot cone's height (yd). The reference's solid (`0x631440`) is a box over a cone whose
 /// bevels rise `radius · [0x80c740]` from a point at the foot, so an edge below this is ridden up
 /// the 61.6° skirt (`0x635c00`) and one above meets the box and takes the step-up. With the

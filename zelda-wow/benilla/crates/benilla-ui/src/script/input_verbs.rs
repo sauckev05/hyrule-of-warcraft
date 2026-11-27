@@ -393,18 +393,21 @@ pub(super) fn install(lua: &Lua) -> mlua::Result<()> {
             Ok(())
         })?,
     )?;
-    // Zelda of Warcraft: `ZeldaRollAnim(kind)`, a roll (1 forward, 2 left, 3 right) or the
-    // backflip (4) just asked of the server: the hero tumbles through it when the push lands.
+    // Zelda of Warcraft: `ZeldaRollAnim(kind, key5)`, a roll (1 forward, 2 left, 3 right) or the
+    // backflip (4) just asked of the server: the hero tumbles through it when the push lands. With
+    // `key5` set the press came from key 5, which in the saddle spurs the mount instead.
     g.set(
         "ZeldaRollAnim",
-        lua.create_function(|lua, kind: Option<Value>| {
+        lua.create_function(|lua, (kind, key5): (Option<Value>, Option<Value>)| {
             let kind = match kind {
                 Some(Value::Integer(n)) => n as i64,
                 Some(Value::Number(n)) => n as i64,
                 _ => 1,
             }
             .clamp(1, 4) as u8;
-            push_call(lua, ScriptCall::ZeldaRoll(kind));
+            // the second argument: the press came from key 5, which spurs the mount in the saddle
+            let key5 = !matches!(key5, None | Some(Value::Nil) | Some(Value::Boolean(false)));
+            push_call(lua, ScriptCall::ZeldaRoll(kind | if key5 { 0x10 } else { 0 }));
             Ok(())
         })?,
     )?;

@@ -34,9 +34,10 @@ local bowDrawing = false       -- ".zbow draw" went out: the hero stands rooted 
 local ROLL_KINDS = { [".zroll f"] = 1, [".zroll l"] = 2, [".zroll r"] = 3, [".zflip"] = 4 }
 
 function ZeldaControls_Command(cmd)
-	local base = string.gsub(cmd, " 5$", "")       -- key 5's rolls carry a " 5" for the server
+	local base, key5 = string.gsub(cmd, " 5$", "")  -- key 5's rolls carry a " 5" for the server
 	if ROLL_KINDS[base] and ZeldaRollAnim then
-		ZeldaRollAnim(ROLL_KINDS[base])
+		-- key 5 also tells the client, which strikes the mount as the press spurs it in the saddle
+		ZeldaRollAnim(ROLL_KINDS[base], key5 > 0)
 	end
 	SendChatMessage(cmd, "SAY")
 end

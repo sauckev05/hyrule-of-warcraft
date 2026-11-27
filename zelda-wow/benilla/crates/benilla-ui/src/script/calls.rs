@@ -63,7 +63,8 @@ pub enum ScriptCall {
     ZeldaGuard { kind: u8, held: bool, secs: f32 },
     /// Zelda of Warcraft: `ZeldaRollAnim(kind)`, a dodge the hero has just asked the server for:
     /// 1 the forward roll, 2 and 3 the left and right side rolls, 4 the backflip. The body tumbles
-    /// through it when the server's push lifts it off the ground.
+    /// through it when the server's push lifts it off the ground. Bit 0x10: the press came from
+    /// key 5 (`ZeldaRollAnim(kind, true)`), which in the saddle spurs the mount.
     ZeldaRoll(u8),
     /// Zelda of Warcraft: `ZeldaDungeonMap(on, zoom)` turns the Minimap into the big dungeon map
     /// (square, zoomed out to `zoom` 0..3, widest first) or back into the corner disc.
