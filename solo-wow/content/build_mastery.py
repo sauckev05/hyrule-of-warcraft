@@ -406,6 +406,24 @@ SPELLS += [
           DurationIndex=0, SpellVisual=PLUNGE_GROUND_VISUAL)),
 ]
 
+# the belt arcanums (build_black_vault.py): Mathredis Firestar's two new librams make four belt
+# enchantments, used like the head and leg arcanums; each use spell is Lesser Arcane Amalgamation's
+# (15389) aimed at a belt. Their enchantments are stock rows (195 crit, 1983 block, 2078 dodge) and one
+# of ours, 2722 (+1% hit, Increased Hit Chance 1), added to SpellItemEnchantment.dbc for both the client
+# and the server
+LESSER_AMALGAMATION, BELT_MASK, ARMOR_SUBCLASSES = 15389, 1 << 6, 0x1e
+ENCHANT_HIT_1 = 2722
+BELT_ARCANA = [
+    (40040, 'Arcanum of Ferocity', 'Permanently adds 1% chance to get a critical strike to a belt.', 195),
+    (40041, 'Arcanum of Precision', 'Permanently adds 1% chance to hit to a belt.', ENCHANT_HIT_1),
+    (40042, 'Arcanum of the Bulwark', 'Permanently adds 1% chance to block attacks with a shield to a belt.', 1983),
+    (40043, 'Arcanum of Evasion', 'Permanently adds 1% chance to dodge to a belt.', 2078),
+]
+for _sid, _name, _text, _enchant in BELT_ARCANA:
+    SPELLS.append((_sid, LESSER_AMALGAMATION, _name, _text,
+                   dict(EffectMiscValue1=_enchant, EquippedItemClass=4, EquippedItemSubClassMask=ARMOR_SUBCLASSES,
+                        EquippedItemInventoryTypeMask=BELT_MASK)))
+
 # Blood Craze: every critical strike the hero lands heals 1% of maximum health a point (ZeldaCritHeal),
 # instead of healing over 6 sec after being crit; its ranks become dummy auras that no longer proc
 BLOOD_CRAZE = (16487, 16489, 16492)
@@ -505,7 +523,8 @@ CREATURE_COLUMNS = ['Entry', 'Name', 'SubName', 'MinLevel', 'MaxLevel', 'Display
 
 DBC_FIELD = {'Stances': 11, 'ProcFlags': 24, 'ProcCharges': 26, 'ProcChance': 25, 'RecoveryTime': 19, 'DurationIndex': 30, 'StackAmount': 39, 'RequiresSpellFocus': 15, 'Totem1': 40, 'Reagent1': 42, 'Reagent2': 43, 'ReagentCount1': 50, 'ReagentCount2': 51, 'SpellVisual': 115,
              'SpellIconID': 117, 'School': 1, 'Attributes': 6, 'AttributesEx': 7, 'AttributesEx3': 9, 'CastingTimeIndex': 18, 'InterruptFlags': 21, 'PowerType': 31,
-             'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'SpellFamilyName': 160,
+             'ManaCost': 32, 'RangeIndex': 36, 'EquippedItemClass': 58, 'EquippedItemSubClassMask': 59,
+             'EquippedItemInventoryTypeMask': 60, 'SpellFamilyName': 160,
              'SpellFamilyFlags': 161, 'DmgClass': 164}
 SQL_ONLY = ('copy_effect1_to_2', 'tooltip')
 for _i, _g in enumerate(EFFECT_GROUPS[:-1]):
