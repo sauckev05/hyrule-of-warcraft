@@ -558,7 +558,12 @@ pub(super) fn control(
         };
 
         // Zelda of Warcraft: the double jump. A second press in the air, once a flight, on foot and
-        // out of the water, launches again (the mover takes it), with the night elf's front flip.
+        // out of the water, launches again (the mover takes it), with the night elf's front flip. The
+        // water gives it back, as the ground does: a jump out of it has its double jump again.
+        if player.swimming {
+            player.zelda_double_used = false;
+            player.zelda_double_jump = false;
+        }
         if want_jump && !swimming && player.airborne_since.is_some() && !player.zelda_double_used
             && !player.modes.hover && !player.server_riding && knock_launch.is_none()
         {

@@ -66,13 +66,13 @@ pub(crate) const ROLL_SPINS: u32 = 2;
 pub(crate) const MOUNT_PUNCH: (u16, usize) = (17, 0);
 /// The plunge: Special2H, both arms up, then down, sword first. It plays as the guard key's clips do
 /// (kind 4): on to [`PLUNGE_POSE`] - crouched over the sword pointing down - in [`PLUNGE_DRAW_SECS`],
-/// and holds there all the way down; landing plays [`PLUNGE_LANDING`] (step 10) instead of the rest.
+/// and holds there all the way down; landing lets the rest play, the strike into the ground and back
+/// up. ([`PLUNGE_LANDING`], step 10, is the KneelEnd landing tried instead.)
 pub(crate) const PLUNGE_CLIP: (u16, usize) = (58, 0);
 pub(crate) const PLUNGE_POSE: f32 = 0.7;
 pub(crate) const PLUNGE_DRAW_SECS: f32 = 0.25;
-/// The plunge's landing (step 10), as the ground's thunder rings out: the clip and how long it plays (s).
+/// A landing clip of its own (step 10), unused while the strike's rest is the landing.
 pub(crate) const PLUNGE_LANDING: (u16, usize) = (116, 0); // KneelEnd: down on one knee, then up
-pub(crate) const PLUNGE_LANDING_SECS: f32 = 0.75;
 
 /// Where in the ranged Load clip the full draw holds (kind 3): near its end, short of the frame
 /// that would finish the one-shot.

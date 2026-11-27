@@ -1,8 +1,8 @@
 -- Zelda Controls: the inventory key (8) and the Subscreen (9).
 --
 -- 8 opens (or closes) the character sheet, every bag and the key ring together.
--- 9 opens the Subscreen, like Ocarina of Time's pause menu: one screen at a time - Spellbook &
--- Abilities, Talents, Quest Log, Main Menu (M still opens the map) - and Left / Right (the arrow keys, or the
+-- 9 opens the Subscreen, like Ocarina of Time's pause menu: one screen at a time - Quest Log, Talents,
+-- Spellbook & Abilities, Main Menu (M still opens the map) - and Left / Right (the arrow keys, or the
 -- arrows on its title bar) turn to the next screen. 9 or Escape closes it.
 
 -- ------------------------------------------------------------------ inventory
@@ -24,12 +24,12 @@ end
 
 -- ------------------------------------------------------------------ subscreen
 local PAGES = {
-	{ name = "Spellbook & Abilities", frame = "SpellBookFrame",
-	  open = function() if ToggleSpellBook then ToggleSpellBook(BOOKTYPE_SPELL or "spell") end end },
-	{ name = "Talents", frame = "TalentFrame",
-	  open = function() if ToggleTalentFrame then ToggleTalentFrame() end end },
 	{ name = "Quest Log", frame = "QuestLogFrame",
 	  open = function() if ToggleQuestLog then ToggleQuestLog() end end },
+	{ name = "Talents", frame = "TalentFrame",
+	  open = function() if ToggleTalentFrame then ToggleTalentFrame() end end },
+	{ name = "Spellbook & Abilities", frame = "SpellBookFrame",
+	  open = function() if ToggleSpellBook then ToggleSpellBook(BOOKTYPE_SPELL or "spell") end end },
 	{ name = "Main Menu", frame = "GameMenuFrame",
 	  open = function() if GameMenuFrame then ShowUIPanel(GameMenuFrame) end end },
 }

@@ -179,11 +179,9 @@ fn tumble(
         // down: the held crouch lets go, and the landing plays (the server's slam rings out with it)
         if state.plunging && !player.zelda_plunge {
             state.plunging = false;
+            // the strike plays on from its crouch: down into the ground and back up (the L4 landing)
             if sw.1.kind == 4 {
                 sw.1.held = false;
-            }
-            if player.airborne_since.is_none() && !player.swimming {
-                sw.0.push((10, crate::creature_anim::PLUNGE_LANDING_SECS));
             }
             trace(|| "plunge landed".to_string());
         }
@@ -202,6 +200,11 @@ fn tumble(
             state.spurs += 1;
         }
         trace(|| format!("spur key5 moving={moving} ready={ready}"));
+    }
+    // key 5 in the saddle only spurs (the server's ZeldaSpur): none of its rolls may tumble - on a
+    // slope or a cliff the mount leaves the ground on its own, which would read as a roll's push
+    if key5 && mounted {
+        request.pending = None;
     }
     if let Some(kind) = request.pending.take() {
         trace(|| format!("asked kind={kind} rolling={}", state.rolling.is_some()));
