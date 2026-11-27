@@ -498,6 +498,10 @@ installed on the PC with models in `E:\.ollama` (unused).
     - flags 0; still lock 93 (OpenTinkering, 6477), and the core's ZeldaDoorKeyHeld gates 160845
       on item 11197.
     - Dark Keeper Key: 100% from Watchman Doomgrip 9476, removed from Dark Keepers 9437–9443.
+    - The key is no longer used up (spellcharges_1 0): stock it was spent on the last vault door (174565,
+      lock 659), and the Dark Coffer behind it asks for it again. Gift tag Galahad:11197:r3 gives one more
+      (PC mangosd.conf and the code default). Installed: 026_black_vault.sql md5 69d010b4, conf backed up as
+      mangosd.conf.before-dkkey3.
     - Loot 11103 + the Crimson Martial Shirt at 100%.
     - Key gift: Zelda.Gifts adds Galahad:11197, in the code default and in the PC conf (conf
       backup mangosd.before-vault.conf).
