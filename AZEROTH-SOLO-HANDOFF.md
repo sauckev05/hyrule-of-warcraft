@@ -418,3 +418,8 @@ installed on the PC with models in `E:\.ollama` (unused).
   - md5s: benilla 1ca8830b…, ZeldaControls.lua a9d60ab5…, bgleave.lua f560ebad…, ZeldaHUD.toc 69532362….
   - Backups: ZeldaWoW\benilla.before-mountpunch.exe (acd6e12a…), ZeldaControls.lua.before-mountpunch.bak,
     ZeldaHUD.toc.before-bgleave.bak.
+- Now (installed 2026-11-26): the T1 scarf front.
+  - CAPE_COWL bulge front 0.04 → 0.03 and ridges 25% lower ((0.3, 0.0105, 0.16), (0.72, 0.012, 0.18)).
+    front_bulge stays 0.15, and the width and back are unchanged.
+  - Previews also had T2 (bulge 0.02, ridges ×0.5, front_bulge 0.1) and T3 (0.012, ×0.35, 0).
+  - patch-Z md5 facc6c3d…; backup patch-Z.before-T1.MPQ.bak (e566f0ff…).
