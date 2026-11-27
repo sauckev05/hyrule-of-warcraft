@@ -1,5 +1,5 @@
 diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
-index 9f973d40b..73543de5b 100644
+index 9f973d40b..44aa060e9 100644
 --- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
 +++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
 @@ -129,10 +129,16 @@ void instance_blackrock_depths::OnObjectCreate(GameObject* pGo)
@@ -21,14 +21,14 @@ index 9f973d40b..73543de5b 100644
          case GO_SHADOW_LOCK:
          case GO_SHADOW_MECHANISM:
          case GO_SHADOW_GIANT_DOOR:
-@@ -148,8 +154,23 @@ void instance_blackrock_depths::OnObjectCreate(GameObject* pGo)
+@@ -148,8 +154,18 @@ void instance_blackrock_depths::OnObjectCreate(GameObject* pGo)
          case GO_SPECTRAL_CHALICE:
          case GO_CHEST_SEVEN:
          case GO_ARENA_SPOILS:
 +            break;
 +        // Zelda of Warcraft: the Black Vault, done, stays done when the instance loads again (a server
-+        // restart): the secret door open, the Secret Safe usable (the vault's end opened both, and that
-+        // never runs again), and the twelve Relic Coffer Doors open
++        // restart): the secret door open and the Secret Safe usable (the vault's end opened both, and that
++        // never runs again; no key opens them). The Relic Coffer Doors stay shut: their keys open them
          case GO_SECRET_DOOR:
 +            if (m_auiEncounter[1] == DONE)
 +                pGo->SetGoState(GO_STATE_ACTIVE);
@@ -37,11 +37,6 @@ index 9f973d40b..73543de5b 100644
 +            if (m_auiEncounter[1] == DONE)
 +                pGo->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
 +            break;
-+        case 174554: case 174555: case 174556: case 174557: case 174558: case 174559:
-+        case 174560: case 174561: case 174562: case 174563: case 174564: case 174565:
-+            if (m_auiEncounter[1] == DONE)
-+                pGo->SetGoState(GO_STATE_ACTIVE);
-+            return;
          case GO_JAIL_DOOR_SUPPLY:
          case GO_JAIL_SUPPLY_CRATE:
          case GO_DWARFRUNE_A01:
@@ -2060,7 +2055,7 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..33c085e34
+index 000000000..97af2b8a9
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
 @@ -0,0 +1,6618 @@
@@ -4680,7 +4675,7 @@ index 000000000..33c085e34
 +{
 +    // "Name:item" once, or "Name:item:tag" once more for each new tag; the gift is marked given only
 +    // once it is in the bags or the mail, and each step goes to the server log
-+    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Galahad:6975 Galahad:191140 Galahad:20608:again Galahad:11197");
++    static std::string const gifts = sConfig.GetStringDefault("Zelda.Gifts", "Galahad:6975 Galahad:191140 Galahad:20608:again Galahad:11197 Galahad:11078:k1 Galahad:11078:k2 Galahad:11078:k3 Galahad:11078:k4 Galahad:11078:k5 Galahad:11078:k6 Galahad:11078:k7 Galahad:11078:k8 Galahad:11078:k9 Galahad:11078:k10 Galahad:11078:k11 Galahad:11078:k12");
 +    std::istringstream in(gifts);
 +    std::string word;
 +    while (in >> word)
