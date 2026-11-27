@@ -556,3 +556,20 @@ installed on the PC with models in `E:\.ollama` (unused).
   - Second set of keys gifted: Galahad:11197:r2 and Galahad:11078:r1…r12, in the PC conf (backup
     mangosd.before-keys2.conf) and the code default.
   - benilla 313d5ad8…; backup benilla.before-pickfix.exe (49af505d…).
+
+## Update 2026-11-27 afternoon: arcanums and resistances (installed)
+
+- Head/leg arcanums (build_black_vault.py LESSER_ARCANA edits the stock SpellItemEnchantment rows, so
+  gear already enchanted follows; use texts in build_mastery DESCRIPTION_EDITS 15340/15389/15391/15394):
+  - 1483 Rumination → +1% crit (7597); 1503 Constitution → +1% hit (15464);
+    1504 Tenacity → +1% block (21469) and +1% dodge (13669); 1505 Resilience → +20 all resistances (18691).
+- Resistances (core, solocraft.patch):
+  - Unit::CalculateEffectiveMagicResistancePercent: a player's percent ×2 (75% cap kept); creature
+    resistance penetration (SPELL_AURA_MOD_TARGET_RESISTANCE) ignored against players.
+  - Player::IsImmuneToSpellEffect: negative MOD_RESISTANCE / MOD_RESISTANCE_PCT on magic schools are
+    immune (Curse of the Elemental Lord etc.); armor debuffs (mask with Normal) still land.
+  - Why elementals hurt (combat log 11/27): their melee is Fire school, so armor never applies; elite
+    melee ×6 (Zelda.EliteMeleeDamageRate) ×0.9 SoloCraft; Fireguard Destroyer's Thrash. Not changed.
+- md5s: mangosd debf84a9 (backup mangosd.before-resist.exe), patch-Z ce630966 (backup
+  patch-Z.MPQ.before-arcana), server SpellItemEnchantment.dbc f4fa4cc8 (backup
+  data\dbc-before-hero\SpellItemEnchantment.before-arcana.dbc).
