@@ -538,3 +538,8 @@ installed on the PC with models in `E:\.ollama` (unused).
   - md5s: benilla 49af505d…, mangosd df155e6b…, patch-Z eb63120a…, 026 8fa349a5….
   - Backups: benilla.before-buckles.exe, mangosd.before-vaultfix.exe, patch-Z.before-buckles.MPQ.bak,
     026_black_vault.sql.before-vaultfix.bak.
+- Now (installed 2026-11-27, f99349c8): the Relic Coffer Doors stay shut after a restart (the
+  instance no longer opens them on DONE; only the secret door and the Secret Safe are restored).
+  12 Relic Coffer Keys (11078) are gifted to Galahad: Zelda.Gifts has Galahad:11078:k1…k12, in the
+  code default and the PC conf (backup mangosd.before-relickeys.conf).
+  mangosd 83b139c4…; backup mangosd.before-relickeys.exe (df155e6b…).
