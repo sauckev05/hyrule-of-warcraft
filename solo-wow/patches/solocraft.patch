@@ -9413,7 +9413,7 @@ index 60cf414d8..ae7107eb9 100644
      AreaTrigger const* at = sObjectMgr.GetAreaTrigger(Trigger_ID);
      if (!at)
 diff --git a/src/game/Entities/Player.cpp b/src/game/Entities/Player.cpp
-index 4d8e9160a..cf6db22da 100644
+index 4d8e9160a..2766f549e 100644
 --- a/src/game/Entities/Player.cpp
 +++ b/src/game/Entities/Player.cpp
 @@ -17,6 +17,7 @@
@@ -9809,7 +9809,22 @@ index 4d8e9160a..cf6db22da 100644
      // find current max talent rank
      uint32 curtalent_maxrank = 0;
      for (int32 k = MAX_TALENT_RANK - 1; k > -1; --k)
-@@ -20032,7 +20186,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
+@@ -19976,6 +20130,14 @@ bool Player::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex
+     {
+         case SPELL_AURA_MOD_TAUNT:
+             return true;
++        // Zelda of Warcraft: nothing lowers the hero's magic resistances (Curse of the Elemental Lord and
++        // the like); armor-lowering effects (Sunder Armor, Faerie Fire) still land
++        case SPELL_AURA_MOD_RESISTANCE:
++        case SPELL_AURA_MOD_RESISTANCE_PCT:
++            if (!castOnSelf && spellInfo->EffectBasePoints[index] < 0 &&
++                (spellInfo->EffectMiscValue[index] & SPELL_SCHOOL_MASK_MAGIC) && !(spellInfo->EffectMiscValue[index] & SPELL_SCHOOL_MASK_NORMAL))
++                return true;
++            break;
+         default:
+             break;
+     }
+@@ -20032,7 +20194,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, uint32& m
      }
  
      // Quest Requirements
@@ -9818,7 +9833,7 @@ index 4d8e9160a..cf6db22da 100644
      {
          miscRequirement = at->requiredQuest;
          return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-@@ -20221,6 +20375,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
+@@ -20221,6 +20383,10 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
      if (itemProto)
          pickCooldowns(itemProto);
  
@@ -9829,7 +9844,7 @@ index 4d8e9160a..cf6db22da 100644
      bool haveToSendEvent = false;
      bool wasPermanent = false;
      uint32 oldItemId = 0;
-@@ -20436,10 +20594,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
+@@ -20436,10 +20602,10 @@ bool Player::CanEnterNewInstance(uint32 instanceId)
      if (IsGameMaster())
          return true;
  
@@ -9924,7 +9939,7 @@ index 70b4e7d00..540b7db72 100644
      crit += GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_CRIT_CHANCE);
      // Increase crit by school from SPELL_AURA_MOD_SPELL_CRIT_CHANCE_SCHOOL
 diff --git a/src/game/Entities/Unit.cpp b/src/game/Entities/Unit.cpp
-index 00986af9e..44979681e 100644
+index 00986af9e..3bed24e11 100644
 --- a/src/game/Entities/Unit.cpp
 +++ b/src/game/Entities/Unit.cpp
 @@ -17,6 +17,7 @@
@@ -10183,7 +10198,27 @@ index 00986af9e..44979681e 100644
  }
  
  float Unit::GetHitChance(SpellSchoolMask schoolMask) const
-@@ -4976,6 +5101,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
+@@ -3923,6 +4048,9 @@ float Unit::CalculateEffectiveMagicResistancePercent(const Unit* attacker, Spell
+         {
+             int32 amount = GetResistance(SpellSchools(school));
+             int32 penetration = attacker ? attacker->GetResistancePenetration(SpellSchools(school)) : 0;
++            // Zelda of Warcraft: enemies do not get through the hero's resistances
++            if (GetTypeId() == TYPEID_PLAYER && attacker && attacker->GetTypeId() == TYPEID_UNIT && !attacker->IsPlayerControlled())
++                penetration = std::min(penetration, 0);
+ 
+             // Modify by penetration, but can't go negative with it
+             int32 result = (amount - penetration);
+@@ -3945,6 +4073,9 @@ float Unit::CalculateEffectiveMagicResistancePercent(const Unit* attacker, Spell
+         percent += (float(resistance) / skill) * 100;
+         // Pre-3.0: multiplied by 0.75
+         percent *= 0.75f;
++        // Zelda of Warcraft: the hero's resistances take off twice as much (still capped at 75%)
++        if (GetTypeId() == TYPEID_PLAYER)
++            percent *= 2.0f;
+         // Bonus resistance percent by positive level difference when calculating damage hit for NPCs only
+         if (!binary && GetTypeId() == TYPEID_UNIT && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
+             percent += (0.4f * std::max(int32(GetSkillMaxForLevel(attacker) - skill), 0));
+@@ -4976,6 +5107,11 @@ bool Unit::RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder)
                  || (holder->GetTriggeredBy() && holder->GetTriggeredBy()->Id == existingSpellId))
              continue;
  
@@ -10195,7 +10230,7 @@ index 00986af9e..44979681e 100644
          bool unique = false;
          bool personal = false;
          if (spellId == existingSpellId)
-@@ -6097,7 +6227,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
+@@ -6097,7 +6233,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
  
      WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4) + 1 + (lines * (4 + 4 + 4 + 4 + 4)) + (4 + 4 + 4 + 4));
  
@@ -10204,7 +10239,7 @@ index 00986af9e..44979681e 100644
      data << calcDamageInfo->attacker->GetPackGUID();
      data << calcDamageInfo->target->GetPackGUID();
      data << uint32(calcDamageInfo->totalDamage);                // Total damage
-@@ -7002,6 +7132,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
+@@ -7002,6 +7138,15 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, SpellEffectIndex
              total += int32(ap_bonus * (GetTotalAttackPowerValue(IsSpellRequiresRangedAP(spellProto) ? RANGED_ATTACK : BASE_ATTACK) + ap_benefit));
          }
      }
@@ -10220,7 +10255,7 @@ index 00986af9e..44979681e 100644
  
      if (benefit)
      {
-@@ -7050,7 +7189,9 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
+@@ -7050,7 +7195,9 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
  
      // Creature damage
      if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
@@ -10231,7 +10266,7 @@ index 00986af9e..44979681e 100644
  
      AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
      for (auto i : mModDamagePercentDone)
-@@ -7167,6 +7308,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
+@@ -7167,6 +7314,13 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
                  DoneAdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
              }
          }
@@ -10245,7 +10280,7 @@ index 00986af9e..44979681e 100644
      }
      return DoneAdvertisedBenefit;
  }
-@@ -7309,6 +7457,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
+@@ -7309,6 +7463,13 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
              AdvertisedBenefit += int32(GetStat(usedStat) * i->GetModifier()->m_amount / 100.0f);
          }
      }
@@ -10259,7 +10294,7 @@ index 00986af9e..44979681e 100644
      return AdvertisedBenefit;
  }
  
-@@ -7598,6 +7753,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
+@@ -7598,6 +7759,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
      {
          if (Player* modOwner = GetSpellModOwner())
              modOwner->ApplySpellMod(spellInfo->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, tmpDamage);
@@ -10269,7 +10304,7 @@ index 00986af9e..44979681e 100644
      }
  
      // bonus result can be negative
-@@ -8095,6 +8253,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
+@@ -8095,6 +8259,13 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
      if (dVal == 0)
          return 0;
  
@@ -10283,7 +10318,7 @@ index 00986af9e..44979681e 100644
      int32 curPower = (int32)GetPower(power);
  
      int32 val = dVal + curPower;
-@@ -8404,6 +8569,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
+@@ -8404,6 +8575,9 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
      // for player case, we look for some custom rates
      if (GetTypeId() == TYPEID_PLAYER)
      {
