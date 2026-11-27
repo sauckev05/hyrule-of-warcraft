@@ -99,7 +99,7 @@ CAPE_COWL = dict(  # R2 (from F3): the scarf rests on the body like a mound, two
     neck=dict(front=(0.09, 0.08), back=(0.10, 0.085)),       # behind: up under the helm's back edge (F3 had 0.09, 0.08)
     top_z=dict(front=1.765, back=1.82),                    # (F3 had 1.77, which left a gap under some helms)
     front_dip=0.03,
-    foot=(0.165, 0.19, 0.2),
+    foot=(0.165, 0.177, 0.2),                             # S2: the front a little narrower (side reach was 0.19)
     lean_in=dict(front=0.15, back=0.1),
     foot_min_z=1.56,
     bulge=dict(front=0.02, back=0.065),                   # T2: front half as thick (R2 0.06, then 0.04, T1 0.03), same width
@@ -114,6 +114,7 @@ CAPE_COWL = dict(  # R2 (from F3): the scarf rests on the body like a mound, two
     rows=20,
     ridges=((0.3, 0.007, 0.16), (0.72, 0.008, 0.18)),       # T2: the two soft rolls half as high (R2 0.02/0.022, then 0.014/0.016)
     ridge_spread=1.5,
+    blend_power=2.5,                                       # S2: the sides as flat as the front, no bumps
 )
 CAPE_PROFILE_BOTTOM = 0.40         # with a worn hem: where CAPE_PROFILE's shape ends (T2 was drawn to 0.40)
 CAPE_BORDER_V = 0.90               # with a worn hem: the texture v above which the hem's border is drawn to scale
@@ -131,7 +132,12 @@ TABARD = 1202
 # its texture the body's own at that spot (so each belt's design, buckle and all, is on it), with an
 # optional raised buckle plate at the front; geoset: 0 to preview it on the body, else its own submesh
 # (BELT_GEOSET, drawn with the body's texture, two-sided), which the client shows when a belt is worn
-BELT = dict(geoset=1652, thick=0.008, grow=0.006, buckle=dict(half_angle=16, thick=0.009, rise=0.008))   # E3
+# E3's band; its buckle a rounded rectangle in geosets of its own that the client picks by the belt
+# (Benilla geosets.rs): 1653 for most belts, 1654 bigger (wider, taller, further out) for the tall ones,
+# none for the thin ones
+BELT = dict(geoset=1652, thick=0.008, grow=0.006,
+            buckles={1653: dict(half_angle=16, thick=0.009, rise=0.008, corner=0.018),
+                     1654: dict(half_angle=21, thick=0.011, rise=0.016, corner=0.022)})
 BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
@@ -392,6 +398,7 @@ def _mound_geometry(m, d, recs, pos, c):
         if isinstance(val, dict):
             wb = (1 - math.cos(th)) / 2
             wb = wb * wb * (3 - 2 * wb)
+            wb = wb ** c.get('blend_power', 1.0)          # above 1: the front's look reaches further round
             if isinstance(val['front'], (list, tuple)):
                 return [f + (b_ - f) * wb for f, b_ in zip(val['front'], val['back'])]
             return val['front'] + (val['back'] - val['front']) * wb
@@ -1062,44 +1069,60 @@ def _belt_geometry(m, d, recs, pos):
         faces += [(ao_t, ao_b, bo_t), (bo_t, ao_b, bo_b)]           # the band's face
         faces += [(ai_t, ao_t, bi_t), (bi_t, ao_t, bo_t)]           # its top rim
         faces += [(ao_b, ai_b, bo_b), (bo_b, ai_b, bi_b)]           # its bottom rim
-    # the buckle plate: a raised slab at the front, the belt's own buckle drawn on it
-    bk = c.get('buckle')
-    if bk:
-        half_a = bk['half_angle']
-        rows_ = []
-        for z_frac in (0.0, 1.0):
-            row = []
-            for s_ in (-1.0, -0.5, 0.0, 0.5, 1.0):
-                a = s_ * half_a
-                zt = belt_z(abs(a), v_top) + grow + bk.get('rise', 0.0)
-                zb = belt_z(abs(a), v_bot) - grow - bk.get('rise', 0.0)
-                z = zt + (zb - zt) * z_frac
-                sf = surface(a, z)
-                if sf is None:
-                    row.append(None); continue
-                p, uv, w, out = sf
-                u = 0.504 + (bk.get('u_edge', 0.58) - 0.504) * abs(s_)
-                vv = v_top + (v_bot - v_top) * z_frac
-                lift = 0.002 + thick + bk['thick']
-                row.append((vertex(p + out * lift, (u, vv), w, out), vertex(p + out * (0.002 + thick), (u, vv), w, out)))
-            rows_.append(row)
-        top, bot = rows_
-        for k in range(4):
-            if None in (top[k], top[k + 1], bot[k], bot[k + 1]):
+    # the buckle plates: a raised plate at the front, the belt's own buckle drawn on it - a rounded
+    # rectangle (corner radius 'corner', m; 0: square), 'half_angle' each way round and 'rise' past the
+    # band above and below. 'buckle' goes into the band itself; 'buckles' ({geoset: plate}) are
+    # geosets of their own (none, normal, big), which the client picks by the belt worn
+    def plate(bk):
+        out_faces = []
+        half_a, rise, corner = bk['half_angle'], bk.get('rise', 0.0), bk.get('corner', 0.0)
+        r_front = abs(surface(0.0, belt_z(0.0, (v_top + v_bot) / 2))[0][0] - cx)
+        zt0 = belt_z(0.0, v_top) + grow + rise
+        zb0 = belt_z(0.0, v_bot) - grow - rise
+        zc = (zt0 + zb0) / 2
+        hw = math.radians(half_a) * r_front                # half width along the waist (m)
+        hh = (zt0 - zb0) / 2
+        rc = min(corner, hw * 0.95, hh * 0.95)
+        steps = bk.get('corner_steps', 5)
+        outline = []                                      # (x along the waist, z offset), anticlockwise from the right
+        for cxs, czs, a0 in ((1, 1, 0), (-1, 1, 90), (-1, -1, 180), (1, -1, 270)):
+            ox, oz = cxs * (hw - rc), czs * (hh - rc)
+            for k in range(steps + 1):
+                ang = math.radians(a0 + 90.0 * k / steps)
+                outline.append((ox + rc * math.cos(ang), oz + rc * math.sin(ang)))
+        lift = 0.002 + thick + bk['thick']
+        def plate_vertex(x, zo, depth):
+            a = math.degrees(x / r_front)
+            z = zc + zo
+            sf = surface(a, z)
+            if sf is None:
+                return None
+            p, uv, w, out = sf
+            u = 0.504 + (bk.get('u_edge', 0.58) - 0.504) * min(1.0, abs(a) / half_a)
+            vv = min(v_bot, max(v_top, v_top + (v_bot - v_top) * (zt0 - rise - z) / ((zt0 - zb0 - 2 * rise) or 1)))
+            return vertex(p + out * depth, (u, vv), w, out)
+        centre = plate_vertex(0.0, 0.0, lift)
+        front = [plate_vertex(x, zo, lift) for x, zo in outline]
+        back = [plate_vertex(x, zo, 0.002 + thick) for x, zo in outline]
+        n_o = len(outline)
+        for k in range(n_o):
+            a_, b_ = k, (k + 1) % n_o
+            if None in (centre, front[a_], front[b_]):
                 continue
-            faces += [(top[k][0], bot[k][0], top[k + 1][0]), (top[k + 1][0], bot[k][0], bot[k + 1][0])]
-        for row, flip in ((top, False), (bot, True)):                 # its top and bottom edges
-            for k in range(4):
-                if None in (row[k], row[k + 1]):
-                    continue
-                f = [(row[k][1], row[k][0], row[k + 1][1]), (row[k + 1][1], row[k][0], row[k + 1][0])]
-                faces += [(x, z_, y) for x, y, z_ in f] if flip else f
-        for k, flip in ((0, True), (4, False)):                        # its ends
-            if None in (top[k], bot[k]):
+            out_faces.append((centre, front[a_], front[b_]))              # the face
+            if None in (back[a_], back[b_]):
                 continue
-            f = [(top[k][1], bot[k][1], top[k][0]), (top[k][0], bot[k][1], bot[k][0])]
-            faces += [(x, z_, y) for x, y, z_ in f] if flip else f
+            out_faces += [(front[a_], back[a_], front[b_]), (front[b_], back[a_], back[b_])]   # its rim
+        return out_faces
+    if c.get('buckle'):
+        faces += plate(c['buckle'])
+    _BELT_EXTRA.clear()
+    for geoset, bk in c.get('buckles', {}).items():
+        _BELT_EXTRA[int(geoset)] = plate(bk)
     return faces
+
+
+_BELT_EXTRA = {}                    # the buckles' faces by geoset (BELT 'buckles'), for _cape_extras
 
 
 def _cape_extras(m, d, pos):
@@ -1200,6 +1223,9 @@ def _cape_extras(m, d, pos):
             struct.pack_into('<4H', d, o_sub + tab_k * 32 + 4, *tab_rec)
     if belt_tris and BELT.get('geoset', BELT_GEOSET) != 0:
         _add_belt_submesh(d, belt_tris, BELT.get('geoset', BELT_GEOSET))
+    for geoset, tris in sorted(_BELT_EXTRA.items()):
+        if tris:
+            _add_belt_submesh(d, tris, geoset)
 
 
 def _add_belt_submesh(d, faces, sub_id):

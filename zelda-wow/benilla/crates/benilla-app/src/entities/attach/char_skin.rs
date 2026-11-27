@@ -171,6 +171,10 @@ pub(in crate::entities) fn equip_geosets(
                 eg.bodyslots[i] = worn[i].map(|row| row.geoset_groups);
             }
         }
+        // Zelda of Warcraft: the buckle the worn belt shows on the 3D belt
+        if let Some(belt) = worn[2] {
+            eg.belt_buckle = benilla_formats::belt_buckle(&belt.region_textures);
+        }
         // B3's gate is the ArmLower tile's occupancy in the composite plan, not a worn chest.
         eg.forearm_dressed = benilla_formats::forearm_dressed(&worn);
         if cloak != 0 {

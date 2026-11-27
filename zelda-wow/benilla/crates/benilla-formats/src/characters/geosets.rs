@@ -16,6 +16,57 @@ const HELMET_GEOSET_VIS: &str = "DBFilesClient\\HelmetGeosetVisData.dbc";
 /// Zelda of Warcraft's 3D belt (build_hero.py `BELT_GEOSET`): a managed ID (at most 1700, so it is
 /// hidden unless picked), shown when the belt slot is worn.
 pub const ZELDA_BELT_GEOSET: u16 = 1652;
+/// Zelda of Warcraft: the 3D belt's buckle plates (build_hero.py BELT 'buckles'): the rounded plate
+/// most belts wear, and the bigger one of the tall belts.
+pub const ZELDA_BUCKLE_GEOSET: u16 = 1653;
+pub const ZELDA_BIG_BUCKLE_GEOSET: u16 = 1654;
+
+/// Zelda of Warcraft: which buckle a worn belt shows on the 3D belt, by how tall its painted strip is.
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BeltBuckle {
+    /// The rounded plate: belts painted the strip's 16 pixels high, or a little less.
+    #[default]
+    Normal,
+    /// No plate: thin straps (9 pixels or less).
+    None,
+    /// The bigger plate: belts painted taller than the strip (17 pixels and more, or onto the
+    /// lower torso too).
+    Big,
+}
+
+/// LegUpper texture basenames (lowercase) of belts painted 9 pixels high or less: no buckle.
+const THIN_BELTS: &[&str] = &[
+    "plate_ahnqiraj_a_01blue_belt_lu", "plate_ahnqiraj_a_01yellow_belt_lu", "plate_b_04 _brass_belt_lu",
+    "plate_b_04 _purple_belt_lu", "plate_b_04 _silver_belt_lu", "plate_raidpaladin_b_01_belt_lu",
+    "plate_raidwarrior_b_01black_belt_lu", "robe_raidmage_c_01_belt_lu",
+];
+/// LegUpper texture basenames (lowercase) of belts painted 17 pixels high or more: the big buckle.
+const TALL_BELTS: &[&str] = &[
+    "leather_horde_c_02brown_pant_lu", "leather_horde_c_02green_pant_lu", "leather_horde_c_02red_pant_lu",
+    "mail_horde_a_02black_pant_lu", "mail_horde_a_02gold_pant_lu", "mail_horde_a_02green_pant_lu",
+    "plate_c_03_belt_lu", "plate_d_03green_pant_lu", "plate_horde_b_05rusty_belt_lu",
+    "plate_horde_c_01gold_belt_lu", "plate_horde_c_05blue_belt_lu", "plate_horde_c_05burgandy_belt_lu",
+    "plate_horde_c_05gold_belt_lu",
+];
+
+/// The buckle for a belt display, from its body-region textures (TorsoLower, LegUpper): measured
+/// from every belt in the 1.12.1 data (the rows of its LegUpper texture more than half opaque).
+pub fn belt_buckle(region_textures: &[Option<String>; 8]) -> BeltBuckle {
+    if region_textures[4].as_deref().is_some_and(|t| !t.is_empty()) {
+        return BeltBuckle::Big;
+    }
+    let Some(lu) = region_textures[5].as_deref() else {
+        return BeltBuckle::Normal;
+    };
+    let lu = lu.to_ascii_lowercase();
+    if THIN_BELTS.contains(&lu.as_str()) {
+        BeltBuckle::None
+    } else if TALL_BELTS.contains(&lu.as_str()) {
+        BeltBuckle::Big
+    } else {
+        BeltBuckle::Normal
+    }
+}
 
 const REGION_BASES: [u16; 16] = [
     1, 101, 201, 301, 401, 501, 601, 702, 801, 901, 1001, 1101, 1201, 1301, 1401, 1501,
@@ -62,6 +113,8 @@ pub struct EquipGeosets {
     /// Branch B6's gate `[cc+0xc]`: the tabard designer is open (setter `0x5e07fb`), so the body
     /// wears a previewable tabard over an empty tabard slot.
     pub tabard_preview: bool,
+    /// Zelda of Warcraft: the worn belt's buckle on the 3D belt ([`belt_buckle`]).
+    pub belt_buckle: BeltBuckle,
 }
 
 impl CharacterGeosets {
@@ -179,6 +232,11 @@ impl CharacterGeosets {
         // belts are painted (build_hero.py BELT, geoset ZELDA_BELT_GEOSET); no stock model has it.
         if equip.bodyslots[2].is_some() {
             set.push(ZELDA_BELT_GEOSET);
+            match equip.belt_buckle {
+                BeltBuckle::Normal => set.push(ZELDA_BUCKLE_GEOSET),
+                BeltBuckle::Big => set.push(ZELDA_BIG_BUCKLE_GEOSET),
+                BeltBuckle::None => {}
+            }
         }
         // The client sets a flag per submesh (`0x7110d0`), so a repeated enable is a no-op there.
         set.sort_unstable();
