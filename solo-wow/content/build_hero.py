@@ -152,6 +152,9 @@ CAPE_STRAIGHT = 0.0
 # cloak's straight back sits nearer the body there, and would swallow the scarf's back point)
 CAPE_COWL_KEEP_REST = True
 _COWL_REST = None        # those positions, while a model is built
+# with a straight back: keep the old shape round the scarf's back point (None: straight everywhere): an
+# ellipse round (y 0, z) of the given (y, z) radii; inside ease[0] radii old, past ease[1] straight
+CAPE_STRAIGHT_KEEP_BUMP = None
 BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
@@ -1434,6 +1437,19 @@ def build_model(stock, sound_map):
             finally:
                 globals()['CAPE_STRAIGHT'] = straight
         _full_cape(m, pos)
+        if CAPE_STRAIGHT and CAPE_STRAIGHT_KEEP_BUMP and _COWL_REST:
+            # round the scarf's back the cloak keeps its old shape (the bump the scarf rests on),
+            # easing into the straight back further out
+            kb = CAPE_STRAIGHT_KEEP_BUMP
+            for sm in m.subs:
+                if sm['id'] != FULL_CAPE:
+                    continue
+                for v in {m.vlookup[m.tris[t]] for t in range(sm['st'], sm['st'] + sm['nt'])}:
+                    x, y, z = pos[v]
+                    e = math.hypot(y / kb['radii'][0], (z - kb['z']) / kb['radii'][1])
+                    w = max(0.0, min(1.0, (e - kb['ease'][0]) / (kb['ease'][1] - kb['ease'][0])))
+                    w = w * w * (3 - 2 * w)
+                    pos[v] = tuple(a + (b - a) * w for a, b in zip(_COWL_REST[v], pos[v]))
     # the split cape, longer: everything below the anchor is stretched down (and a little back)
     cape = set()
     for s in m.subs:
