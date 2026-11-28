@@ -141,7 +141,10 @@ BELT = dict(geoset=1652, thick=0.008, grow=0.006,
 # the cloak given thickness (None: a single sheet): its back sheet copied out behind it by depth (model
 # units), tapering to nothing over the shoulders (full below taper[0], none above taper[1]), and the
 # side and hem edges closed with a strip, so the cloth shows its thickness all round
-CAPE_THICK = dict(depth=0.02)      # K1
+CAPE_THICK = dict(depth=0.02, taper=(1.90, 2.00))   # K1, thick over the shoulders too (taper above the yoke)
+# the cloak's extra half width (model units), growing from none under the shoulders to all of it at the
+# profile's end: K3's width (its 0.06 thickness spread the edges by about this much over K1's 0.02)
+CAPE_WIDEN = 0.04
 BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
@@ -252,6 +255,7 @@ def _cloak_at(u, s):
     x_mid = -0.20 - 0.10 * u                                          # the middle hangs behind
     x_edge = CAPE_EDGE_X + CAPE_EDGE_FORWARD * min(u, 1.0)            # the edges come round the legs
     nz = 1.42 - u * (1.42 - _profile_bottom())
+    half += CAPE_WIDEN * min(u, 1.0)                                  # wider going down
     return (x_mid + (x_edge - x_mid) * s * s, s * half, nz)
 
 

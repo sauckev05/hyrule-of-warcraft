@@ -596,3 +596,6 @@ installed on the PC with models in `E:\.ollama` (unused).
   edges with a strip; added to the cloak submesh. Previews: /home/claude/body/thick_build.py + cowl_render.py
   (bpy as a python module now: `python3 cowl_render.py -- ...`). patch-Z 1f580563 (out41; backup
   patch-Z.MPQ.before-capethick).
+- Then: K3's width with K1's thickness, and thick over the shoulders: CAPE_THICK taper (1.90, 2.00)
+  (no taper on the yoke), CAPE_WIDEN 0.04 (half width + 0.04·min(u, 1) in _cloak_at). patch-Z ddc970ee
+  (out42; the K1 build 1f580563 is replaced, pre-thickness backup still patch-Z.MPQ.before-capethick).
