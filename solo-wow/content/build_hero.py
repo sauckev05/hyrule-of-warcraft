@@ -147,7 +147,7 @@ CAPE_THICK = dict(depth=0.02, taper=(1.90, 2.00))   # K1, thick over the shoulde
 CAPE_WIDEN = 0.04
 # how straight the cloak's back runs from the neck down (0: the yoke between the shoulder blades sits as far
 # back as the panel's top, a bump; 1: neck, shoulder blades and panel in one straight line to the hem)
-CAPE_STRAIGHT = 0.0
+CAPE_STRAIGHT = 1.0                # Q1: straight from the neck down (S2), the scarf keeping its rest
 # with a straight back: the scarf still rests where it did on the cloak before it was straightened (the
 # cloak's straight back sits nearer the body there, and would swallow the scarf's back point)
 CAPE_COWL_KEEP_REST = True
