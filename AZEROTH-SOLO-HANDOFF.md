@@ -630,3 +630,13 @@ installed on the PC with models in `E:\.ollama` (unused).
   its item icon INV_Zelda_Shard_24 re-tinted to match).
 - md5s: patch-Z a925c0f3 (out46; backup before the screen: patch-Z.MPQ.before-shards), shardsdata.lua 20ca00a1, mangosd 7e767bf2 (backup
   mangosd.before-shards.exe), addon files backed up as *.before-shards.
+
+## Shards on the screen only; Linken's sword quest; cape S0 (installed 2026-11-28)
+
+- Crystal Shards are no longer items: GiveShard writes only the 'shard:<item>' key (DirectPExecute) and
+  tells the hero it shines on the Crystal Shards screen. At login ZeldaShardsToScreen takes any shard item
+  still carried (bags, bank, keyring), keeps its key, and logs "Zelda shards: ... moved to the screen".
+- The Light of Every Dungeon (90520) completes once all 24 dungeon keys exist (AllDungeonShardsEarned) and
+  the hilt is held; ZeldaQuestExtraTake takes nothing but the hilt. Its texts (story.py -> 001) say so.
+- Cape back to S0: CAPE_STRAIGHT 0.0. patch-Z 101bd9bb (out47; backup patch-Z.MPQ.before-s0).
+- mangosd 24723aab (backup mangosd.before-shardquest.exe); 001_companions.sql backup *.before-shardquest.
