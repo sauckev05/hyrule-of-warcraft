@@ -141,7 +141,7 @@ BELT = dict(geoset=1652, thick=0.008, grow=0.006,
 # the cloak given thickness (None: a single sheet): its back sheet copied out behind it by depth (model
 # units), tapering to nothing over the shoulders (full below taper[0], none above taper[1]), and the
 # side and hem edges closed with a strip, so the cloth shows its thickness all round
-CAPE_THICK = None
+CAPE_THICK = dict(depth=0.02)      # K1
 BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out

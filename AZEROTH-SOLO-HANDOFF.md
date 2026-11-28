@@ -585,3 +585,14 @@ installed on the PC with models in `E:\.ollama` (unused).
 - md5s: mangosd 583fc112 (backup mangosd.before-rescurve.exe = debf84a9), patch-Z 8af44eb4 (backup
   patch-Z.MPQ.before-res50), server SpellItemEnchantment.dbc 83e544c0 (backup
   data\dbc-before-hero\SpellItemEnchantment.before-res50.dbc).
+
+## Update 2026-11-27 night: Windsor and cape thickness (installed)
+
+- Jail Break (blackrock_depths.cpp npc_marshal_windsor): paused at a cell with no living prisoner
+  (PrisonerLeft), out of combat, he walks on after 5 s. mangosd 90a99cd6 (backup mangosd.before-windsor.exe).
+- Hero cape thickness: build_hero.py CAPE_THICK = dict(depth=0.02) (K1 of K0-K3: none/0.02/0.04/0.06);
+  _thick_geometry copies the cloak panel (stock 1502 without the dropped hem row, plus the worn hem) out
+  behind along its normals, tapering to 0 over the shoulders (taper 1.50-1.66), and closes the open
+  edges with a strip; added to the cloak submesh. Previews: /home/claude/body/thick_build.py + cowl_render.py
+  (bpy as a python module now: `python3 cowl_render.py -- ...`). patch-Z 1f580563 (out41; backup
+  patch-Z.MPQ.before-capethick).
