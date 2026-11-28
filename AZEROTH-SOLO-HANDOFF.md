@@ -573,3 +573,15 @@ installed on the PC with models in `E:\.ollama` (unused).
 - md5s: mangosd debf84a9 (backup mangosd.before-resist.exe), patch-Z ce630966 (backup
   patch-Z.MPQ.before-arcana), server SpellItemEnchantment.dbc f4fa4cc8 (backup
   data\dbc-before-hero\SpellItemEnchantment.before-arcana.dbc).
+
+## Update 2026-11-27 evening: resistance curve, Resilience +50, lava spawns (installed)
+
+- Player resistance (Unit::CalculateEffectiveMagicResistancePercent): ×2 up to 100 points (≈54% vs
+  level 55-56), then at100 + (90 - at100)·(1 - (1 - t)²), t = (R - 100)/200: 90% cap at 300 points.
+- Lesser Arcanum of Resilience: enchant 1505 → spell 823 (+50 all resistances).
+- Dungeon clears (ZeldaClearCreatureAdded): a spawn whose point is in magma (TerrainInfo liquid, vmaps)
+  is not counted; Server.log line "Zelda clear: <name> (spawn N) is in lava, not counted". BRD candidates:
+  22 Fireguard Destroyers at z < -100 around x 850-1210, y -230..-450. Kills from before stay counted.
+- md5s: mangosd 583fc112 (backup mangosd.before-rescurve.exe = debf84a9), patch-Z 8af44eb4 (backup
+  patch-Z.MPQ.before-res50), server SpellItemEnchantment.dbc 83e544c0 (backup
+  data\dbc-before-hero\SpellItemEnchantment.before-res50.dbc).
