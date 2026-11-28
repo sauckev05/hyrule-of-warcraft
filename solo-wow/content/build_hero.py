@@ -145,6 +145,9 @@ CAPE_THICK = dict(depth=0.02, taper=(1.90, 2.00))   # K1, thick over the shoulde
 # the cloak's extra half width (model units), growing from none under the shoulders to all of it at the
 # profile's end: K3's width (its 0.06 thickness spread the edges by about this much over K1's 0.02)
 CAPE_WIDEN = 0.04
+# how straight the cloak's back runs from the neck down (0: the yoke between the shoulder blades sits as far
+# back as the panel's top, a bump; 1: neck, shoulder blades and panel in one straight line to the hem)
+CAPE_STRAIGHT = 0.0
 BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
@@ -209,7 +212,7 @@ def _full_cape(m, pos):
     # the yoke (stock vertex ids, left/right) laid over the backs of the shoulders
     YOKE = {(2285, 2288): (-0.02, 0.20, 1.735),        # beside the neck, on the shoulder top
             (2271, 2272): (-0.14, 0.15, 1.705),        # behind the neck
-            (2243, 2240): (-0.20, 0.21, 1.585),        # between the shoulder blades
+            (2243, 2240): (-0.20 + 0.045 * CAPE_STRAIGHT, 0.21, 1.585),   # between the shoulder blades
             (2278, 2279): (-0.12, w - 0.04, 1.705),    # the back of the shoulder top
             (2286, 2287): (-0.15, w, 1.585)}           # down the back of the shoulder, to the arm
     yoke = {}
@@ -252,7 +255,8 @@ def _cloak_at(u, s):
     else:
         top_half = CAPE_ARM_GAP_HALF if CAPE_ARM_GAP_HALF else CAPE_SHOULDER + 0.01
         half = top_half + (CAPE_HEM_HALF - top_half) * u              # the new half width
-    x_mid = -0.20 - 0.10 * u                                          # the middle hangs behind
+    x_top = -0.20 + 0.025 * CAPE_STRAIGHT                             # on the neck-to-hem line when straight
+    x_mid = x_top + (-0.30 - x_top) * u                               # the middle hangs behind
     x_edge = CAPE_EDGE_X + CAPE_EDGE_FORWARD * min(u, 1.0)            # the edges come round the legs
     nz = 1.42 - u * (1.42 - _profile_bottom())
     half += CAPE_WIDEN * min(u, 1.0)                                  # wider going down
