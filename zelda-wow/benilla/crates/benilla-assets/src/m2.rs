@@ -260,6 +260,29 @@ impl AssetLoader for M2ModelLoader {
             .ok()
             .filter(|c| !c.is_empty());
 
+        // Zelda of Warcraft: the cape's own bones - those skinning only a cape (15xx) and the
+        // tabard (12xx), which share the cape's tail bones - for the cape-masked Run node.
+        let cape_roots: Vec<usize> = {
+            let mut users: std::collections::BTreeMap<u16, (bool, bool)> = Default::default();
+            for sub in &subs {
+                let cape = sub.geoset_id / 100 == 15;
+                let shared = cape || sub.geoset_id / 100 == 12;
+                for (j, w) in sub.joints.iter().zip(&sub.weights) {
+                    for (b, w) in j.iter().zip(w) {
+                        if *w > 0.0 {
+                            let e = users.entry(*b).or_insert((true, false));
+                            e.0 &= shared;
+                            e.1 |= cape;
+                        }
+                    }
+                }
+            }
+            users
+                .into_iter()
+                .filter(|(_, (only, cape))| *only && *cape)
+                .map(|(b, _)| b as usize)
+                .collect()
+        };
         let mut submeshes = Vec::with_capacity(subs.len());
         for sub in subs {
             // The URL is lowercased, since Bevy matches the `blp` extension case-sensitively, and
@@ -466,6 +489,16 @@ impl AssetLoader for M2ModelLoader {
                     pose.bone_masks[i] |= 1 << 4;
                 }
             }
+            // Group 5 holds every joint outside the cape's bones (Zelda of Warcraft).
+            let cape_group = !cape_roots.is_empty();
+            if cape_group {
+                for i in 0..skeleton_raw.bones.len() {
+                    if !cape_roots.iter().any(|&r| in_subtree(&skeleton_raw, i, r)) {
+                        graph.add_target_to_mask_group(bone_target_id(i as u16), 5);
+                        pose.bone_masks[i] |= 1 << 5;
+                    }
+                }
+            }
             // Read before the clip walk: the loader-idle seed resolves through it.
             let playable_animation_lookup =
                 parse_m2_playable_animation_lookup(&bytes).unwrap_or_default();
@@ -503,6 +536,12 @@ impl AssetLoader for M2ModelLoader {
                             pose.set_node(nodes.1, pose_idx, 1 << 1);
                             nodes
                         });
+                    // The Run clip's cape-only node (Zelda of Warcraft: the plunge's flapping cape).
+                    if cape_group && anim.anim_id == 5 && pose.cape_run.is_none() {
+                        let n = graph.add_clip_with_mask(clip.clone(), 1 << 5, 1.0, root);
+                        pose.set_node(n, pose_idx, 1 << 5);
+                        pose.cape_run = Some(n);
+                    }
                     // With an upper-body root, every clip gets an upper-body node, so a one-shot
                     // can play over a live base.
                     let upper_node = upper_root.map(|_| {

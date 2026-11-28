@@ -168,11 +168,17 @@ fn tumble(
     // the sword in the air is the plunge: script_calls turns the swing into it while this says the
     // hero is airborne, and asks here for the dive, which the mover runs to the ground
     if let Some(sw) = swings.as_deref_mut() {
-        let airborne = player.airborne_since.is_some() && !player.swimming && !mounted && !player.server_riding;
+        let airborne = player.airborne_since.is_some()
+            && !player.swimming
+            && !mounted
+            && !player.server_riding;
         sw.2 = airborne;
         if std::mem::take(&mut sw.3) && airborne {
             player.zelda_plunge = true;
             state.plunging = true;
+            // the cape flaps on the way down; the shield rides on the back till the strike is done
+            sw.4.diving = true;
+            sw.4.shield_until = f32::MAX;
             sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[3], 1.0));
             trace(|| "plunge".to_string());
         }
@@ -183,20 +189,37 @@ fn tumble(
             if sw.1.kind == 4 {
                 sw.1.held = false;
             }
+            // the strike's rest, from its held crouch to its end, before the shield comes back
+            let rest = body
+                .single()
+                .ok()
+                .flatten()
+                .and_then(|a| a.find(crate::creature_anim::PLUNGE_CLIP.0))
+                .map_or(0.5, |c| {
+                    c.duration * (1.0 - crate::creature_anim::PLUNGE_POSE)
+                });
+            sw.4.diving = false;
+            sw.4.shield_until = now + rest;
             trace(|| "plunge landed".to_string());
         }
     }
     let key5 = std::mem::take(&mut request.key5);
     if key5 && mounted && !player.server_riding {
         use crate::creature_anim::move_flags as f;
-        let moving = player.move_flags & (f::FORWARD | f::BACKWARD | f::STRAFE_LEFT | f::STRAFE_RIGHT) != 0;
-        let ready = state.last_spur.is_none_or(|t| now - t >= SPUR_COOLDOWN_SECS);
+        let moving =
+            player.move_flags & (f::FORWARD | f::BACKWARD | f::STRAFE_LEFT | f::STRAFE_RIGHT) != 0;
+        let ready = state
+            .last_spur
+            .is_none_or(|t| now - t >= SPUR_COOLDOWN_SECS);
         if moving && ready {
             state.last_spur = Some(now);
             if let Some(swings) = swings.as_deref_mut() {
                 swings.0.push((8, MOUNT_PUNCH_SECS));
             }
-            sounds.write(crate::sound::ZeldaRollSound(MOUNT_PUNCH_SOUNDS[state.spurs % MOUNT_PUNCH_SOUNDS.len()], MOUNT_PUNCH_GAIN));
+            sounds.write(crate::sound::ZeldaRollSound(
+                MOUNT_PUNCH_SOUNDS[state.spurs % MOUNT_PUNCH_SOUNDS.len()],
+                MOUNT_PUNCH_GAIN,
+            ));
             state.spurs += 1;
         }
         trace(|| format!("spur key5 moving={moving} ready={ready}"));
@@ -227,8 +250,14 @@ fn tumble(
                 state.armed = Some((kind, now));
                 forward_now = true;
             } else {
-                trace(|| format!("refused kind=1: rolling={} since_last={:.3} airborne={} mounted={mounted}",
-                                 state.rolling.is_some(), now - state.last_start, player.airborne_since.is_some()));
+                trace(|| {
+                    format!(
+                        "refused kind=1: rolling={} since_last={:.3} airborne={} mounted={mounted}",
+                        state.rolling.is_some(),
+                        now - state.last_start,
+                        player.airborne_since.is_some()
+                    )
+                });
             }
         } else if state.rolling.is_none() {
             state.armed = Some((kind, now));
@@ -237,7 +266,9 @@ fn tumble(
     // the double jump's front flip (the mover launched it): the model's own clip when it has one
     if player.zelda_flip_at.take().is_some() {
         let has_clip = body.single().ok().flatten().is_some_and(|a| {
-            a.clips.iter().any(|c| c.anim_id == crate::creature_anim::FLIP_CLIP)
+            a.clips
+                .iter()
+                .any(|c| c.anim_id == crate::creature_anim::FLIP_CLIP)
         });
         if let (true, Some(swings)) = (has_clip, swings.as_deref_mut()) {
             swings.0.push((7, FLIP_SECS));
@@ -258,7 +289,10 @@ fn tumble(
             // the push landed: the arc's time in the air is the turn's
             Some(since) => {
                 let lasts = ROLL_SECS[usize::from(kind.clamp(1, 4) - 1)];
-                sounds.write(crate::sound::ZeldaRollSound(ROLL_SOUNDS[usize::from(kind.clamp(1, 4) - 1)], 1.0));
+                sounds.write(crate::sound::ZeldaRollSound(
+                    ROLL_SOUNDS[usize::from(kind.clamp(1, 4) - 1)],
+                    1.0,
+                ));
                 // a model with the roll's own clip plays it over the arc; the rest turn whole
                 let has_clip = own_clip(kind).is_some_and(|(clip, _)| {
                     body.single()
@@ -266,12 +300,20 @@ fn tumble(
                         .flatten()
                         .is_some_and(|a| a.clips.iter().any(|c| c.anim_id == clip))
                 });
-                if let (true, Some((_, step)), Some(swings)) = (has_clip, own_clip(kind), swings.as_deref_mut()) {
-                    let clip_secs = if kind == 4 { lasts * BACKFLIP_CLIP_SHARE } else { lasts };
+                if let (true, Some((_, step)), Some(swings)) =
+                    (has_clip, own_clip(kind), swings.as_deref_mut())
+                {
+                    let clip_secs = if kind == 4 {
+                        lasts * BACKFLIP_CLIP_SHARE
+                    } else {
+                        lasts
+                    };
                     swings.0.push((step, clip_secs));
                 }
-                trace(|| format!("start kind={kind} pushed={pushed} dash={} lasts={lasts:.3} own_clip={has_clip} body={}",
-                                 player.zelda_dash.is_some(), body.single().is_ok()));
+                trace(|| {
+                    format!("start kind={kind} pushed={pushed} dash={} lasts={lasts:.3} own_clip={has_clip} body={}",
+                                 player.zelda_dash.is_some(), body.single().is_ok())
+                });
                 state.rolling = Some((kind, since, lasts, has_clip));
                 state.last_start = since;
                 state.armed = None;
@@ -298,7 +340,11 @@ fn turn_body(
     time: Res<Time>,
     mut state: ResMut<ZeldaRollState>,
     mut body: Query<
-        (&mut Transform, Option<&CameraPivot>, Option<&crate::net::NetEntity>),
+        (
+            &mut Transform,
+            Option<&CameraPivot>,
+            Option<&crate::net::NetEntity>,
+        ),
         (With<Embodied>, Without<FlyCam>),
     >,
 ) {
@@ -321,7 +367,9 @@ fn turn_body(
         }
     }
     let upright = *t;
-    let height = pivot.map_or(1.0, |p| model_pivot_height(p, net.map_or(1.0, |n| n.scale), false));
+    let height = pivot.map_or(1.0, |p| {
+        model_pivot_height(p, net.map_or(1.0, |n| n.scale), false)
+    });
     let up = Vec3::Y * height * PIVOT_SHARE;
     // `control` has just set the body upright at its feet: turn it about its middle instead
     let base = t.rotation;

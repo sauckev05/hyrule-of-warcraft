@@ -117,6 +117,9 @@ pub struct PoseSource {
     pub nodes: Vec<Option<PoseNode>>,
     /// Per bone: the mask-group bits it belongs to (the `add_target_to_mask_group` calls).
     pub bone_masks: Vec<u64>,
+    /// Zelda of Warcraft: the Run clip (5) masked to the cape's own bones (mask group 5), so the
+    /// hero's cape can flap as in a run while the body plays something else (the plunge's dive).
+    pub cape_run: Option<AnimationNodeIndex>,
 }
 
 impl PoseSource {

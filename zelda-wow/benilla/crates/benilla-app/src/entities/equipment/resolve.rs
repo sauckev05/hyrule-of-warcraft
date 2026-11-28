@@ -101,6 +101,8 @@ pub(in crate::entities) struct ResolveKey {
     visual_sheath: Option<[u8; 2]>,
     nocked: Option<u32>,
     latched: bool,
+    /// Zelda of Warcraft: the plunge's shield on the back.
+    shield_on_back: bool,
 }
 
 /// The dress half of the resolve, one of a model widget's re-take triggers (`0x5dee30`,
@@ -138,6 +140,7 @@ pub(in crate::entities) fn resolve_equipment(
         Option<&DressKey>,
         Option<&DisarmFreeze>,
         Has<crate::net::SelfPlayer>,
+        Has<crate::creature_anim::ZeldaShieldOnBack>,
     )>,
     held: Option<ResMut<ItemDisplays>>,
     templates: Res<Items>,
@@ -188,6 +191,7 @@ pub(in crate::entities) fn resolve_equipment(
         current_dress,
         freeze,
         is_self,
+        shield_on_back,
     ) in &units
     {
         if !matches!(net_entity.kind, EntityKind::Unit | EntityKind::Player) {
@@ -204,6 +208,7 @@ pub(in crate::entities) fn resolve_equipment(
             visual_sheath: visual_sheath.map(|v| v.0),
             nocked: nocked.map(|n| n.display_id),
             latched: nock_latched,
+            shield_on_back,
         };
         if !caches_moved && !store.is_changed() && current_key == Some(&key) {
             continue;
@@ -270,6 +275,11 @@ pub(in crate::entities) fn resolve_equipment(
         // The sheath a slot is placed by: per arm during a draw or stow ceremony (`VisualSheath`),
         // each weapon moving at its own clip's `$SHL`/`$SHR` key rather than at the byte change.
         let sheath_of = |slot: usize, inv_type: u32| {
+            // Zelda of Warcraft: through the plunge a shield is on the back (sheathed) while the
+            // sword stays drawn
+            if shield_on_back && slot == 1 && inv_type == 14 {
+                return 0;
+            }
             visual_sheath.map_or(committed, |v| v.for_slot(slot, inv_type))
         };
         // A player in a non-character display (a form, a morph) resolves `Wielded` but attaches no

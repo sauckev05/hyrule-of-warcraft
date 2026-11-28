@@ -527,10 +527,11 @@ mod driver;
 pub(crate) use driver::oneshot_is_live;
 /// Zelda of Warcraft: the sword combo's swings, asked for by the ZeldaControls addon.
 mod zelda_swing;
-pub(crate) use zelda_swing::{
-    ZeldaSwingRequests, BACKFLIP_CLIP, FLIP_CLIP, PLUNGE_DRAW_SECS, PLUNGE_LANDING, ROLL_CLIP,
-};
 use driver::{drive_animations, drive_hand_grip};
+pub(crate) use zelda_swing::{
+    ZeldaShieldOnBack, ZeldaSwingRequests, BACKFLIP_CLIP, FLIP_CLIP, PLUNGE_CLIP, PLUNGE_DRAW_SECS,
+    PLUNGE_LANDING, PLUNGE_POSE, ROLL_CLIP,
+};
 
 /// The model event-keyframe scanner.
 mod events;
@@ -875,6 +876,14 @@ impl Plugin for CreatureAnimPlugin {
                     // `VisualSheath` must land before `resolve_equipment` reads it, or a sheath
                     // change double-swaps the weapon placement for a frame.
                     .before(crate::entities::EntityVisualsSet),
+            )
+            // Zelda of Warcraft: the plunge's flapping cape and the shield on the back.
+            .add_systems(
+                Update,
+                zelda_swing::zelda_plunge_look
+                    .after(drive_animations)
+                    .before(crate::entities::EntityVisualsSet)
+                    .run_if(not(resource_exists::<crate::run_mode::CaptureMode>)),
             )
             // The CharProc 11 freeze, after the driver so this frame's arms are in when it holds
             // the clocks: Ice Block's cast one-shot is armed, then never advances.

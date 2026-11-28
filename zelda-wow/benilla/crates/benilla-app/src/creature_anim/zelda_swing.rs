@@ -20,14 +20,76 @@ use bevy::prelude::*;
 /// The swings the addon asked for since the driver last ran, `(step, seconds)`; the last wins.
 /// The second field is the guard key: the shield raised, or the weapon held up to parry. The third
 /// is whether the hero is in the air (player::zelda_roll keeps it), where a sword swing becomes the
-/// plunge (step 9); the fourth, a plunge asked for that the mover has not yet dropped the hero into.
+/// plunge (step 9); the fourth, a plunge asked for that the mover has not yet dropped the hero into;
+/// the fifth, how the plunge dresses the hero ([`ZeldaPlungeLook`]).
 #[derive(Resource, Default)]
 pub(crate) struct ZeldaSwingRequests(
     pub(crate) Vec<(u8, f32)>,
     pub(crate) ZeldaGuard,
     pub(crate) bool,
     pub(crate) bool,
+    pub(crate) ZeldaPlungeLook,
 );
+
+/// Zelda of Warcraft: the plunge's look, kept by player::zelda_roll. While the hero dives, the cape
+/// flaps as in a run (the Run clip on the cape's own bones, over the held crouch); from the leap
+/// until the strike into the ground has played, a shield rides on the back and the sword stays in
+/// hand.
+#[derive(Default, Clone, Copy, Debug)]
+pub(crate) struct ZeldaPlungeLook {
+    pub(crate) diving: bool,
+    /// Elapsed seconds the shield stays on the back until (0: not).
+    pub(crate) shield_until: f32,
+}
+
+/// Marks the hero whose shield is on the back for the plunge: equipment resolves the offhand shield
+/// as sheathed, the mainhand as drawn.
+#[derive(Component)]
+pub(crate) struct ZeldaShieldOnBack;
+
+/// The cape's run flapping over the dive outweighs the crouch's own cape keys about this much.
+const CAPE_FLAP_WEIGHT: f32 = 20.0;
+
+/// Apply [`ZeldaPlungeLook`] to the hero's body: the cape-masked Run node plays while diving, and
+/// the shield marker comes and goes. After the driver, so its own plays are in; before the entity
+/// visuals, so equipment resolves the shield the same frame.
+pub(super) fn zelda_plunge_look(
+    mut commands: Commands,
+    time: Res<Time>,
+    swings: Option<Res<ZeldaSwingRequests>>,
+    mut body: Query<
+        (
+            Entity,
+            &benilla_assets::ModelAnimations,
+            &mut AnimationPlayer,
+            Has<ZeldaShieldOnBack>,
+        ),
+        With<crate::net::SelfPlayer>,
+    >,
+) {
+    let look = swings.map(|s| s.4).unwrap_or_default();
+    let now = time.elapsed_secs();
+    for (entity, anims, mut player, on_back) in &mut body {
+        if let Some(node) = anims.pose.cape_run {
+            if look.diving {
+                if player.animation(node).is_none() {
+                    player.play(node).repeat();
+                }
+                if let Some(a) = player.animation_mut(node) {
+                    a.set_weight(CAPE_FLAP_WEIGHT);
+                }
+            } else if player.animation(node).is_some() {
+                player.stop(node);
+            }
+        }
+        let want = now < look.shield_until;
+        if want && !on_back {
+            commands.entity(entity).insert(ZeldaShieldOnBack);
+        } else if !want && on_back {
+            commands.entity(entity).remove::<ZeldaShieldOnBack>();
+        }
+    }
+}
 
 /// Zelda of Warcraft: the guard key, from `ZeldaGuardAnim(kind, held)`. Pressing it plays the
 /// guard clip once - ShieldBlock (24) with a shield (`kind` 1), the wielded weapon's parry (20-23)
