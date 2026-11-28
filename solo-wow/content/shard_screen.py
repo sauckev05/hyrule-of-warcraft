@@ -141,8 +141,9 @@ SHORT = {'Shadowfang Keep': 'Shadowfang', 'Blackfathom Deeps': 'Blackfathom', 'B
 BACKDROP_ALPHA = 105
 MIRROR = set()
 SHADE = True
-RAID_SHAPE = 'shard'       # the raids' crystals: shard, gem, diamond or prism
-EDGE_COLOURS = 'rainbow'   # the hexagon's lines: rainbow, or 'blend' (from one raid's colour to the next's)
+RAID_SHAPE = 'prism'       # the raids' crystals: shard, gem, diamond or prism (Naxxramas: CENTRE_SHAPE)
+CENTRE_SHAPE = 'gem'
+EDGE_COLOURS = 'blend'     # the hexagon's lines: rainbow, own (the raid's colour), or blend (into the next raid's)
 from PIL import ImageEnhance, ImageOps
 D = [s for s in SHARDS if not s[4]]; R = [s for s in SHARDS if s[4]]
 OWNED = set()
@@ -173,8 +174,12 @@ def load_credits(interface_mpq):
 
 def art_image(name):
     return ARTS[name.lower()].copy()
+def shape_of(s):
+    return 'shard' if not s[4] else CENTRE_SHAPE if s is R[6] else RAID_SHAPE
+
+
 def spr(s, size):
-    shape = RAID_SHAPE if s[4] else 'shard'
+    shape = shape_of(s)
     return crystal(size, s[6], shape) if (s[0] in OWNED and not STATIC) else hole(size, shape)
 def edge_colour(k):
     """Raid k's line on to raid k + 1: the rainbow's k-th colour, or blended from its colour to the next's."""
@@ -393,8 +398,10 @@ def lit_line(a, b, col, width):
     seg_line(dc, a, b, col, max(2, width // 3), light=True)
     im.alpha_composite(c)
     cut = Image.new('L', (W, H), 255); dcut = ImageDraw.Draw(cut)
-    for (x, y), r in [(p, 22) for p in hex_points()] + [((CX, CY), 27)]:
-        dcut.ellipse([x - r * 0.62, y - r, x + r * 0.62, y + r], fill=0)
+    for (x, y), size, shape in [(p, 64, RAID_SHAPE) for p in hex_points()] + [((CX, CY), 80, CENTRE_SHAPE)]:
+        outline, _, share, _ = SHAPES[shape]                     # the stone's own outline, a little in
+        w_, h_ = size * share * 0.86, size * 0.86
+        dcut.polygon([(x - w_ / 2 + px * w_, y - h_ / 2 + py * h_) for px, py in outline], fill=0)
     im.putalpha(ImageChops.multiply(im.split()[3], cut.filter(ImageFilter.GaussianBlur(2))))
     return im
 
@@ -432,7 +439,7 @@ def build(interface_mpq):
            '-- Screen pixels of the ' + '%dx%d' % (W, H) + ' picture; Background.blp holds it at its top left.',
            'ZeldaShardScreen = { width = %d, height = %d, texture = 1024, slots = {' % (W, H)]
     for s_, x, y, size in slots():
-        lay = Image.new('RGBA', (W, H), (0, 0, 0, 0)); place(lay, crystal(size, s_[6]), x, y)
+        lay = Image.new('RGBA', (W, H), (0, 0, 0, 0)); place(lay, crystal(size, s_[6], shape_of(s_)), x, y)
         box, left, top = boxed(lay, x, y)
         name = DIR + 'Crystal%d.blp' % (s_[0] - SHARDS[0][0])
         files[name] = scarlet_horse.blp_raw1_alpha(box)

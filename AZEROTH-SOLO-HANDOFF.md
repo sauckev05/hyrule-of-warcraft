@@ -623,7 +623,7 @@ installed on the PC with models in `E:\.ollama` (unused).
   Hollow centre, carved Gargoyle/Drake/Troll/Naga corners) into Interface\Zelda\Shards\Background,
   Crystal<n>, Edge<k>, Spoke<k> (palette+8-bit alpha BLPs; PIL misreads their alpha, Benilla is fine).
 - Server: `.zshards` -> "ZSHARDS:item,..." (shard:<item> store keys plus shards carried), hidden from chat.
-- Pending: the user is choosing the raid crystal shape (SHAPES: gem/diamond/prism, RAID_SHAPE) and the
-  hexagon line colours (EDGE_COLOURS rainbow/own/blend).
-- md5s: patch-Z 0b891bf1 (backup patch-Z.MPQ.before-shards), mangosd 7e767bf2 (backup
+- Raid crystals: prism (RAID_SHAPE), Naxxramas a cut gem (CENTRE_SHAPE); hexagon lines blend from each
+  raid's colour into the next raid's (EDGE_COLOURS 'blend'). Dungeon crystals keep the shard shape.
+- md5s: patch-Z 13225227 (out45; backup before the screen: patch-Z.MPQ.before-shards), shardsdata.lua 20ca00a1, mangosd 7e767bf2 (backup
   mangosd.before-shards.exe), addon files backed up as *.before-shards.
