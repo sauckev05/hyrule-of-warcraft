@@ -625,5 +625,8 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Server: `.zshards` -> "ZSHARDS:item,..." (shard:<item> store keys plus shards carried), hidden from chat.
 - Raid crystals: prism (RAID_SHAPE), Naxxramas a cut gem (CENTRE_SHAPE); hexagon lines blend from each
   raid's colour into the next raid's (EDGE_COLOURS 'blend'). Dungeon crystals keep the shard shape.
-- md5s: patch-Z 13225227 (out45; backup before the screen: patch-Z.MPQ.before-shards), shardsdata.lua 20ca00a1, mangosd 7e767bf2 (backup
+- Naxxramas's gem throws back the six raids' colours (fire_of, FIRE_MIX 0.55 = N2), each outer facet
+  halved between the two raids on its sides. Zul'Gurub's shard is grass green now (shards.py 100/0.75/0.8;
+  its item icon INV_Zelda_Shard_24 re-tinted to match).
+- md5s: patch-Z a925c0f3 (out46; backup before the screen: patch-Z.MPQ.before-shards), shardsdata.lua 20ca00a1, mangosd 7e767bf2 (backup
   mangosd.before-shards.exe), addon files backed up as *.before-shards.

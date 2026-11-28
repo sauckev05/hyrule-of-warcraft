@@ -35,7 +35,7 @@ SHARDS = [
     (191122, 329, 0, 'Stratholme', 0, ANY, (265, 0.6, 0.75)),
     (191123, 289, 0, 'Scholomance', 0, ANY, (110, 0.7, 0.6)),
     # raids (epic, purple)
-    (191124, 309, 0, "Zul'Gurub", 1, ANY, (350, 0.9, 0.75)),
+    (191124, 309, 0, "Zul'Gurub", 1, ANY, (100, 0.75, 0.8)),     # grass green
     (191125, 249, 0, "Onyxia's Lair", 1, ANY, (285, 0.85, 0.75)),
     (191126, 409, 0, 'Molten Core', 1, ANY, (22, 1.0, 1.0)),
     (191127, 469, 0, 'Blackwing Lair', 1, ANY, (2, 0.9, 0.6)),
