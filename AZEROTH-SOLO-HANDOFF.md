@@ -614,3 +614,16 @@ installed on the PC with models in `E:\.ollama` (unused).
   round Naxxramas; an owned raid lights its rainbow edge on to the next raid and its spoke to Naxxramas in
   its own colour), credits art (Interface\Glues\Credits\*, CreditsFrame.lua's CreditsArtInfo layout) as
   decoration. Mock-ups: /home/claude/shardui (mock.py, ring.py).
+
+## Crystal Shards screen (installed 2026-11-28)
+
+- 9 menu page "Crystal Shards" before Main Menu: ZeldaControls/shards.lua (frame ZeldaShardFrame, 600 wide,
+  Escape closes), shardsdata.lua (generated). Art: content/shard_screen.py <interface.MPQ> <patch-Z in>
+  <patch-Z out> <shardsdata.lua> renders layout F1 from the credits' concept art (Tol Barad behind, Night's
+  Hollow centre, carved Gargoyle/Drake/Troll/Naga corners) into Interface\Zelda\Shards\Background,
+  Crystal<n>, Edge<k>, Spoke<k> (palette+8-bit alpha BLPs; PIL misreads their alpha, Benilla is fine).
+- Server: `.zshards` -> "ZSHARDS:item,..." (shard:<item> store keys plus shards carried), hidden from chat.
+- Pending: the user is choosing the raid crystal shape (SHAPES: gem/diamond/prism, RAID_SHAPE) and the
+  hexagon line colours (EDGE_COLOURS rainbow/own/blend).
+- md5s: patch-Z 0b891bf1 (backup patch-Z.MPQ.before-shards), mangosd 7e767bf2 (backup
+  mangosd.before-shards.exe), addon files backed up as *.before-shards.

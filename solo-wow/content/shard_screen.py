@@ -34,30 +34,55 @@ FACETS = [((0.50, 0.00), (0.80, 0.22), (0.52, 0.40), 1.00), ((0.50, 0.00), (0.52
 def pts(poly, x, y, w, h):
     return [(x + px * w, y + py * h) for px, py in poly]
 
-def crystal(size, hsv):
-    w, h = int(size * 0.62), size
+# shapes: (outline, facets (polygon..., shade), width share of the height, highlight line)
+SHAPES = {
+    'shard': (SHAPE, FACETS, 0.62, [(0.5, 0.04), (0.52, 0.38)]),
+    # a cut gem seen from above: a hexagon, its flat table in the middle, six facets round it
+    'gem': ([(0.5, 0.0), (0.93, 0.25), (0.93, 0.75), (0.5, 1.0), (0.07, 0.75), (0.07, 0.25)],
+            [((0.5, 0.0), (0.93, 0.25), (0.72, 0.37), (0.5, 0.25), 1.0), ((0.93, 0.25), (0.93, 0.75), (0.72, 0.63), (0.72, 0.37), 0.78),
+             ((0.93, 0.75), (0.5, 1.0), (0.5, 0.75), (0.72, 0.63), 0.55), ((0.5, 1.0), (0.07, 0.75), (0.28, 0.63), (0.5, 0.75), 0.5),
+             ((0.07, 0.75), (0.07, 0.25), (0.28, 0.37), (0.28, 0.63), 0.66), ((0.07, 0.25), (0.5, 0.0), (0.5, 0.25), (0.28, 0.37), 0.92),
+             ((0.5, 0.25), (0.72, 0.37), (0.72, 0.63), (0.5, 0.75), (0.28, 0.63), (0.28, 0.37), 0.84)],
+            0.9, [(0.32, 0.3), (0.5, 0.2)]),
+    # a diamond: four facets meeting at a ridge
+    'diamond': ([(0.5, 0.0), (1.0, 0.42), (0.5, 1.0), (0.0, 0.42)],
+                [((0.5, 0.0), (1.0, 0.42), (0.5, 0.42), 1.0), ((0.5, 0.0), (0.5, 0.42), (0.0, 0.42), 0.82),
+                 ((0.0, 0.42), (0.5, 0.42), (0.5, 1.0), 0.55), ((0.5, 0.42), (1.0, 0.42), (0.5, 1.0), 0.7)],
+                0.82, [(0.5, 0.05), (0.5, 0.4)]),
+    # a double-ended prism, wide in the middle
+    'prism': ([(0.5, 0.0), (0.9, 0.3), (0.9, 0.7), (0.5, 1.0), (0.1, 0.7), (0.1, 0.3)],
+              [((0.5, 0.0), (0.9, 0.3), (0.5, 0.3), 1.0), ((0.5, 0.0), (0.5, 0.3), (0.1, 0.3), 0.82),
+               ((0.1, 0.3), (0.5, 0.3), (0.5, 0.7), (0.1, 0.7), 0.66), ((0.5, 0.3), (0.9, 0.3), (0.9, 0.7), (0.5, 0.7), 0.88),
+               ((0.1, 0.7), (0.5, 0.7), (0.5, 1.0), 0.5), ((0.5, 0.7), (0.9, 0.7), (0.5, 1.0), 0.62)],
+              0.7, [(0.5, 0.04), (0.5, 0.3)]),
+}
+
+
+def crystal(size, hsv, shape='shard'):
+    outline, facets, share, hl = SHAPES[shape]
+    w, h = int(size * share), size
     S = 4
     im = Image.new('RGBA', (w * S, h * S), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     r, g, b = colorsys.hsv_to_rgb(hsv[0] / 360, hsv[1], hsv[2])
-    for f in FACETS:
+    for f in facets:
         k = f[-1]
         col = tuple(int(255 * min(1, c * k + 0.25 * k * k)) for c in (r, g, b)) + (255,)
         d.polygon(pts(f[:-1], 0, 0, w * S, h * S), fill=col)
-    d.line(pts(SHAPE + [SHAPE[0]], 0, 0, w * S, h * S), fill=(255, 255, 255, 200), width=S)
-    d.line(pts([(0.5, 0.04), (0.52, 0.38)], 0, 0, w * S, h * S), fill=(255, 255, 255, 230), width=2 * S)
+    d.line(pts(outline + [outline[0]], 0, 0, w * S, h * S), fill=(255, 255, 255, 200), width=S)
+    d.line(pts(hl, 0, 0, w * S, h * S), fill=(255, 255, 255, 230), width=2 * S)
     im = im.resize((w, h), Image.LANCZOS)
-    glow = Image.new('RGBA', (w + 24, h + 24), (0, 0, 0, 0))
     gm = im.split()[3].resize((w, h))
     gl = Image.new('RGBA', (w + 24, h + 24), (int(r * 255), int(g * 255), int(b * 255), 0))
     a = Image.new('L', (w + 24, h + 24), 0); a.paste(gm, (12, 12)); a = a.filter(ImageFilter.GaussianBlur(7)).point(lambda v: int(v * 0.7))
     gl.putalpha(a); gl.alpha_composite(im, (12, 12))
     return gl
 
-def hole(size):
+def hole(size, shape='shard'):
     """The shard's empty socket: its shape cut into the stone, shadowed at the top, lit at the bottom."""
-    w, h = int(size * 0.62), size
+    outline, _, share, _ = SHAPES[shape]
+    w, h = int(size * share), size
     S = 4
-    mask = Image.new('L', (w * S, h * S), 0); ImageDraw.Draw(mask).polygon(pts(SHAPE, 0, 0, w * S, h * S), fill=255)
+    mask = Image.new('L', (w * S, h * S), 0); ImageDraw.Draw(mask).polygon(pts(outline, 0, 0, w * S, h * S), fill=255)
     mask = mask.resize((w, h), Image.LANCZOS)
     pad = 12
     out = Image.new('RGBA', (w + 2 * pad, h + 2 * pad), (0, 0, 0, 0))
@@ -116,6 +141,8 @@ SHORT = {'Shadowfang Keep': 'Shadowfang', 'Blackfathom Deeps': 'Blackfathom', 'B
 BACKDROP_ALPHA = 105
 MIRROR = set()
 SHADE = True
+RAID_SHAPE = 'shard'       # the raids' crystals: shard, gem, diamond or prism
+EDGE_COLOURS = 'rainbow'   # the hexagon's lines: rainbow, or 'blend' (from one raid's colour to the next's)
 from PIL import ImageEnhance, ImageOps
 D = [s for s in SHARDS if not s[4]]; R = [s for s in SHARDS if s[4]]
 OWNED = set()
@@ -146,9 +173,34 @@ def load_credits(interface_mpq):
 
 def art_image(name):
     return ARTS[name.lower()].copy()
-def spr(s, size): return crystal(size, s[6]) if (s[0] in OWNED and not STATIC) else hole(size)
+def spr(s, size):
+    shape = RAID_SHAPE if s[4] else 'shard'
+    return crystal(size, s[6], shape) if (s[0] in OWNED and not STATIC) else hole(size, shape)
+def edge_colour(k):
+    """Raid k's line on to raid k + 1: the rainbow's k-th colour, or blended from its colour to the next's."""
+    if EDGE_COLOURS == 'blend':
+        return (rgb(R[k][6], 1.0), rgb(R[(k + 1) % 6][6], 1.0))
+    if EDGE_COLOURS == 'own':
+        return rgb(R[k][6], 1.0)
+    return rgb([(0, 1, 1), (30, 1, 1), (58, 1, 1), (120, 0.9, 0.9), (215, 0.9, 1), (275, 0.8, 1)][k])
+
+
 def rgb(hsv, v=None):
     r, g, b = colorsys.hsv_to_rgb(hsv[0] / 360, hsv[1], v if v is not None else hsv[2]); return (int(r * 255), int(g * 255), int(b * 255))
+
+def seg_line(draw, a, b, col, width, light=False):
+    """A line in one colour, or (from, to) shading along it from the one colour to the other."""
+    two = isinstance(col[0], (tuple, list))
+    steps = 24 if two else 1
+    for i in range(steps):
+        t0, t1 = i / steps, (i + 1) / steps
+        c = col if not two else tuple(int(col[0][k] + (col[1][k] - col[0][k]) * (t0 + t1) / 2) for k in range(3))
+        if light:
+            c = tuple(min(255, int(x * 0.4 + 160)) for x in c)
+        p0 = (a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0)
+        p1 = (a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1)
+        draw.line([p0, p1], fill=tuple(c) + (255,), width=width)
+
 
 def glow_line(im, a, b, col, lit, width=6):
     """A groove cut in the stone; lit, a glowing line of light in it."""
@@ -157,11 +209,11 @@ def glow_line(im, a, b, col, lit, width=6):
     d.line([(a[0] + 1, a[1] + 2), (b[0] + 1, b[1] + 2)], fill=(120, 128, 108, 120), width=2)
     im.alpha_composite(lay)
     if lit:
-        g = Image.new('RGBA', im.size, (0, 0, 0, 0)); ImageDraw.Draw(g).line([a, b], fill=col + (255,), width=width + 10)
+        g = Image.new('RGBA', im.size, (0, 0, 0, 0)); seg_line(ImageDraw.Draw(g), a, b, col, width + 10)
         g = g.filter(ImageFilter.GaussianBlur(7)); im.alpha_composite(g)
         c = Image.new('RGBA', im.size, (0, 0, 0, 0)); dc = ImageDraw.Draw(c)
-        dc.line([a, b], fill=col + (255,), width=width)
-        dc.line([a, b], fill=tuple(min(255, int(x * 0.4 + 160)) for x in col) + (255,), width=max(2, width // 3))
+        seg_line(dc, a, b, col, width)
+        seg_line(dc, a, b, col, max(2, width // 3), light=True)
         im.alpha_composite(c)
 
 def art(name, size, alpha, mode='plain'):
@@ -298,7 +350,7 @@ def screen(deco, middle=None, corners=None, corner_mode='carve', backdrop=None):
     for k in range(6):
         glow_line(im, hexp[k], (cx0, cy0), rgb(R[k][6], 1.0), R[k][0] in OWNED and not STATIC, 5)
     for k in range(6):
-        glow_line(im, hexp[k], hexp[(k + 1) % 6], rgb(rainbow[k]), R[k][0] in OWNED and not STATIC, 6)
+        glow_line(im, hexp[k], hexp[(k + 1) % 6], edge_colour(k), R[k][0] in OWNED and not STATIC, 6)
     for k in range(6): place(im, spr(R[k], 64), *hexp[k])
     place(im, spr(R[6], 80), cx0, cy0)
     return im
@@ -334,11 +386,11 @@ def lit_line(a, b, col, width):
     """A raid's line of light alone, on clear ground, the raid slots cut out of it (their stones sit
     over it): the overlay a lit line is, over the background's dark groove."""
     im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    g = Image.new('RGBA', (W, H), (0, 0, 0, 0)); ImageDraw.Draw(g).line([a, b], fill=col + (255,), width=width + 10)
+    g = Image.new('RGBA', (W, H), (0, 0, 0, 0)); seg_line(ImageDraw.Draw(g), a, b, col, width + 10)
     im.alpha_composite(g.filter(ImageFilter.GaussianBlur(7)))
     c = Image.new('RGBA', (W, H), (0, 0, 0, 0)); dc = ImageDraw.Draw(c)
-    dc.line([a, b], fill=col + (255,), width=width)
-    dc.line([a, b], fill=tuple(min(255, int(x * 0.4 + 160)) for x in col) + (255,), width=max(2, width // 3))
+    seg_line(dc, a, b, col, width)
+    seg_line(dc, a, b, col, max(2, width // 3), light=True)
     im.alpha_composite(c)
     cut = Image.new('L', (W, H), 255); dcut = ImageDraw.Draw(cut)
     for (x, y), r in [(p, 22) for p in hex_points()] + [((CX, CY), 27)]:
@@ -391,7 +443,7 @@ def build(interface_mpq):
     hexp = hex_points()
     for k in range(6):
         for kind, a, b, col, width in (('Spoke', hexp[k], (CX, CY), rgb(R[k][6], 1.0), 5),
-                                       ('Edge', hexp[k], hexp[(k + 1) % 6], rgb(RAINBOW[k]), 6)):
+                                       ('Edge', hexp[k], hexp[(k + 1) % 6], edge_colour(k), 6)):
             box, left, top = boxed(lit_line(a, b, col, width))
             name = DIR + '%s%d.blp' % (kind, k)
             files[name] = scarlet_horse.blp_raw1_alpha(box)
