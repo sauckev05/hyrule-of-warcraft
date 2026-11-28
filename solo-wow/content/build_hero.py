@@ -138,6 +138,10 @@ TABARD = 1202
 BELT = dict(geoset=1652, thick=0.008, grow=0.006,
             buckles={1653: dict(half_angle=16, thick=0.009, rise=0.008, corner=0.018),
                      1654: dict(half_angle=21, thick=0.011, rise=0.016, corner=0.022)})
+# the cloak given thickness (None: a single sheet): its back sheet copied out behind it by depth (model
+# units), tapering to nothing over the shoulders (full below taper[0], none above taper[1]), and the
+# side and hem edges closed with a strip, so the cloth shows its thickness all round
+CAPE_THICK = None
 BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
@@ -1125,6 +1129,70 @@ def _belt_geometry(m, d, recs, pos):
 _BELT_EXTRA = {}                    # the buckles' faces by geoset (BELT 'buckles'), for _cape_extras
 
 
+def _thick_geometry(m, recs, hem_faces):
+    """The cloak's thickness (CAPE_THICK): every panel vertex (the stock cloak's, without the dropped
+    hem row, and the worn hem's) copied out behind along its surface normal, the panel's faces again on
+    the copies, and the open edges (those of one face) closed by a strip of edge vertices facing out
+    from the edge. New vertex records go on recs; returns the faces (global vertex ids)."""
+    import math
+    c = CAPE_THICK
+    drop = set(HEM) if CAPE_TATTER else set()
+    faces = []
+    for sm in m.subs:
+        if sm['id'] == FULL_CAPE:
+            for t in range(sm['st'], sm['st'] + sm['nt'], 3):
+                f = tuple(m.vlookup[m.tris[t + k]] for k in range(3))
+                if not drop & set(f):
+                    faces.append(f)
+    faces += [tuple(f) for f in hem_faces]
+    P = lambda g: struct.unpack_from('<3f', recs, g * 48)
+    def sub(a, b): return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+    def cross(a, b): return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+    def unit(a):
+        n = math.sqrt(sum(x * x for x in a)) or 1.0
+        return tuple(x / n for x in a)
+    # every face turned to face out (away from the body's axis), and the normals summed per vertex
+    out_faces, normal = [], {}
+    for f in faces:
+        a, b, e = (P(g) for g in f)
+        n = cross(sub(b, a), sub(e, a))
+        mid = [(a[k] + b[k] + e[k]) / 3 for k in range(3)]
+        if n[0] * mid[0] + n[1] * mid[1] < 0:
+            f, n = (f[0], f[2], f[1]), tuple(-x for x in n)
+        out_faces.append(f)
+        for g in f:
+            normal[g] = tuple(x + y for x, y in zip(normal.get(g, (0.0, 0.0, 0.0)), n))
+    lo, hi = c.get('taper', (1.50, 1.66))
+    def depth(g):
+        z = P(g)[2]
+        return c['depth'] * max(0.0, min(1.0, (hi - z) / (hi - lo)))
+    copy = {}
+    def new_vertex(g, p, n):
+        rec = bytearray(recs[g * 48:g * 48 + 48])
+        struct.pack_into('<3f', rec, 0, *p)
+        struct.pack_into('<3f', rec, 20, *n)
+        recs.extend(rec)
+        return len(recs) // 48 - 1
+    for g in normal:
+        n = unit(normal[g])
+        copy[g] = new_vertex(g, tuple(x + y * depth(g) for x, y in zip(P(g), n)), n)
+    new = [(copy[a], copy[b], copy[e]) for a, b, e in out_faces]
+    # the open edges: an edge of one face, in that face's winding
+    count = {}
+    for a, b, e in out_faces:
+        for x, y in ((a, b), (b, e), (e, a)):
+            count[frozenset((x, y))] = count.get(frozenset((x, y)), 0) + 1
+    for a, b, e in out_faces:
+        for x, y in ((a, b), (b, e), (e, a)):
+            if count[frozenset((x, y))] != 1 or (depth(x) <= 0 and depth(y) <= 0):
+                continue
+            side = unit(cross(sub(P(y), P(x)), unit(normal[x])))       # out from the edge, in the cloth's plane
+            xi, yi = new_vertex(x, P(x), side), new_vertex(y, P(y), side)
+            xo, yo = new_vertex(x, P(copy[x]), side), new_vertex(y, P(copy[y]), side)
+            new += [(xi, xo, yi), (yi, xo, yo)]
+    return new
+
+
 def _cape_extras(m, d, pos):
     """Add the worn hem and the scarf to the full cloak's submesh (1502, the big one): the new
     vertices go on the end of the vertex list; every view shares the one index and triangle list,
@@ -1135,6 +1203,7 @@ def _cape_extras(m, d, pos):
     cowl_faces = _cowl_geometry(m, d, recs, pos) if CAPE_COWL else []
     tabard_tris = _tabard_skirt(m, d, recs) if TABARD_SKIRT else (_tabard_geometry(m, d, recs) if TABARD_LONG else None)
     belt_tris = _belt_geometry(m, d, recs, pos) if BELT else None
+    thick_faces = _thick_geometry(m, recs, hem_faces) if CAPE_THICK else []
     drop = set(HEM) if CAPE_TATTER else set()
     n_new = len(recs) // 48
     while len(d) % 16:
@@ -1178,7 +1247,7 @@ def _cape_extras(m, d, pos):
                 if (facing(f) > 0) != want:
                     f = (f[0], f[2], f[1])
                 new_tris += [local[g] for g in f]
-            for f in cowl_faces:
+            for f in cowl_faces + thick_faces:
                 new_tris += [local[g] for g in f]
             # the upper back: with a cape on, the game hides the no-cape piece (1501) and the stock
             # cape's collar covers that spot; the cloak's yoke no longer does, so the body keeps it:
