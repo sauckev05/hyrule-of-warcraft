@@ -2131,10 +2131,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..2fbd1fa80
+index 000000000..cb83a33ce
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6660 @@
+@@ -0,0 +1,6697 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -3644,6 +3644,8 @@ index 000000000..2fbd1fa80
 +static void ZeldaSulthraze(Player* player, ZeldaState& state, uint32 diff);
 +static void ZeldaSpentIdol(Player* player);
 +static void ZeldaSpentBlades(Player* player);
++static void ZeldaShardsToScreen(Player* player);
++void ZeldaShardEarned(Player* player);
 +static void ZeldaTalentStrikes(Player* player, ZeldaState& state);
 +static void ZeldaDoomLordWatch(Player* player);
 +static void ZeldaDefianceStrikesBack(Player* player, ZeldaState& state);
@@ -3727,6 +3729,7 @@ index 000000000..2fbd1fa80
 +        ZeldaResetOnce(player);
 +        ZeldaSpentIdol(player);
 +        ZeldaSpentBlades(player);
++        ZeldaShardsToScreen(player);
 +    }
 +
 +    // the Gurubashi Arena challenge
@@ -5479,22 +5482,35 @@ index 000000000..2fbd1fa80
 +    return questId == QUEST_EVERY_DUNGEON && itemEntry >= FIRST_DUNGEON_SHARD && itemEntry <= LAST_DUNGEON_SHARD;
 +}
 +
++// every dungeon's shard earned: their 'shard:<item>' keys (the Crystal Shards screen's), not items
++static bool AllDungeonShardsEarned(uint32 guid)
++{
++    std::string keys;
++    for (uint32 shard = FIRST_DUNGEON_SHARD; shard <= LAST_DUNGEON_SHARD; ++shard)
++        keys += std::string(keys.empty() ? "" : ",") + "'shard:" + std::to_string(shard) + "'";
++    if (auto result = CharacterDatabase.PQuery("SELECT COUNT(*) FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` IN (%s)",
++                                               guid, keys.c_str()))
++        return result->Fetch()[0].GetUInt32() >= LAST_DUNGEON_SHARD - FIRST_DUNGEON_SHARD + 1;
++    return false;
++}
++
 +bool ZeldaQuestExtraHeld(Player const* player, uint32 questId)
 +{
 +    if (questId != QUEST_EVERY_DUNGEON || !player)
 +        return true;
-+    for (uint32 shard = FIRST_DUNGEON_SHARD; shard <= LAST_DUNGEON_SHARD; ++shard)
-+        if (!player->HasItemCount(shard, 1))
-+            return false;
-+    return true;
++    return AllDungeonShardsEarned(player->GetGUIDLow());
 +}
 +
-+void ZeldaQuestExtraTake(Player* player, uint32 questId)
++// the shards are the hero's for good (the Crystal Shards screen): the sword takes their power, not them
++void ZeldaQuestExtraTake(Player* /*player*/, uint32 /*questId*/)
 +{
-+    if (questId != QUEST_EVERY_DUNGEON || !player)
-+        return;
-+    for (uint32 shard = FIRST_DUNGEON_SHARD; shard <= LAST_DUNGEON_SHARD; ++shard)
-+        player->DestroyItemCount(shard, 1, true);
++}
++
++// a shard just earned may finish The Light of Every Dungeon
++static void ShardsMayFinishSword(Player* player)
++{
++    if (player->GetQuestStatus(QUEST_EVERY_DUNGEON) == QUEST_STATUS_INCOMPLETE && player->CanCompleteQuest(QUEST_EVERY_DUNGEON))
++        player->CompleteQuest(QUEST_EVERY_DUNGEON);
 +}
 +
 +namespace
@@ -8336,28 +8352,13 @@ index 000000000..2fbd1fa80
 +        if (CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
 +                                     player->GetGUIDLow(), key.c_str()) || player->HasItemCount(c.item, 1, true))
 +            return;
-+        CharacterDatabase.PExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
-+                                   player->GetGUIDLow(), key.c_str());
-+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(c.item);
-+        char const* itemName = proto ? proto->Name1 : "Crystal Shard";
-+        ChatHandler(player).PSendSysMessage("|cff33ff99Every foe in %s has fallen!|r", c.name.c_str());
++        // written at once: the sword's quest reads it back straight after
++        CharacterDatabase.DirectPExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
++                                         player->GetGUIDLow(), key.c_str());
++        ChatHandler(player).PSendSysMessage("|cff33ff99Every foe in %s has fallen! Its Crystal Shard now shines on your Crystal Shards screen.|r",
++                                            c.name.c_str());
 +        player->GetSession()->SendAreaTriggerMessage("%s cleared!", c.name.c_str());
-+        ItemPosCountVec dest;
-+        if (player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, c.item, 1) == EQUIP_ERR_OK)
-+        {
-+            if (Item* item = player->StoreNewItem(dest, c.item, true))
-+                player->SendNewItem(item, 1, true, false);
-+            return;
-+        }
-+        if (Item* item = Item::CreateItem(c.item, 1, player))
-+        {
-+            CharacterDatabase.BeginTransaction();
-+            item->SaveToDB();
-+            CharacterDatabase.CommitTransaction();
-+            MailDraft(itemName, "Your bags were full, so I kept this safe for you. Hey! Listen! You did it!")
-+                .AddItem(item).SendMailTo(player, MailSender(MAIL_CREATURE, CLEAR_MAIL_SENDER), MAIL_CHECK_MASK_COPIED);
-+            ChatHandler(player).PSendSysMessage("|cff33ff99Your bags are full: the %s was sent to your mailbox.|r", itemName);
-+        }
++        ZeldaShardEarned(player);
 +    }
 +
 +    // after a kill or a despawn: hand out the shard of every section now fully cleared
@@ -8594,6 +8595,42 @@ index 000000000..2fbd1fa80
 +        list += (list.empty() ? "" : ",") + std::to_string(item);
 +    PSendSysMessage("ZSHARDS:%s", list.c_str());
 +    return true;
++}
++
++// A Crystal Shard is no longer an item: one still carried (bags, bank or keyring, from before) is
++// taken and kept as earned on the Crystal Shards screen instead.
++static void ZeldaShardsToScreen(Player* player)
++{
++    bool any = false;
++    std::vector<uint32> items;
++    {
++        std::lock_guard<std::mutex> guard(s_clearLock);
++        for (ClearSection const& c : s_clearSections)
++            if (c.item)
++                items.push_back(c.item);
++    }
++    for (uint32 item : items)
++    {
++        uint32 const held = player->GetItemCount(item, true);
++        if (!held)
++            continue;
++        std::string const key = "shard:" + std::to_string(item);
++        if (!CharacterDatabase.PQuery("SELECT 1 FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` = '%s'",
++                                      player->GetGUIDLow(), key.c_str()))
++            CharacterDatabase.DirectPExecute("INSERT INTO `ai_playerbot_db_store` (`guid`, `preset`, `key`, `value`) VALUES ('%u', 'zelda', '%s', '1')",
++                                             player->GetGUIDLow(), key.c_str());
++        player->DestroyItemCount(item, held, true, false, true);
++        sLog.outString("Zelda shards: %s's item %u x%u moved to the Crystal Shards screen", player->GetName(), item, held);
++        any = true;
++    }
++    if (any)
++        ChatHandler(player).PSendSysMessage("|cff33ff99Your Crystal Shards now shine on the Crystal Shards screen (the Subscreen, 9).|r");
++    ZeldaShardEarned(player);
++}
++
++void ZeldaShardEarned(Player* player)
++{
++    ShardsMayFinishSword(player);
 +}
 +
 +bool ChatHandler::HandleZeldaDungeonCommand(char* args)

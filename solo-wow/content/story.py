@@ -996,13 +996,14 @@ quest(id=90520, level=58, min=55, kind='', zone=490, giver=LINKEN, ender=LINKEN,
       details="That hilt... I know it the way I know my own hands. It's all that's left of my sword.$B$BThe blade "
               "wasn't steel, $N. It was light - the light that gathers in the deep places of the world, where heroes "
               "go and come back changed. When I lost my way, the light went out of it.$B$BYou've walked those deep "
-              "places. Every one you clear leaves a Crystal Shard behind. Bring me a shard from every dungeon in "
-              "the land, and the hilt with them. Not the great raids - their light is too wild for a sword. Just "
-              "the dungeons. All of them.",
-      objectives="Bring the Hilt of the Sword of Mastery and a Crystal Shard from every dungeon to Linken in "
-                 "Un'Goro Crater: " + DUNGEONS + ".",
+              "places. Every one you clear lights a Crystal Shard in you - I can see them shining. Light a shard "
+              "in every dungeon in the land, then bring me the hilt, and we'll call their power into it. Not the "
+              "great raids - their light is too wild for a sword. Just the dungeons. All of them.",
+      objectives="Earn the Crystal Shard of every dungeon (they shine on the Crystal Shards screen), then bring "
+                 "the Hilt of the Sword of Mastery to Linken in Un'Goro Crater: " + DUNGEONS + ".",
       request="Every dungeon, $N. The light has to be whole, or the blade will be too.",
-      reward="*Linken sets the shards around the hilt. One by one they dim, and the hilt begins to glow.*$B$BIt "
+      reward="*Linken holds the hilt out to you. The light of every shard you have earned flows into it, and the "
+             "hilt begins to glow.*$B$BIt "
              "remembers. Can you feel it? The light knows where it belongs.$B$BBut no fire here could hold it. "
              "There's only one forge in the world that burns hot enough - and only one hammer it will answer to...",
       kills=[], items=[(LINKEN_HILT, 1)], reward_item=LINKEN_SHARD_BOUND_HILT, rep=(0, 0))
