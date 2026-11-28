@@ -5,5 +5,7 @@
 ZeldaControls.lua
 potion.lua
 mount.lua
+shardsdata.lua
+shards.lua
 subscreen.lua
 bagswap.lua

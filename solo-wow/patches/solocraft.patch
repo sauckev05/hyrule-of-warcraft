@@ -2034,10 +2034,10 @@ index a52867619..810d9d3f2 100644
      // end battleground or set respawn timer
      if (winner)
 diff --git a/src/game/Chat/Chat.cpp b/src/game/Chat/Chat.cpp
-index ffa25ba3d..c60dac6b8 100644
+index ffa25ba3d..cdb86bbbf 100644
 --- a/src/game/Chat/Chat.cpp
 +++ b/src/game/Chat/Chat.cpp
-@@ -962,6 +962,21 @@ ChatCommand* ChatHandler::getCommandTable()
+@@ -962,6 +962,22 @@ ChatCommand* ChatHandler::getCommandTable()
          { "revive",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleReviveCommand,              "", nullptr },
          { "dismount",       SEC_PLAYER,         false, &ChatHandler::HandleDismountCommand,            "", nullptr },
          { "gps",            SEC_MODERATOR,      false, &ChatHandler::HandleGPSCommand,                 "", nullptr },
@@ -2045,6 +2045,7 @@ index ffa25ba3d..c60dac6b8 100644
 +        { "zspin",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaSpinCommand,           "", nullptr },
 +        { "zstats",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaStatsCommand,          "", nullptr },
 +        { "zdungeon",       SEC_PLAYER,         false, &ChatHandler::HandleZeldaDungeonCommand,        "", nullptr },
++        { "zshards",        SEC_PLAYER,         false, &ChatHandler::HandleZeldaShardsCommand,         "", nullptr },
 +        { "zcrest",         SEC_PLAYER,         false, &ChatHandler::HandleZeldaCrestCommand,          "", nullptr },
 +        { "zroll",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaRollCommand,           "", nullptr },
 +        { "zflip",          SEC_PLAYER,         false, &ChatHandler::HandleZeldaFlipCommand,           "", nullptr },
@@ -2060,10 +2061,10 @@ index ffa25ba3d..c60dac6b8 100644
          { "help",           SEC_PLAYER,         true,  &ChatHandler::HandleHelpCommand,                "", nullptr },
          { "itemmove",       SEC_GAMEMASTER,     false, &ChatHandler::HandleItemMoveCommand,            "", nullptr },
 diff --git a/src/game/Chat/Chat.h b/src/game/Chat/Chat.h
-index 00fde0a85..5b61f24b1 100644
+index 00fde0a85..b752fb66b 100644
 --- a/src/game/Chat/Chat.h
 +++ b/src/game/Chat/Chat.h
-@@ -679,6 +679,22 @@ class ChatHandler
+@@ -679,6 +679,23 @@ class ChatHandler
          bool HandleAnnounceCommand(char* args);
          bool HandleNotifyCommand(char* args);
          bool HandleGPSCommand(char* args);
@@ -2072,6 +2073,7 @@ index 00fde0a85..5b61f24b1 100644
 +        bool HandleZeldaSpinCommand(char* args);
 +        bool HandleZeldaStatsCommand(char* args);
 +        bool HandleZeldaDungeonCommand(char* args);
++        bool HandleZeldaShardsCommand(char* args);
 +        bool HandleZeldaCrestCommand(char* args);
 +        bool HandleZeldaRollCommand(char* args);
 +        bool HandleZeldaFlipCommand(char* args);
@@ -2129,10 +2131,10 @@ index b94694c8b..f94526838 100644
              if (flagged)                            // Already flagged
 diff --git a/src/game/Chat/ZeldaCommands.cpp b/src/game/Chat/ZeldaCommands.cpp
 new file mode 100644
-index 000000000..967bceb20
+index 000000000..2fbd1fa80
 --- /dev/null
 +++ b/src/game/Chat/ZeldaCommands.cpp
-@@ -0,0 +1,6631 @@
+@@ -0,0 +1,6660 @@
 +/*
 + * Zelda of Warcraft: Ocarina of Time style combat moves for players, driven by chat commands that
 + * the client sends from key bindings (any 1.12 client + the ZeldaControls addon, or Benilla).
@@ -8563,6 +8565,35 @@ index 000000000..967bceb20
 +        return;
 +    state.lastClearReport = report;
 +    ChatHandler(player).PSendSysMessage("ZDUNGEON:%s", report.c_str());
++}
++
++// The Crystal Shards screen asks which shards the hero has earned: "ZSHARDS:item,item,..." - every shard
++// the hero was given (its 'shard:<item>' key) or still carries (bags, bank or keyring).
++bool ChatHandler::HandleZeldaShardsCommand(char* /*args*/)
++{
++    Player* player = m_session->GetPlayer();
++    std::set<uint32> owned;
++    if (auto result = CharacterDatabase.PQuery("SELECT `key` FROM `ai_playerbot_db_store` WHERE `guid` = '%u' AND `preset` = 'zelda' AND `key` LIKE 'shard:%%'",
++                                               player->GetGUIDLow()))
++    {
++        do
++        {
++            std::string const key = result->Fetch()[0].GetCppString();
++            owned.insert(uint32(std::strtoul(key.c_str() + 6, nullptr, 10)));
++        }
++        while (result->NextRow());
++    }
++    {
++        std::lock_guard<std::mutex> guard(s_clearLock);
++        for (ClearSection const& c : s_clearSections)
++            if (c.item && player->HasItemCount(c.item, 1, true))
++                owned.insert(c.item);
++    }
++    std::string list;
++    for (uint32 item : owned)
++        list += (list.empty() ? "" : ",") + std::to_string(item);
++    PSendSysMessage("ZSHARDS:%s", list.c_str());
++    return true;
 +}
 +
 +bool ChatHandler::HandleZeldaDungeonCommand(char* args)

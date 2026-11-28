@@ -2,7 +2,7 @@
 --
 -- 8 opens (or closes) the character sheet, every bag and the key ring together.
 -- 9 opens the Subscreen, like Ocarina of Time's pause menu: one screen at a time - Quest Log, Talents,
--- Spellbook & Abilities, Main Menu (M still opens the map) - and Left / Right (the arrow keys, or the
+-- Spellbook & Abilities, Crystal Shards, Main Menu (M still opens the map) - and Left / Right (the arrow keys, or the
 -- arrows on its title bar) turn to the next screen. 9 or Escape closes it.
 
 -- ------------------------------------------------------------------ inventory
@@ -30,6 +30,8 @@ local PAGES = {
 	  open = function() if ToggleTalentFrame then ToggleTalentFrame() end end },
 	{ name = "Spellbook & Abilities", frame = "SpellBookFrame",
 	  open = function() if ToggleSpellBook then ToggleSpellBook(BOOKTYPE_SPELL or "spell") end end },
+	{ name = "Crystal Shards", frame = "ZeldaShardFrame",
+	  open = function() if ZeldaShardFrame then ZeldaShardFrame:Show() end end },
 	{ name = "Main Menu", frame = "GameMenuFrame",
 	  open = function() if GameMenuFrame then ShowUIPanel(GameMenuFrame) end end },
 }
