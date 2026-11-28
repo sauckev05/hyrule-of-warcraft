@@ -607,3 +607,10 @@ installed on the PC with models in `E:\.ollama` (unused).
   the strike's rest, duration × (1 − PLUNGE_POSE), has played) makes resolve_equipment place an
   offhand shield as sheathed (SHIELD_BACK) with the sword drawn. benilla.exe 04e41f1a (backup
   benilla.before-plungelook.exe). Untested live.
+- Cape Q1 (to try): CAPE_STRAIGHT 1.0 (neck-to-hem straight back), CAPE_COWL_KEEP_REST (the scarf is
+  cast onto the unstraightened cloak and the straight cloak's outside, whichever is further out, so its
+  back point keeps S0's V). patch-Z ff3480d6 (out43; S0 backup patch-Z.MPQ.before-q1 = ddc970ee).
+- Crystal Shards screen (planned, 9-menu page before Main Menu): layout B (dungeon ring, raid hexagon
+  round Naxxramas; an owned raid lights its rainbow edge on to the next raid and its spoke to Naxxramas in
+  its own colour), credits art (Interface\Glues\Credits\*, CreditsFrame.lua's CreditsArtInfo layout) as
+  decoration. Mock-ups: /home/claude/shardui (mock.py, ring.py).
