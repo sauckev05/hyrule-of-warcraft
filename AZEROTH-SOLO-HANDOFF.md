@@ -599,3 +599,11 @@ installed on the PC with models in `E:\.ollama` (unused).
 - Then: K3's width with K1's thickness, and thick over the shoulders: CAPE_THICK taper (1.90, 2.00)
   (no taper on the yoke), CAPE_WIDEN 0.04 (half width + 0.04·min(u, 1) in _cloak_at). patch-Z ddc970ee
   (out42; the K1 build 1f580563 is replaced, pre-thickness backup still patch-Z.MPQ.before-capethick).
+- Windsor waits 10 s (was 5). mangosd 76466411 (backup mangosd.before-windsor10.exe).
+- Plunge look (Benilla 7d86d477): benilla-assets m2.rs finds the cape's own bones (skinning only
+  15xx/12xx geosets: HumanMale 23 and 51), mask group 5 = every joint outside them, and the Run clip
+  (5) gets a cape-only node, PoseSource::cape_run. creature_anim::zelda_swing::zelda_plunge_look plays
+  it (weight 20, looping) while ZeldaSwingRequests.4.diving; ZeldaShieldOnBack (from the leap until
+  the strike's rest, duration × (1 − PLUNGE_POSE), has played) makes resolve_equipment place an
+  offhand shield as sheathed (SHIELD_BACK) with the sword drawn. benilla.exe 04e41f1a (backup
+  benilla.before-plungelook.exe). Untested live.
