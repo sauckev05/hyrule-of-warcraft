@@ -148,6 +148,10 @@ CAPE_WIDEN = 0.04
 # how straight the cloak's back runs from the neck down (0: the yoke between the shoulder blades sits as far
 # back as the panel's top, a bump; 1: neck, shoulder blades and panel in one straight line to the hem)
 CAPE_STRAIGHT = 0.0
+# with a straight back: the scarf still rests where it did on the cloak before it was straightened (the
+# cloak's straight back sits nearer the body there, and would swallow the scarf's back point)
+CAPE_COWL_KEEP_REST = True
+_COWL_REST = None        # those positions, while a model is built
 BELT_GEOSET = 1652             # a managed id (<= 1700) the client hides unless a belt is worn (Benilla)
 # or the tabard's lower part as a long surcoat skirt (None: not), the robe skirt's shape (1302) in the
 # tabard's colours (the stock flaps' part of the body texture): it replaces the flaps, sits push out
@@ -379,6 +383,26 @@ def _mound_geometry(m, d, recs, pos, c):
     tri_v = np.array(tri_v)
     P = np.array(pos, dtype=float)
     A, B, C = P[tri_v[:, 0]], P[tri_v[:, 1]], P[tri_v[:, 2]]
+    if CAPE_STRAIGHT and CAPE_COWL_KEEP_REST and _COWL_REST:
+        # with a straight back the scarf rests on whichever is further out: the cloak as it was before
+        # straightening (so the scarf keeps its shape), or the straight cloak's outside (its thickness
+        # out behind), so no part of the scarf sinks into it
+        cloak = set()
+        for sm in m.subs:
+            if sm['id'] == FULL_CAPE:
+                cloak |= {m.vlookup[m.tris[t]] for t in range(sm['st'], sm['st'] + sm['nt'])}
+        R = P.copy()
+        for v in cloak:
+            R[v] = _COWL_REST[v]
+        outside = P.copy()
+        depth = (CAPE_THICK or {}).get('depth', 0.0)
+        for v in cloak:
+            outside[v] = P[v] + np.array([-depth, 0.0, 0.0])
+        in_cloak = np.array([all(int(x) in cloak for x in row) for row in tri_v])
+        tri_v = np.concatenate([tri_v, tri_v[in_cloak]])
+        A = np.concatenate([R[tri_v[:len(in_cloak), 0]], outside[tri_v[len(in_cloak):, 0]]])
+        B = np.concatenate([R[tri_v[:len(in_cloak), 1]], outside[tri_v[len(in_cloak):, 1]]])
+        C = np.concatenate([R[tri_v[:len(in_cloak), 2]], outside[tri_v[len(in_cloak):, 2]]])
     E1, E2 = B - A, C - A
     def cast(o, dr):
         """The first surface along o + t dr (t > 0): (point, triangle index, barycentric) or None."""
@@ -442,7 +466,7 @@ def _mound_geometry(m, d, recs, pos, c):
             nrm = np.cross(E1[k], E2[k]); nrm /= (np.linalg.norm(nrm) or 1.0)
             if np.dot(nrm, dr) < 0:
                 nrm = -nrm
-            foot = foot + nrm * c.get('lift', 0.006)
+            foot = foot + nrm * par('lift', th, 0.006)
             fw = weights_of(k, bary)
         zt = par('top_z', th) - c['front_dip'] * front
         nk = par('neck', th)
@@ -1399,6 +1423,16 @@ def build_model(stock, sound_map):
     _shape_nose(m)
     pos = deform.deform(m, shape)
     if CAPE_STYLE == 'full':
+        if CAPE_STRAIGHT and CAPE_COWL_KEEP_REST:
+            # the scarf rests where it did on the unstraightened cloak, keeping its shape behind
+            global _COWL_REST
+            _COWL_REST = list(pos)
+            straight = CAPE_STRAIGHT
+            try:
+                globals()['CAPE_STRAIGHT'] = 0.0
+                _full_cape(m, _COWL_REST)
+            finally:
+                globals()['CAPE_STRAIGHT'] = straight
         _full_cape(m, pos)
     # the split cape, longer: everything below the anchor is stretched down (and a little back)
     cape = set()
