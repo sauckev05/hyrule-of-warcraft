@@ -1,3 +1,77 @@
+diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/blackrock_depths.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/blackrock_depths.cpp
+index a494fea39..706c739cd 100644
+--- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/blackrock_depths.cpp
++++ b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/blackrock_depths.cpp
+@@ -1164,11 +1164,34 @@ struct npc_marshal_windsorAI : public npc_escortAI
+     instance_blackrock_depths* m_pInstance;
+ 
+     uint8 m_uiEventPhase;
++    uint32 m_uiNoPrisonerTimer;                             // Zelda of Warcraft: see UpdateEscortAI
+ 
+     void Reset() override
+     {
+         if (!HasEscortState(STATE_ESCORT_ESCORTING))
+             m_uiEventPhase = 0;
++        m_uiNoPrisonerTimer = 0;
++    }
++
++    // the prisoners Windsor waits for at this phase's cell
++    bool PrisonerLeft() const
++    {
++        std::vector<uint32> prisoners;
++        switch (m_uiEventPhase)
++        {
++            case 1: prisoners = { NPC_DUGHAL }; break;
++            case 2:
++            case 3: prisoners = { NPC_JAZ, NPC_OGRABISI }; break;
++            case 4: prisoners = { NPC_SHILL }; break;
++            case 5: prisoners = { NPC_CREST }; break;
++            case 6: prisoners = { NPC_TOBIAS }; break;
++            default: return true;
++        }
++        for (uint32 entry : prisoners)
++            if (Creature* pPrisoner = m_pInstance->GetSingleCreatureFromStorage(entry))
++                if (pPrisoner->IsAlive())
++                    return true;
++        return false;
+     }
+ 
+     void Aggro(Unit* pWho) override
+@@ -1323,7 +1346,7 @@ struct npc_marshal_windsorAI : public npc_escortAI
+         }
+     }
+ 
+-    void UpdateEscortAI(const uint32 /*uiDiff*/) override
++    void UpdateEscortAI(const uint32 uiDiff) override
+     {
+         // Handle escort resume events
+         if (m_pInstance && m_pInstance->GetData(TYPE_QUEST_JAIL_BREAK) == SPECIAL)
+@@ -1345,6 +1368,25 @@ struct npc_marshal_windsorAI : public npc_escortAI
+             m_pInstance->SetData(TYPE_QUEST_JAIL_BREAK, IN_PROGRESS);
+         }
+ 
++        // Zelda of Warcraft: dungeons don't respawn, so a cell whose prisoner was killed before the escort
++        // would keep Windsor waiting forever: with no one left in it he walks on after 5 seconds
++        if (m_pInstance && HasEscortState(STATE_ESCORT_PAUSED) && !m_creature->IsInCombat() && !PrisonerLeft())
++        {
++            if (!m_uiNoPrisonerTimer)
++                m_uiNoPrisonerTimer = 5000;
++            else if (m_uiNoPrisonerTimer <= uiDiff)
++            {
++                m_uiNoPrisonerTimer = 0;
++                if (m_uiEventPhase == 2)
++                    m_uiEventPhase = 3;             // Jaz's cell holds two
++                SetEscortPaused(false);
++            }
++            else
++                m_uiNoPrisonerTimer -= uiDiff;
++        }
++        else
++            m_uiNoPrisonerTimer = 0;
++
+         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
+             return;
+ 
 diff --git a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp b/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
 index 9f973d40b..44aa060e9 100644
 --- a/src/game/AI/ScriptDevAI/scripts/eastern_kingdoms/blackrock_depths/instance_blackrock_depths.cpp
