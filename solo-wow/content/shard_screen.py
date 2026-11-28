@@ -58,16 +58,34 @@ SHAPES = {
 }
 
 
-def crystal(size, hsv, shape='shard'):
+def crystal(size, hsv, shape='shard', fire=None, fire_mix=0.55):
+    """A crystal of the given colour. fire: one colour per facet (0-1 rgb) it throws back, like a
+    diamond's fire, mixed in by fire_mix; the last facet (a gem's table) keeps the stone's own."""
     outline, facets, share, hl = SHAPES[shape]
     w, h = int(size * share), size
     S = 4
     im = Image.new('RGBA', (w * S, h * S), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     r, g, b = colorsys.hsv_to_rgb(hsv[0] / 360, hsv[1], hsv[2])
-    for f in facets:
+    def shade(base, k):
+        return tuple(int(255 * min(1, c * k + 0.25 * k * k)) for c in base) + (255,)
+    for i, f in enumerate(facets):
         k = f[-1]
-        col = tuple(int(255 * min(1, c * k + 0.25 * k * k)) for c in (r, g, b)) + (255,)
-        d.polygon(pts(f[:-1], 0, 0, w * S, h * S), fill=col)
+        poly = f[:-1]
+        if fire and i < len(fire) and len(poly) == 4:
+            # the facet's two halves, each throwing back the colour on its side (its outer corner's)
+            A, B, C, Dd = poly
+            M = ((A[0] + B[0]) / 2, (A[1] + B[1]) / 2); N = ((C[0] + Dd[0]) / 2, (C[1] + Dd[1]) / 2)
+            for half, col_ in (((A, M, N, Dd), fire[i][0]), ((M, B, C, N), fire[i][1])):
+                base = tuple((r, g, b)[c] + (col_[c] - (r, g, b)[c]) * fire_mix for c in range(3))
+                d.polygon(pts(half, 0, 0, w * S, h * S), fill=shade(base, k))
+            continue
+        d.polygon(pts(poly, 0, 0, w * S, h * S), fill=shade((r, g, b), k))
+    if fire:                      # glints where the light catches
+        for gx, gy, gr in ((0.3, 0.28, 0.05), (0.7, 0.62, 0.035), (0.62, 0.3, 0.025)):
+            cx_, cy_, rr = gx * w * S, gy * h * S, gr * w * S
+            d.polygon([(cx_, cy_ - rr * 2.2), (cx_ + rr * 0.5, cy_ - rr * 0.5), (cx_ + rr * 2.2, cy_), (cx_ + rr * 0.5, cy_ + rr * 0.5),
+                       (cx_, cy_ + rr * 2.2), (cx_ - rr * 0.5, cy_ + rr * 0.5), (cx_ - rr * 2.2, cy_), (cx_ - rr * 0.5, cy_ - rr * 0.5)],
+                      fill=(255, 255, 255, 235))
     d.line(pts(outline + [outline[0]], 0, 0, w * S, h * S), fill=(255, 255, 255, 200), width=S)
     d.line(pts(hl, 0, 0, w * S, h * S), fill=(255, 255, 255, 230), width=2 * S)
     im = im.resize((w, h), Image.LANCZOS)
@@ -174,13 +192,25 @@ def load_credits(interface_mpq):
 
 def art_image(name):
     return ARTS[name.lower()].copy()
+FIRE_MIX = 0.55
+
+
+def fire_of(s):
+    """Naxxramas's gem throws back the other raids' colours: each outer facet (upper right, right,
+    lower right, lower left, left, upper left) the halves each the colour of the raid on its side."""
+    if s is not R[6] or CENTRE_SHAPE != 'gem':
+        return None
+    cols = [colorsys.hsv_to_rgb(r_[6][0] / 360, min(1.0, r_[6][1] + 0.1), 1.0) for r_ in R[:6]]
+    return [(cols[k], cols[(k + 1) % 6]) for k in range(6)]          # facet k lies between raids k and k + 1
+
+
 def shape_of(s):
     return 'shard' if not s[4] else CENTRE_SHAPE if s is R[6] else RAID_SHAPE
 
 
 def spr(s, size):
     shape = shape_of(s)
-    return crystal(size, s[6], shape) if (s[0] in OWNED and not STATIC) else hole(size, shape)
+    return crystal(size, s[6], shape, fire_of(s), FIRE_MIX) if (s[0] in OWNED and not STATIC) else hole(size, shape)
 def edge_colour(k):
     """Raid k's line on to raid k + 1: the rainbow's k-th colour, or blended from its colour to the next's."""
     if EDGE_COLOURS == 'blend':
@@ -439,7 +469,7 @@ def build(interface_mpq):
            '-- Screen pixels of the ' + '%dx%d' % (W, H) + ' picture; Background.blp holds it at its top left.',
            'ZeldaShardScreen = { width = %d, height = %d, texture = 1024, slots = {' % (W, H)]
     for s_, x, y, size in slots():
-        lay = Image.new('RGBA', (W, H), (0, 0, 0, 0)); place(lay, crystal(size, s_[6], shape_of(s_)), x, y)
+        lay = Image.new('RGBA', (W, H), (0, 0, 0, 0)); place(lay, crystal(size, s_[6], shape_of(s_), fire_of(s_), FIRE_MIX), x, y)
         box, left, top = boxed(lay, x, y)
         name = DIR + 'Crystal%d.blp' % (s_[0] - SHARDS[0][0])
         files[name] = scarlet_horse.blp_raw1_alpha(box)
